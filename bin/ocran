@@ -1179,7 +1179,7 @@ EOF
 
           Ocran.verbose_msg "### INNOSETUP SCRIPT ###\n\n#{iss}\n\n"
 
-          f = File.open("ocrantemp.iss", "w")
+          f = File.open("ocrantemp.iss", "w", autoclose: false)
           f.write(iss)
           f.close()
 
