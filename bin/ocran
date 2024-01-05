@@ -913,12 +913,12 @@ EOF
 
         if file.directory?
           sb.mkdir(target)
+        elsif file.exist?
+          sb.create_file(file, target)
+        elsif file =~ IGNORE_MODULE_NAMES
+          next
         else
-          begin
-            sb.create_file(file, target)
-          rescue Errno::ENOENT
-            raise unless file =~ IGNORE_MODULE_NAMES
-          end
+          Ocran.fatal_error "The file does not exist (#{file})"
         end
       end
 
@@ -1164,7 +1164,6 @@ EOF
             f.puts "[Files]"
             f.puts "Source: \"#{ esc.(path) }\"; DestDir: \"{app}\""
             @files.each_value do |tgt, src|
-              next if src =~ IGNORE_MODULE_NAMES
               dest_dir = Ocran.Pathname(tgt).dirname
               f.puts "Source: \"#{ esc.(src) }\"; DestDir: \"{app}/#{ esc.(dest_dir) }\""
             end
@@ -1230,6 +1229,10 @@ EOF
     private :create_inst_dir
 
     def create_file(src, tgt)
+      unless src.exist?
+        raise "The file does not exist (#{src})"
+      end
+
       key = tgt.to_s.downcase
       return if @files[key]
 
