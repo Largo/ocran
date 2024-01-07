@@ -1209,7 +1209,8 @@ EOF
       # To create intermediate directories, perform a recursive call
       mkdir(path.dirname)
 
-      @of << [OP_CREATE_DIRECTORY, path.to_native].pack("VZ*")
+      write_opcode(OP_CREATE_DIRECTORY)
+      write_string(path.to_native)
     end
 
     # When OP_CREATE_INST_DIRECTORY appears in the data stream,
@@ -1223,8 +1224,10 @@ EOF
 
       # Creation of installation directory will be handled by InnoSetup
       return if Ocran.inno_script
-
-      @of << [OP_CREATE_INST_DIRECTORY, next_to_exe ? 1 : 0, delete_after ? 1 : 0, chdir_before ? 1 : 0].pack("VVVV")
+      write_opcode(OP_CREATE_INST_DIRECTORY)
+      write_bool(next_to_exe)
+      write_bool(delete_after)
+      write_bool(chdir_before)
     end
     private :create_inst_dir
 
@@ -1245,7 +1248,9 @@ EOF
       mkdir(tgt.dirname)
       Ocran.verbose_msg "a #{show_path tgt}"
       src = Ocran.Pathname(src)
-      @of << [OP_CREATE_FILE, tgt.to_native, src.size].pack("VZ*V")
+      write_opcode(OP_CREATE_FILE)
+      write_string(tgt.to_native)
+      write_size(src.size)
       IO.copy_stream(src, @of)
     end
 
@@ -1257,7 +1262,9 @@ EOF
     # extraction provided by the `post_create_process` method.
     def create_process(image, cmdline)
       Ocran.verbose_msg "l #{show_path image} #{show_path cmdline}"
-      @of << [OP_CREATE_PROCESS, image.to_native, cmdline].pack("VZ*Z*")
+      write_opcode(OP_CREATE_PROCESS)
+      write_string(image.to_native)
+      write_string(cmdline)
     end
 
     # Specifies the final application script to be launched, which can be called
@@ -1269,16 +1276,21 @@ EOF
     # runtime operations.
     def post_create_process(image, cmdline)
       Ocran.verbose_msg "p #{show_path image} #{show_path cmdline}"
-      @of << [OP_POST_CREATE_PROCESS, image.to_native, cmdline].pack("VZ*Z*")
+      write_opcode(OP_POST_CREATE_PROCESS)
+      write_string(image.to_native)
+      write_string(cmdline)
     end
 
     def setenv(name, value)
       Ocran.verbose_msg "e #{name} #{show_path value}"
-      @of << [OP_SETENV, name, value].pack("VZ*Z*")
+      write_opcode(OP_SETENV)
+      write_string(name)
+      write_string(value)
     end
 
     def close
-      @of << ([OP_END, @opcode_offset] + Signature).pack("VVC*")
+      write_opcode(OP_END)
+      @of << ([@opcode_offset] + Signature).pack("VC*")
       @of.close
     end
 
@@ -1299,11 +1311,12 @@ EOF
       return if @debug_mode_enabled
       @debug_mode_enabled = true
       Ocran.msg("Enabling debug mode in executable")
-      @of << [OP_ENABLE_DEBUG_MODE].pack("V")
+      write_opcode(OP_ENABLE_DEBUG_MODE)
     end
 
     def compress
-      @of << [OP_DECOMPRESS_LZMA, 0].pack("VV")
+      write_opcode(OP_DECOMPRESS_LZMA)
+      @of << [0].pack("V") # dummy size
       offset = @of.pos
 
       require "tempfile"
@@ -1324,6 +1337,32 @@ EOF
       File.binwrite(@of.path, [compressed_data_size].pack("V"), offset - 4)
     end
     private :compress
+
+    def write_bool(b)
+      @of << [b ? 1 : 0].pack("C")
+    end
+    private :write_bool
+
+    def write_opcode(op)
+      @of << [op].pack("C")
+    end
+    private :write_opcode
+
+    def write_size(i)
+      @of << [i].pack("V")
+    end
+    private :write_size
+
+    def write_string(str)
+      len = str.bytesize + 1
+
+      if len > 65535
+        raise "str is too long"
+      end
+
+      @of << [len, str].pack("vZ*")
+    end
+    private :write_string
   end # class OcranBuilder
 end # module Ocran
 

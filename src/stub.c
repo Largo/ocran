@@ -90,9 +90,11 @@ TCHAR InstDir[MAX_PATH];
 /** Decoder: Zero-terminated string */
 LPTSTR GetString(LPVOID* p)
 {
-   LPTSTR str = *p;
-   *p += lstrlen(str) + sizeof(TCHAR);
-   return str;
+    SIZE_T len = (SIZE_T)*(LPWORD)*p;
+    *p += sizeof(WORD);
+    LPTSTR str = *p;
+    *p += len;
+    return str;
 }
 
 /** Decoder: 32 bit unsigned integer */
@@ -101,6 +103,20 @@ DWORD GetInteger(LPVOID* p)
    DWORD dw = *(DWORD*)*p;
    *p += 4;
    return dw;
+}
+
+BYTE GetOpcode(LPVOID* p)
+{
+    BYTE op = *(LPBYTE)*p;
+    *p += sizeof(BYTE);
+    return op;
+}
+
+BOOL GetBool(LPVOID* p)
+{
+    BOOL b = (BOOL)*(LPBYTE)*p;
+    *p += sizeof(BYTE);
+    return b;
 }
 
 /**
@@ -190,10 +206,10 @@ void MarkForDeletion(LPTSTR path)
 
 BOOL OpCreateInstDirectory(LPVOID* p)
 {
-   DWORD DebugExtractMode = GetInteger(p);
+   DWORD DebugExtractMode = GetBool(p);
 
-   DeleteInstDirEnabled = GetInteger(p);
-   ChdirBeforeRunEnabled = GetInteger(p);
+   DeleteInstDirEnabled = GetBool(p);
+   ChdirBeforeRunEnabled = GetBool(p);
 
    /* Create an installation directory that will hold the extracted files */
    TCHAR TempPath[MAX_PATH];
@@ -369,7 +385,7 @@ BOOL ProcessOpcodes(LPVOID* p)
 
    while (result && !ExitCondition)
    {
-      DWORD opcode = GetInteger(p);
+      DWORD opcode = GetOpcode(p);
       if (opcode >= OP_MAX)
       {
          FATAL("Invalid opcode '%lu'.", opcode);
