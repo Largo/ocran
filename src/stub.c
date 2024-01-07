@@ -365,23 +365,20 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 */
 BOOL ProcessOpcodes(LPVOID* p)
 {
-   while (!ExitCondition)
+   BOOL result = TRUE;
+
+   while (result && !ExitCondition)
    {
       DWORD opcode = GetInteger(p);
-      if (opcode < OP_MAX)
-      {
-         if (!OpcodeHandlers[opcode](p))
-         {
-            return FALSE;
-         }
-      }
-      else
+      if (opcode >= OP_MAX)
       {
          FATAL("Invalid opcode '%lu'.", opcode);
          return FALSE;
       }
+      result = OpcodeHandlers[opcode](p);
    }
-   return TRUE;
+
+   return result;
 }
 
 /**
