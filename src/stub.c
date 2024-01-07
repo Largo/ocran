@@ -18,9 +18,7 @@ const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 #define OP_DECOMPRESS_LZMA 4
 #define OP_SETENV 5
 #define OP_POST_CREATE_PROCRESS 6
-#define OP_ENABLE_DEBUG_MODE 7
-#define OP_CREATE_INST_DIRECTORY 8
-#define OP_MAX 9
+#define OP_MAX 7
 
 BOOL ProcessImage(LPVOID p, DWORD size);
 BOOL ProcessOpcodes(LPVOID* p);
@@ -33,8 +31,6 @@ BOOL OpCreateProcess(LPVOID* p);
 BOOL OpDecompressLzma(LPVOID* p);
 BOOL OpSetEnv(LPVOID* p);
 BOOL OpPostCreateProcess(LPVOID* p);
-BOOL OpEnableDebugMode(LPVOID* p);
-BOOL OpCreateInstDirectory(LPVOID* p);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
@@ -81,8 +77,6 @@ POpcodeHandler OpcodeHandlers[OP_MAX] =
 #endif
    &OpSetEnv,
    &OpPostCreateProcess,
-   &OpEnableDebugMode,
-   &OpCreateInstDirectory,
 };
 
 TCHAR InstDir[MAX_PATH];
@@ -117,6 +111,14 @@ BOOL GetBool(LPVOID* p)
     BOOL b = (BOOL)*(LPBYTE)*p;
     *p += sizeof(BYTE);
     return b;
+}
+
+void GetHeader(LPVOID* p, LPBOOL debug_mode, LPBOOL debug_extract, LPBOOL delete_after, LPBOOL chdir_before)
+{
+    *debug_mode = GetBool(p);
+    *debug_extract = GetBool(p);
+    *delete_after = GetBool(p);
+    *chdir_before = GetBool(p);
 }
 
 /**
@@ -204,13 +206,8 @@ void MarkForDeletion(LPTSTR path)
    CloseHandle(h);
 }
 
-BOOL OpCreateInstDirectory(LPVOID* p)
+BOOL CreateInstDirectory(BOOL DebugExtractMode)
 {
-   DWORD DebugExtractMode = GetBool(p);
-
-   DeleteInstDirEnabled = GetBool(p);
-   ChdirBeforeRunEnabled = GetBool(p);
-
    /* Create an installation directory that will hold the extracted files */
    TCHAR TempPath[MAX_PATH];
    if (DebugExtractMode)
@@ -361,19 +358,25 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 */
 BOOL ProcessImage(LPVOID ptr, DWORD size)
 {
-   LPVOID pSig = ptr + size - 4;
-   if (memcmp(pSig, Signature, 4) == 0)
-   {
-      DEBUG("Good signature found.");
-      DWORD OpcodeOffset = *(DWORD*)(pSig - 4);
-      LPVOID pSeg = ptr + OpcodeOffset;
-      return ProcessOpcodes(&pSeg);
-   }
-   else
-   {
-      FATAL("Bad signature in executable.");
-      return FALSE;
-   }
+    LPVOID pSig = ptr + size - sizeof(Signature);
+    if (memcmp(pSig, Signature, sizeof(Signature)) != 0) {
+        FATAL("Bad signature in executable.");
+        return FALSE;
+    }
+    DEBUG("Good signature found.");
+
+    DWORD OpcodeOffset = *(DWORD*)(pSig - sizeof(DWORD));
+    LPVOID pSeg = ptr + OpcodeOffset;
+
+    BOOL debug_extract;
+    GetHeader(&pSeg, &DebugModeEnabled, &debug_extract, &DeleteInstDirEnabled, &ChdirBeforeRunEnabled);
+
+    if (DebugModeEnabled)
+        DEBUG("Ocran stub running in debug mode");
+
+    CreateInstDirectory(debug_extract);
+
+    return ProcessOpcodes(&pSeg);
 }
 
 /**
@@ -599,13 +602,6 @@ BOOL OpPostCreateProcess(LPVOID* p)
       GetCreateProcessInfo(p, &PostCreateProcess_ApplicationName, &PostCreateProcess_CommandLine);
       return TRUE;
    }
-}
-
-BOOL OpEnableDebugMode(LPVOID* p)
-{
-   DebugModeEnabled = TRUE;
-   DEBUG("Ocran stub running in debug mode");
-   return TRUE;
 }
 
 #if WITH_LZMA

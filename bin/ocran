@@ -1083,8 +1083,6 @@ EOF
     OP_DECOMPRESS_LZMA = 4
     OP_SETENV = 5
     OP_POST_CREATE_PROCESS = 6
-    OP_ENABLE_DEBUG_MODE = 7
-    OP_CREATE_INST_DIRECTORY = 8
 
     base_dir = File.join(File.dirname(__FILE__), "../share/ocran")
     STUB_PATH = File.join(base_dir, "stub.exe")
@@ -1132,8 +1130,16 @@ EOF
         File.open(path, "ab") do |ocranfile|
           @of = ocranfile
 
-          enable_debug_mode if debug_mode
-          create_inst_dir debug_extract, !debug_extract, chdir_before
+          if debug_mode
+            Ocran.msg("Enabling debug mode in executable")
+          end
+
+          if Ocran.inno_script
+            write_header(debug_mode, false, false, true)
+          else
+            next_to_exe, delete_after = debug_extract, !debug_extract
+            write_header(debug_mode, next_to_exe, delete_after, chdir_before)
+          end
 
           if compress_mode?
             compress(&b)
@@ -1213,24 +1219,6 @@ EOF
       write_string(path.to_native)
     end
 
-    # When OP_CREATE_INST_DIRECTORY appears in the data stream,
-    # the stub changes the destination for file extraction.
-    # Therefore, this method should be called before the start
-    # of file extraction. Calling it in the middle of directive
-    # code or multiple times is not allowed.
-    def create_inst_dir(next_to_exe, delete_after, chdir_before)
-      raise "duplicated create_inst_dir method" if @inst_dir_created
-      @inst_dir_created = true
-
-      # Creation of installation directory will be handled by InnoSetup
-      return if Ocran.inno_script
-      write_opcode(OP_CREATE_INST_DIRECTORY)
-      write_bool(next_to_exe)
-      write_bool(delete_after)
-      write_bool(chdir_before)
-    end
-    private :create_inst_dir
-
     def create_file(src, tgt)
       unless src.exist?
         raise "The file does not exist (#{src})"
@@ -1302,18 +1290,6 @@ EOF
       x.to_s.gsub(TEMPDIR_ROOT.to_s, "<tempdir>")
     end
 
-    # The `enable_debug_mode` method instructs the stub to output debugging
-    # information at runtime. It should be called only once; subsequent calls
-    # have no effect. The method writes OP_ENABLE_DEBUG_MODE to the stub's data
-    # stream. When OP_ENABLE_DEBUG_MODE is encountered during execution, the
-    # stub will start reporting debugging information.
-    def enable_debug_mode
-      return if @debug_mode_enabled
-      @debug_mode_enabled = true
-      Ocran.msg("Enabling debug mode in executable")
-      write_opcode(OP_ENABLE_DEBUG_MODE)
-    end
-
     def compress
       write_opcode(OP_DECOMPRESS_LZMA)
       @of << [0].pack("V") # dummy size
@@ -1337,6 +1313,14 @@ EOF
       File.binwrite(@of.path, [compressed_data_size].pack("V"), offset - 4)
     end
     private :compress
+
+    def write_header(debug_mode, next_to_exe, delete_after, chdir_before)
+      write_bool(debug_mode)
+      write_bool(next_to_exe)
+      write_bool(delete_after)
+      write_bool(chdir_before)
+    end
+    private :write_header
 
     def write_bool(b)
       @of << [b ? 1 : 0].pack("C")
