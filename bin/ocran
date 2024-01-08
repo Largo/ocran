@@ -1080,7 +1080,6 @@ EOF
     OP_CREATE_DIRECTORY = 1
     OP_CREATE_FILE = 2
     OP_CREATE_PROCESS = 3
-    OP_DECOMPRESS_LZMA = 4
     OP_SETENV = 5
     OP_POST_CREATE_PROCESS = 6
 
@@ -1134,14 +1133,16 @@ EOF
             Ocran.msg("Enabling debug mode in executable")
           end
 
+          compress_mode = Ocran.lzma_mode && !Ocran.inno_script
+
           if Ocran.inno_script
-            write_header(debug_mode, false, false, true)
+            write_header(debug_mode, false, false, true, compress_mode)
           else
             next_to_exe, delete_after = debug_extract, !debug_extract
-            write_header(debug_mode, next_to_exe, delete_after, chdir_before)
+            write_header(debug_mode, next_to_exe, delete_after, chdir_before, compress_mode)
           end
 
-          if compress_mode?
+          if compress_mode
             compress(&b)
           else
             yield(self)
@@ -1282,19 +1283,11 @@ EOF
       @of.close
     end
 
-    def compress_mode?
-      Ocran.lzma_mode and not Ocran.inno_script
-    end
-
     def show_path(x)
       x.to_s.gsub(TEMPDIR_ROOT.to_s, "<tempdir>")
     end
 
     def compress
-      write_opcode(OP_DECOMPRESS_LZMA)
-      @of << [0].pack("V") # dummy size
-      offset = @of.pos
-
       require "tempfile"
       tmp = Tempfile.open(mode: IO::BINARY) do |tmp|
         _of = @of
@@ -1309,16 +1302,15 @@ EOF
 
       out = IO.popen([LZMA_PATH, "e", tmp.path, "-so"])
       IO.copy_stream(out, @of)
-      compressed_data_size = @of.pos - offset
-      File.binwrite(@of.path, [compressed_data_size].pack("V"), offset - 4)
     end
     private :compress
 
-    def write_header(debug_mode, next_to_exe, delete_after, chdir_before)
+    def write_header(debug_mode, next_to_exe, delete_after, chdir_before, compressed)
       write_bool(debug_mode)
       write_bool(next_to_exe)
       write_bool(delete_after)
       write_bool(chdir_before)
+      write_bool(compressed)
     end
     private :write_header
 

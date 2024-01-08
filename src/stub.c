@@ -15,7 +15,6 @@ const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 #define OP_CREATE_DIRECTORY 1
 #define OP_CREATE_FILE 2
 #define OP_CREATE_PROCESS 3
-#define OP_DECOMPRESS_LZMA 4
 #define OP_SETENV 5
 #define OP_POST_CREATE_PROCRESS 6
 #define OP_MAX 7
@@ -28,12 +27,12 @@ BOOL OpEnd(LPVOID* p);
 BOOL OpCreateFile(LPVOID* p);
 BOOL OpCreateDirectory(LPVOID* p);
 BOOL OpCreateProcess(LPVOID* p);
-BOOL OpDecompressLzma(LPVOID* p);
 BOOL OpSetEnv(LPVOID* p);
 BOOL OpPostCreateProcess(LPVOID* p);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
+BOOL DecompressLzma(LPVOID p, DWORD CompressedSize);
 #endif
 
 typedef BOOL (*POpcodeHandler)(LPVOID*);
@@ -70,11 +69,7 @@ POpcodeHandler OpcodeHandlers[OP_MAX] =
    &OpCreateDirectory,
    &OpCreateFile,
    &OpCreateProcess,
-#if WITH_LZMA
-   &OpDecompressLzma,
-#else
    NULL,
-#endif
    &OpSetEnv,
    &OpPostCreateProcess,
 };
@@ -113,12 +108,13 @@ BOOL GetBool(LPVOID* p)
     return b;
 }
 
-void GetHeader(LPVOID* p, LPBOOL debug_mode, LPBOOL debug_extract, LPBOOL delete_after, LPBOOL chdir_before)
+void GetHeader(LPVOID* p, LPBOOL debug_mode, LPBOOL debug_extract, LPBOOL delete_after, LPBOOL chdir_before, LPBOOL compressed)
 {
     *debug_mode = GetBool(p);
     *debug_extract = GetBool(p);
     *delete_after = GetBool(p);
     *chdir_before = GetBool(p);
+    *compressed = GetBool(p);
 }
 
 /**
@@ -365,16 +361,31 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     }
     DEBUG("Good signature found.");
 
-    DWORD OpcodeOffset = *(DWORD*)(pSig - sizeof(DWORD));
+    LPVOID data_tail = pSig - sizeof(DWORD);
+    DWORD OpcodeOffset = *(DWORD*)(data_tail);
     LPVOID pSeg = ptr + OpcodeOffset;
 
     BOOL debug_extract;
-    GetHeader(&pSeg, &DebugModeEnabled, &debug_extract, &DeleteInstDirEnabled, &ChdirBeforeRunEnabled);
+    BOOL compressed;
+    GetHeader(&pSeg, &DebugModeEnabled, &debug_extract, &DeleteInstDirEnabled, &ChdirBeforeRunEnabled, &compressed);
 
     if (DebugModeEnabled)
         DEBUG("Ocran stub running in debug mode");
 
     CreateInstDirectory(debug_extract);
+
+    if (compressed) {
+#if WITH_LZMA
+        DWORD data_len = data_tail - pSeg - 1; // 1 is OP_END
+        if (!DecompressLzma(pSeg, data_len)) {
+            return FALSE;
+        }
+        pSeg += data_len;
+#else
+        FATAL("Does not support LZMA");
+        return FALSE;
+#endif
+    }
 
     return ProcessOpcodes(&pSeg);
 }
@@ -612,15 +623,13 @@ ISzAlloc alloc = { SzAlloc, SzFree };
 #define LZMA_UNPACKSIZE_SIZE 8
 #define LZMA_HEADER_SIZE (LZMA_PROPS_SIZE + LZMA_UNPACKSIZE_SIZE)
 
-BOOL OpDecompressLzma(LPVOID* p)
+BOOL DecompressLzma(LPVOID p, DWORD CompressedSize)
 {
    BOOL Success = TRUE;
 
-   DWORD CompressedSize = GetInteger(p);
    DEBUG("LzmaDecode(%ld)", CompressedSize);
 
-   Byte* src = (Byte*)*p;
-   *p += CompressedSize;
+   Byte* src = (Byte*)p;
 
    UInt64 unpackSize = 0;
    int i;
