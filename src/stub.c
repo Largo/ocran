@@ -15,7 +15,7 @@ const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 #define OP_CREATE_DIRECTORY 1
 #define OP_CREATE_FILE 2
 #define OP_SETENV 5
-#define OP_POST_CREATE_PROCRESS 6
+#define OP_SET_SCRIPT 6
 #define OP_MAX 7
 
 BOOL ProcessImage(LPVOID p, DWORD size);
@@ -26,7 +26,7 @@ BOOL OpEnd(LPVOID* p);
 BOOL OpCreateFile(LPVOID* p);
 BOOL OpCreateDirectory(LPVOID* p);
 BOOL OpSetEnv(LPVOID* p);
-BOOL OpPostCreateProcess(LPVOID* p);
+BOOL OpSetScript(LPVOID* p);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
@@ -35,8 +35,8 @@ BOOL DecompressLzma(LPVOID p, DWORD CompressedSize);
 
 typedef BOOL (*POpcodeHandler)(LPVOID*);
 
-LPTSTR PostCreateProcess_ApplicationName = NULL;
-LPTSTR PostCreateProcess_CommandLine = NULL;
+LPTSTR Script_ApplicationName = NULL;
+LPTSTR Script_CommandLine = NULL;
 
 DWORD ExitStatus = 0;
 BOOL ExitCondition = FALSE;
@@ -69,7 +69,7 @@ POpcodeHandler OpcodeHandlers[OP_MAX] =
    NULL,
    NULL,
    &OpSetEnv,
-   &OpPostCreateProcess,
+   &OpSetScript,
 };
 
 TCHAR InstDir[MAX_PATH];
@@ -319,12 +319,12 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
       SetCurrentDirectory("./src");
    }
 
-   if (PostCreateProcess_ApplicationName && PostCreateProcess_CommandLine)
+   if (Script_ApplicationName && Script_CommandLine)
    {
       DEBUG("**********");
       DEBUG("Starting app in: %s", InstDir);
       DEBUG("**********");
-      CreateAndWaitForProcess(PostCreateProcess_ApplicationName, PostCreateProcess_CommandLine);
+      CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
    }
 
    if (DeleteInstDirEnabled)
@@ -533,11 +533,8 @@ BOOL OpCreateDirectory(LPVOID* p)
    return TRUE;
 }
 
-void GetCreateProcessInfo(LPVOID* p, LPTSTR* pApplicationName, LPTSTR* pCommandLine)
+void GetScriptInfo(LPTSTR ImageName, LPTSTR* pApplicationName, LPTSTR CmdLine, LPTSTR* pCommandLine)
 {
-   LPTSTR ImageName = GetString(p);
-   LPTSTR CmdLine = GetString(p);
-
    ExpandPath(pApplicationName, ImageName);
 
    LPTSTR ExpandedCommandLine;
@@ -584,18 +581,20 @@ void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
  * Sets up a process to be created after all other opcodes have been processed. This can be used to create processes
  * after the temporary files have all been created and memory has been freed.
  */
-BOOL OpPostCreateProcess(LPVOID* p)
+BOOL OpSetScript(LPVOID* p)
 {
-   DEBUG("PostCreateProcess");
-   if (PostCreateProcess_ApplicationName || PostCreateProcess_CommandLine)
-   {
-      return FALSE;
-   }
-   else
-   {
-      GetCreateProcessInfo(p, &PostCreateProcess_ApplicationName, &PostCreateProcess_CommandLine);
-      return TRUE;
-   }
+    DEBUG("SetScript");
+    if (Script_ApplicationName || Script_CommandLine) {
+        FATAL("Script is already set")
+        return FALSE;
+    }
+
+    LPTSTR app_name = GetString(p);
+    LPTSTR cmd_line = GetString(p);
+
+    GetScriptInfo(app_name, &Script_ApplicationName, cmd_line, &Script_CommandLine);
+
+    return TRUE;
 }
 
 #if WITH_LZMA

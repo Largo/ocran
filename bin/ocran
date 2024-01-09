@@ -993,8 +993,7 @@ EOF
       extra_arg = Ocran.arg.map { |arg| "\"#{arg.gsub("\"", "\\\"")}\"" }.join(" ")
       installed_ruby_exe = TEMPDIR_ROOT / BINDIR / rubyexe
       launch_script = (TEMPDIR_ROOT / target_script).to_native
-      sb.post_create_process(installed_ruby_exe,
-                             "#{rubyexe} \"#{launch_script}\" #{extra_arg}")
+      sb.set_script(installed_ruby_exe, "#{rubyexe} \"#{launch_script}\" #{extra_arg}")
     end
 
     unless Ocran.inno_script
@@ -1080,7 +1079,7 @@ EOF
     OP_CREATE_DIRECTORY = 1
     OP_CREATE_FILE = 2
     OP_SETENV = 5
-    OP_POST_CREATE_PROCESS = 6
+    OP_SET_SCRIPT = 6
 
     base_dir = File.join(File.dirname(__FILE__), "../share/ocran")
     STUB_PATH = File.join(base_dir, "stub.exe")
@@ -1243,15 +1242,19 @@ EOF
     end
 
     # Specifies the final application script to be launched, which can be called
-    # from any position in the data stream. If specified multiple times, the last
-    # one takes effect.
+    # from any position in the data stream. It cannot be specified more than once.
     #
-    # You can omit setting OP_POST_CREATE_PROCESS without issues, in which case
+    # You can omit setting OP_SET_SCRIPT without issues, in which case
     # the stub terminates without launching anything after performing other
     # runtime operations.
-    def post_create_process(image, cmdline)
+    def set_script(image, cmdline)
+      if @script_set
+        raise "Script is already set"
+      end
+      @script_set = true
+
       Ocran.verbose_msg "p #{show_path image} #{show_path cmdline}"
-      write_opcode(OP_POST_CREATE_PROCESS)
+      write_opcode(OP_SET_SCRIPT)
       write_string(image.to_native)
       write_string(cmdline)
     end
