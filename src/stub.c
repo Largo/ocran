@@ -325,6 +325,10 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
       DEBUG("Starting app in: %s", InstDir);
       DEBUG("**********");
       CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
+      LocalFree(Script_ApplicationName);
+      LocalFree(Script_CommandLine);
+      Script_ApplicationName = NULL;
+      Script_CommandLine = NULL;
    }
 
    if (DeleteInstDirEnabled)
