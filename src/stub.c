@@ -14,7 +14,6 @@ const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 #define OP_END 0
 #define OP_CREATE_DIRECTORY 1
 #define OP_CREATE_FILE 2
-#define OP_CREATE_PROCESS 3
 #define OP_SETENV 5
 #define OP_POST_CREATE_PROCRESS 6
 #define OP_MAX 7
@@ -26,7 +25,6 @@ void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine);
 BOOL OpEnd(LPVOID* p);
 BOOL OpCreateFile(LPVOID* p);
 BOOL OpCreateDirectory(LPVOID* p);
-BOOL OpCreateProcess(LPVOID* p);
 BOOL OpSetEnv(LPVOID* p);
 BOOL OpPostCreateProcess(LPVOID* p);
 
@@ -68,7 +66,7 @@ POpcodeHandler OpcodeHandlers[OP_MAX] =
    &OpEnd,
    &OpCreateDirectory,
    &OpCreateFile,
-   &OpCreateProcess,
+   NULL,
    NULL,
    &OpSetEnv,
    &OpPostCreateProcess,
@@ -554,21 +552,6 @@ void GetCreateProcessInfo(LPVOID* p, LPTSTR* pApplicationName, LPTSTR* pCommandL
    lstrcat(*pCommandLine, MyArgs);
 
    LocalFree(ExpandedCommandLine);
-}
-
-/**
-   Create a new process and wait for it to complete (OP_CREATE_PROCESS
-   opcode handler)
-*/
-BOOL OpCreateProcess(LPVOID* p)
-{
-   LPTSTR ApplicationName;
-   LPTSTR CommandLine;
-   GetCreateProcessInfo(p, &ApplicationName, &CommandLine);
-   CreateAndWaitForProcess(ApplicationName, CommandLine);
-   LocalFree(ApplicationName);
-   LocalFree(CommandLine);
-   return TRUE;
 }
 
 void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
