@@ -1078,8 +1078,8 @@ EOF
     OP_END = 0
     OP_CREATE_DIRECTORY = 1
     OP_CREATE_FILE = 2
-    OP_SETENV = 5
-    OP_SET_SCRIPT = 6
+    OP_SETENV = 3
+    OP_SET_SCRIPT = 4
 
     base_dir = File.join(File.dirname(__FILE__), "../share/ocran")
     STUB_PATH = File.join(base_dir, "stub.exe")

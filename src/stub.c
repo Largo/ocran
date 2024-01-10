@@ -14,9 +14,9 @@ const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 #define OP_END 0
 #define OP_CREATE_DIRECTORY 1
 #define OP_CREATE_FILE 2
-#define OP_SETENV 5
-#define OP_SET_SCRIPT 6
-#define OP_MAX 7
+#define OP_SETENV 3
+#define OP_SET_SCRIPT 4
+#define OP_MAX 5
 
 BOOL ProcessImage(LPVOID p, DWORD size);
 BOOL ProcessOpcodes(LPVOID* p);
@@ -66,8 +66,6 @@ POpcodeHandler OpcodeHandlers[OP_MAX] =
    &OpEnd,
    &OpCreateDirectory,
    &OpCreateFile,
-   NULL,
-   NULL,
    &OpSetEnv,
    &OpSetScript,
 };
