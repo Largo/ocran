@@ -22,7 +22,6 @@ BOOL ProcessImage(LPVOID p, DWORD size);
 BOOL ProcessOpcodes(LPVOID* p);
 void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine);
 
-BOOL OpEnd(LPVOID* p);
 BOOL OpCreateFile(LPVOID* p);
 BOOL OpCreateDirectory(LPVOID* p);
 BOOL OpSetEnv(LPVOID* p);
@@ -39,7 +38,6 @@ LPTSTR Script_ApplicationName = NULL;
 LPTSTR Script_CommandLine = NULL;
 
 DWORD ExitStatus = 0;
-BOOL ExitCondition = FALSE;
 BOOL DebugModeEnabled = FALSE;
 BOOL DeleteInstDirEnabled = FALSE;
 BOOL ChdirBeforeRunEnabled = TRUE;
@@ -63,7 +61,7 @@ TCHAR ImageFileName[MAX_PATH];
 
 POpcodeHandler OpcodeHandlers[OP_MAX] =
 {
-   &OpEnd,
+   NULL,
    &OpCreateDirectory,
    &OpCreateFile,
    &OpSetEnv,
@@ -397,12 +395,11 @@ BOOL ProcessOpcodes(LPVOID* p)
 {
    BOOL result = TRUE;
 
-   while (result && !ExitCondition)
-   {
-      DWORD opcode = GetOpcode(p);
-      if (opcode >= OP_MAX)
-      {
-         FATAL("Invalid opcode '%lu'.", opcode);
+   while (result) {
+      BYTE opcode = GetOpcode(p);
+      if (opcode == OP_END) return TRUE;
+      if (opcode >= OP_MAX || OpcodeHandlers[opcode] == NULL) {
+         FATAL("Invalid opcode '%u'.", opcode);
          return FALSE;
       }
       result = OpcodeHandlers[opcode](p);
@@ -647,12 +644,6 @@ BOOL DecompressLzma(LPVOID p, DWORD CompressedSize)
    return Success;
 }
 #endif
-
-BOOL OpEnd(LPVOID* p)
-{
-   ExitCondition = TRUE;
-   return TRUE;
-}
 
 BOOL OpSetEnv(LPVOID* p)
 {
