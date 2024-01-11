@@ -13,7 +13,7 @@
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
 BOOL ProcessImage(LPVOID p, DWORD size);
-void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine);
+DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
@@ -24,7 +24,6 @@ BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T
 LPTSTR Script_ApplicationName = NULL;
 LPTSTR Script_CommandLine = NULL;
 
-DWORD ExitStatus = 0;
 BOOL DebugModeEnabled = FALSE;
 BOOL DeleteInstDirEnabled = FALSE;
 BOOL ChdirBeforeRunEnabled = TRUE;
@@ -182,6 +181,8 @@ BOOL CreateInstDirectory(BOOL DebugExtractMode)
 
 int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
+    DWORD exit_code = 0;
+
    /* Find name of image */
    if (!GetModuleFileName(NULL, ImageFileName, MAX_PATH))
    {
@@ -226,7 +227,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
    {
       if (!ProcessImage(lpv, FileSize))
       {
-         ExitStatus = -1;
+         exit_code = -1;
       }
 
       if (!UnmapViewOfFile(lpv))
@@ -252,12 +253,12 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
       SetCurrentDirectory("./src");
    }
 
-   if (Script_ApplicationName && Script_CommandLine)
+   if (exit_code == 0 && Script_ApplicationName && Script_CommandLine)
    {
       DEBUG("**********");
       DEBUG("Starting app in: %s", InstDir);
       DEBUG("**********");
-      CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
+      exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
       LocalFree(Script_ApplicationName);
       LocalFree(Script_CommandLine);
       Script_ApplicationName = NULL;
@@ -277,7 +278,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
             MarkForDeletion(InstDir);
    }
 
-   ExitProcess(ExitStatus);
+   ExitProcess(exit_code);
 
    /* Never gets here */
    return 0;
@@ -490,7 +491,7 @@ void GetScriptInfo(LPTSTR ImageName, LPTSTR* pApplicationName, LPTSTR CmdLine, L
    LocalFree(ExpandedCommandLine);
 }
 
-void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
+DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
 {
    PROCESS_INFORMATION ProcessInformation;
    STARTUPINFO StartupInfo;
@@ -502,18 +503,20 @@ void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
    if (!r)
    {
       FATAL("Failed to create process (%s): %lu", ApplicationName, GetLastError());
-      return;
+      return -1;
    }
 
    WaitForSingleObject(ProcessInformation.hProcess, INFINITE);
 
-   if (!GetExitCodeProcess(ProcessInformation.hProcess, &ExitStatus))
+   DWORD exit_code;
+   if (!GetExitCodeProcess(ProcessInformation.hProcess, &exit_code))
    {
       FATAL("Failed to get exit status (error %lu).", GetLastError());
    }
 
    CloseHandle(ProcessInformation.hProcess);
    CloseHandle(ProcessInformation.hThread);
+   return exit_code;
 }
 
 /**
