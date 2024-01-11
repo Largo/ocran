@@ -1,4 +1,4 @@
-SRCS = lzma/LzmaDec.c
+SRCS = lzma/LzmaDec.c unpack.c
 OBJS = $(SRCS:.c=.o) stubicon.o
 CC = gcc
 BINDIR = $(CURDIR)/../share/ocran
@@ -27,6 +27,9 @@ stub.o: stub.c
 
 stubw.o: stub.c
 	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
+
+unpack.o: unpack.c unpack.h
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 clean:
 	rm -f $(OBJS) stub.exe stubw.exe edicon.exe edicon.o stubw.o stub.o

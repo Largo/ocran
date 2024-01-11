@@ -8,31 +8,17 @@
 #include <string.h>
 #include <tchar.h>
 #include <stdio.h>
+#include "unpack.h"
 
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
-#define OP_END 0
-#define OP_CREATE_DIRECTORY 1
-#define OP_CREATE_FILE 2
-#define OP_SETENV 3
-#define OP_SET_SCRIPT 4
-#define OP_MAX 5
-
 BOOL ProcessImage(LPVOID p, DWORD size);
-BOOL ProcessOpcodes(LPVOID* p);
 void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine);
-
-BOOL OpCreateFile(LPVOID* p);
-BOOL OpCreateDirectory(LPVOID* p);
-BOOL OpSetEnv(LPVOID* p);
-BOOL OpSetScript(LPVOID* p);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
 BOOL DecompressLzma(LPVOID p, DWORD CompressedSize);
 #endif
-
-typedef BOOL (*POpcodeHandler)(LPVOID*);
 
 LPTSTR Script_ApplicationName = NULL;
 LPTSTR Script_CommandLine = NULL;
@@ -59,57 +45,7 @@ TCHAR ImageFileName[MAX_PATH];
 #define DEBUG(...)
 #endif
 
-POpcodeHandler OpcodeHandlers[OP_MAX] =
-{
-   NULL,
-   &OpCreateDirectory,
-   &OpCreateFile,
-   &OpSetEnv,
-   &OpSetScript,
-};
-
 TCHAR InstDir[MAX_PATH];
-
-/** Decoder: Zero-terminated string */
-LPTSTR GetString(LPVOID* p)
-{
-    SIZE_T len = (SIZE_T)*(LPWORD)*p;
-    *p += sizeof(WORD);
-    LPTSTR str = *p;
-    *p += len;
-    return str;
-}
-
-/** Decoder: 32 bit unsigned integer */
-DWORD GetInteger(LPVOID* p)
-{
-   DWORD dw = *(DWORD*)*p;
-   *p += 4;
-   return dw;
-}
-
-BYTE GetOpcode(LPVOID* p)
-{
-    BYTE op = *(LPBYTE)*p;
-    *p += sizeof(BYTE);
-    return op;
-}
-
-BOOL GetBool(LPVOID* p)
-{
-    BOOL b = (BOOL)*(LPBYTE)*p;
-    *p += sizeof(BYTE);
-    return b;
-}
-
-void GetHeader(LPVOID* p, LPBOOL debug_mode, LPBOOL debug_extract, LPBOOL delete_after, LPBOOL chdir_before, LPBOOL compressed)
-{
-    *debug_mode = GetBool(p);
-    *debug_extract = GetBool(p);
-    *delete_after = GetBool(p);
-    *chdir_before = GetBool(p);
-    *compressed = GetBool(p);
-}
 
 /**
    Handler for console events.
@@ -363,9 +299,11 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     DWORD OpcodeOffset = *(DWORD*)(data_tail);
     LPVOID pSeg = ptr + OpcodeOffset;
 
-    BOOL debug_extract;
-    BOOL compressed;
-    GetHeader(&pSeg, &DebugModeEnabled, &debug_extract, &DeleteInstDirEnabled, &ChdirBeforeRunEnabled, &compressed);
+    DebugModeEnabled      = (BOOL)*(LPBYTE)pSeg; pSeg++;
+    BOOL debug_extract    = (BOOL)*(LPBYTE)pSeg; pSeg++;
+    DeleteInstDirEnabled  = (BOOL)*(LPBYTE)pSeg; pSeg++;
+    ChdirBeforeRunEnabled = (BOOL)*(LPBYTE)pSeg; pSeg++;
+    BOOL compressed       = (BOOL)*(LPBYTE)pSeg; pSeg++;
 
     if (DebugModeEnabled)
         DEBUG("Ocran stub running in debug mode");
@@ -385,27 +323,12 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 #endif
     }
 
-    return ProcessOpcodes(&pSeg);
-}
-
-/**
-   Process the opcodes in memory.
-*/
-BOOL ProcessOpcodes(LPVOID* p)
-{
-   BOOL result = TRUE;
-
-   while (result) {
-      BYTE opcode = GetOpcode(p);
-      if (opcode == OP_END) return TRUE;
-      if (opcode >= OP_MAX || OpcodeHandlers[opcode] == NULL) {
-         FATAL("Invalid opcode '%u'.", opcode);
-         return FALSE;
-      }
-      result = OpcodeHandlers[opcode](p);
-   }
-
-   return result;
+    BOOL last_opcode = ProcessOpcodes(&pSeg);
+    if (last_opcode != OP_END) {
+        FATAL("Invalid opcode '%u'.", last_opcode);
+        return FALSE;
+    }
+    return TRUE;
 }
 
 /**
@@ -463,13 +386,9 @@ LPTSTR SkipArg(LPTSTR str)
 /**
    Create a file (OP_CREATE_FILE opcode handler)
 */
-BOOL OpCreateFile(LPVOID* p)
+BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
 {
    BOOL Result = TRUE;
-   LPTSTR FileName = GetString(p);
-   DWORD FileSize = GetInteger(p);
-   LPVOID Data = *p;
-   *p += FileSize;
 
    TCHAR Fn[MAX_PATH];
    lstrcpy(Fn, InstDir);
@@ -505,10 +424,8 @@ BOOL OpCreateFile(LPVOID* p)
 /**
    Create a directory (OP_CREATE_DIRECTORY opcode handler)
 */
-BOOL OpCreateDirectory(LPVOID* p)
+BOOL MakeDirectory(LPTSTR DirectoryName)
 {
-   LPTSTR DirectoryName = GetString(p);
-
    TCHAR DirName[MAX_PATH];
    lstrcpy(DirName, InstDir);
    lstrcat(DirName, _T("\\"));
@@ -580,16 +497,13 @@ void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
  * Sets up a process to be created after all other opcodes have been processed. This can be used to create processes
  * after the temporary files have all been created and memory has been freed.
  */
-BOOL OpSetScript(LPVOID* p)
+BOOL SetScript(LPTSTR app_name, LPTSTR cmd_line)
 {
     DEBUG("SetScript");
     if (Script_ApplicationName || Script_CommandLine) {
         FATAL("Script is already set")
         return FALSE;
     }
-
-    LPTSTR app_name = GetString(p);
-    LPTSTR cmd_line = GetString(p);
 
     GetScriptInfo(app_name, &Script_ApplicationName, cmd_line, &Script_CommandLine);
 
@@ -634,9 +548,10 @@ BOOL DecompressLzma(LPVOID p, DWORD CompressedSize)
    else
    {
       LPVOID decPtr = DecompressedData;
-      if (!ProcessOpcodes(&decPtr))
-      {
-         Success = FALSE;
+      BOOL last_opcode = ProcessOpcodes(&decPtr);
+      if (last_opcode != OP_END) {
+          FATAL("Invalid opcode '%u'.", last_opcode);
+          Success = FALSE;
       }
    }
 
@@ -645,10 +560,8 @@ BOOL DecompressLzma(LPVOID p, DWORD CompressedSize)
 }
 #endif
 
-BOOL OpSetEnv(LPVOID* p)
+BOOL SetEnv(LPTSTR Name, LPTSTR Value)
 {
-   LPTSTR Name = GetString(p);
-   LPTSTR Value = GetString(p);
    LPTSTR ExpandedValue;
    ExpandPath(&ExpandedValue, Value);
    DEBUG("SetEnv(%s, %s)", Name, ExpandedValue);
