@@ -17,7 +17,8 @@ void CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
-BOOL DecompressLzma(LPVOID p, DWORD CompressedSize);
+ULONGLONG GetDecompressionSize(LPVOID src);
+BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T CompressedSize);
 #endif
 
 LPTSTR Script_ApplicationName = NULL;
@@ -310,20 +311,42 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 
     CreateInstDirectory(debug_extract);
 
+    BOOL last_opcode;
+
     if (compressed) {
 #if WITH_LZMA
-        DWORD data_len = data_tail - pSeg - 1; // 1 is OP_END
-        if (!DecompressLzma(pSeg, data_len)) {
+        DWORD data_len = data_tail - pSeg;
+        DEBUG("LzmaDecode(%ld)", data_len);
+
+        ULONGLONG unpack_size = GetDecompressionSize(pSeg);
+        if (unpack_size > (ULONGLONG)(DWORD)-1) {
+            FATAL("Decompression size is too large.");
             return FALSE;
         }
-        pSeg += data_len;
+
+        LPVOID unpack_data = LocalAlloc(LMEM_FIXED, unpack_size);
+        if (unpack_data == NULL) {
+            FATAL("LocalAlloc failed with error %lu", GetLastError());
+            return FALSE;
+        }
+
+        if (!DecompressLzma(unpack_data, unpack_size, pSeg, data_len)) {
+            FATAL("LZMA decompression failed.");
+            LocalFree(unpack_data);
+            return FALSE;
+        }
+
+        LPVOID p = unpack_data;
+        last_opcode = ProcessOpcodes(&p);
+        LocalFree(unpack_data);
 #else
         FATAL("Does not support LZMA");
         return FALSE;
 #endif
+    } else {
+        last_opcode = ProcessOpcodes(&pSeg);
     }
 
-    BOOL last_opcode = ProcessOpcodes(&pSeg);
     if (last_opcode != OP_END) {
         FATAL("Invalid opcode '%u'.", last_opcode);
         return FALSE;
@@ -518,45 +541,26 @@ ISzAlloc alloc = { SzAlloc, SzFree };
 #define LZMA_UNPACKSIZE_SIZE 8
 #define LZMA_HEADER_SIZE (LZMA_PROPS_SIZE + LZMA_UNPACKSIZE_SIZE)
 
-BOOL DecompressLzma(LPVOID p, DWORD CompressedSize)
+ULONGLONG GetDecompressionSize(LPVOID src)
 {
-   BOOL Success = TRUE;
+    ULONGLONG size = 0;
 
-   DEBUG("LzmaDecode(%ld)", CompressedSize);
+    for (int i = 0; i < LZMA_UNPACKSIZE_SIZE; i++)
+        size += ((LPBYTE)src)[LZMA_PROPS_SIZE + i] << (i * 8);
 
+    return size;
+}
+
+BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T CompressedSize)
+{
    Byte* src = (Byte*)p;
-
-   UInt64 unpackSize = 0;
-   int i;
-   for (i = 0; i < 8; i++)
-   {
-      unpackSize += (UInt64)src[LZMA_PROPS_SIZE + i] << (i * 8);
-   }
-
-   Byte* DecompressedData = LocalAlloc(LMEM_FIXED, unpackSize);
-
    SizeT lzmaDecompressedSize = unpackSize;
    SizeT inSizePure = CompressedSize - LZMA_HEADER_SIZE;
    ELzmaStatus status;
    SRes res = LzmaDecode(DecompressedData, &lzmaDecompressedSize, src + LZMA_HEADER_SIZE, &inSizePure,
                          src, LZMA_PROPS_SIZE, LZMA_FINISH_ANY, &status, &alloc);
-   if (res != SZ_OK)
-   {
-      FATAL("LZMA decompression failed.");
-      Success = FALSE;
-   }
-   else
-   {
-      LPVOID decPtr = DecompressedData;
-      BOOL last_opcode = ProcessOpcodes(&decPtr);
-      if (last_opcode != OP_END) {
-          FATAL("Invalid opcode '%u'.", last_opcode);
-          Success = FALSE;
-      }
-   }
 
-   LocalFree(DecompressedData);
-   return Success;
+   return (BOOL)(res == SZ_OK);
 }
 #endif
 

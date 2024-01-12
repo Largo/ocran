@@ -1140,10 +1140,15 @@ EOF
             write_header(debug_mode, next_to_exe, delete_after, chdir_before, compress_mode)
           end
 
+          b = proc {
+            yield(self)
+            write_opcode(OP_END)
+          }
+
           if compress_mode
             compress(&b)
           else
-            yield(self)
+            b.yield
           end
 
           close
@@ -1267,7 +1272,6 @@ EOF
     end
 
     def close
-      write_opcode(OP_END)
       @of << ([@opcode_offset] + Signature).pack("VC*")
       @of.close
     end
