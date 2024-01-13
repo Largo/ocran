@@ -361,11 +361,11 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 */
 void ExpandPath(LPTSTR* out, LPTSTR str)
 {
-   DWORD OutSize = lstrlen(str) + sizeof(TCHAR);
+   DWORD OutSize = lstrlen(str) + 1;
    LPTSTR a = str;
    while ((a = _tcschr(a, L'|')))
    {
-      OutSize += lstrlen(InstDir) - sizeof(TCHAR);
+      OutSize += lstrlen(InstDir) - 1;
       a++;
    }
 
@@ -381,7 +381,7 @@ void ExpandPath(LPTSTR* out, LPTSTR str)
          OutPtr += l;
          str += l;
       }
-      str += sizeof(TCHAR);
+      str += 1;
       lstrcpy(OutPtr, InstDir);
       OutPtr += lstrlen(OutPtr);
    }
@@ -483,7 +483,7 @@ void GetScriptInfo(LPTSTR ImageName, LPTSTR* pApplicationName, LPTSTR CmdLine, L
    LPTSTR MyCmdLine = GetCommandLine();
    LPTSTR MyArgs = SkipArg(MyCmdLine);
 
-   *pCommandLine = LocalAlloc(LMEM_FIXED, lstrlen(ExpandedCommandLine) + sizeof(TCHAR) + lstrlen(MyArgs) + sizeof(TCHAR));
+   *pCommandLine = LocalAlloc(LMEM_FIXED, lstrlen(ExpandedCommandLine) + 1 + lstrlen(MyArgs) + 1);
    lstrcpy(*pCommandLine, ExpandedCommandLine);
    lstrcat(*pCommandLine, _T(" "));
    lstrcat(*pCommandLine, MyArgs);
