@@ -139,7 +139,7 @@ BOOL CreateInstDirectory(BOOL DebugExtractMode)
    if (DebugExtractMode)
    {
       // In debug extraction mode, create the temp directory next to the exe
-      FindExeDir(TempPath);
+      lstrcpy(TempPath, InstDir);
       if (strlen(TempPath) == 0)
       {
          FATAL("Unable to find directory containing exe");
