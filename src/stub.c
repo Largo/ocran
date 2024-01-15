@@ -47,6 +47,32 @@ TCHAR ImageFileName[MAX_PATH];
 
 TCHAR InstDir[MAX_PATH];
 
+SIZE_T ParentDirectoryPath(LPTSTR dest, SIZE_T dest_len, LPTSTR path)
+{
+    if (path == NULL) return 0;
+
+    SIZE_T i = lstrlen(path);
+
+    for (; i > 0; i--)
+        if (path[i] == L'\\') break;
+
+    if (dest != NULL)
+        if (_tcsncpy_s(dest, dest_len, path, i))
+            return 0;
+
+    return i;
+}
+
+BOOL CheckInstDirPathExists(LPTSTR rel_path)
+{
+    TCHAR path[MAX_PATH];
+    lstrcpy(path, InstDir);
+    lstrcat(path, _T("\\"));
+    lstrcat(path, rel_path);
+
+    return (BOOL)(GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES);
+}
+
 /**
    Handler for console events.
 */
@@ -420,6 +446,18 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
    lstrcat(Fn, FileName);
 
    DEBUG("CreateFile(%s, %lu)", Fn, FileSize);
+
+    TCHAR parent[MAX_PATH];
+
+    if (ParentDirectoryPath(parent, sizeof(parent), FileName)) {
+        if (!CheckInstDirPathExists(parent)) {
+            if (!MakeDirectory(parent)) {
+                FATAL("Failed to create file '%s'", Fn);
+                return FALSE;
+            }
+        }
+    }
+
    HANDLE hFile = CreateFile(Fn, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
    if (hFile != INVALID_HANDLE_VALUE)
    {
@@ -457,20 +495,28 @@ BOOL MakeDirectory(LPTSTR DirectoryName)
 
    DEBUG("CreateDirectory(%s)", DirName);
 
-   if (!CreateDirectory(DirName, NULL))
-   {
-      if (GetLastError() == ERROR_ALREADY_EXISTS)
-      {
-         DEBUG("Directory already exists");
-      }
-      else
-      {
-         FATAL("Failed to create directory '%s'.", DirName);
-         return FALSE;
-      }
-   }
+    if (CreateDirectory(DirName, NULL))
+        return TRUE;
 
-   return TRUE;
+    DWORD e = GetLastError();
+
+    if (e == ERROR_ALREADY_EXISTS) {
+        DEBUG("Directory already exists");
+        return TRUE;
+    }
+
+    if (e == ERROR_PATH_NOT_FOUND) {
+        TCHAR parent[MAX_PATH];
+
+        if (ParentDirectoryPath(parent, sizeof(parent), DirectoryName))
+            if (MakeDirectory(parent))
+                if (CreateDirectory(DirName, NULL))
+                    return TRUE;
+    }
+
+    FATAL("Failed to create directory '%s'.", DirName);
+
+    return FALSE;
 }
 
 void GetScriptInfo(LPTSTR ImageName, LPTSTR* pApplicationName, LPTSTR CmdLine, LPTSTR* pCommandLine)
