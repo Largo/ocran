@@ -27,7 +27,6 @@ LPTSTR Script_CommandLine = NULL;
 BOOL DebugModeEnabled = FALSE;
 BOOL DeleteInstDirEnabled = FALSE;
 BOOL ChdirBeforeRunEnabled = TRUE;
-TCHAR ImageFileName[MAX_PATH];
 
 #if _CONSOLE
 #define FATAL(...) { fprintf(stderr, "FATAL ERROR: "); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
@@ -81,20 +80,6 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
    // Ignore all events. They will also be dispatched to the child procress (Ruby) which should
    // exit quickly, allowing us to clean up.
    return TRUE;
-}
-
-void FindExeDir(TCHAR* d)
-{
-   strncpy(d, ImageFileName, MAX_PATH);
-   unsigned int i;
-   for (i = strlen(d)-1; i >= 0; --i)
-   {
-      if (i == 0 || d[i] == '\\')
-      {
-         d[i] = 0;
-         break;
-      }
-   }
 }
 
 BOOL DeleteRecursively(LPTSTR path)
@@ -208,28 +193,32 @@ BOOL CreateInstDirectory(BOOL DebugExtractMode)
 int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
 {
     DWORD exit_code = 0;
+    TCHAR image_path[MAX_PATH];
 
    /* Find name of image */
-   if (!GetModuleFileName(NULL, ImageFileName, MAX_PATH))
+   if (!GetModuleFileName(NULL, image_path, MAX_PATH))
    {
       FATAL("Failed to get executable name (error %lu).", GetLastError());
       return -1;
    }
 
 
-   /* By default, assume the installation directory is wherever the EXE is */
-   FindExeDir(InstDir);
+    /* By default, assume the installation directory is wherever the EXE is */
+    if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
+        FATAL("Failed to set default installation directory.");
+        return -1;
+    }
 
    /* Set up environment */
-   SetEnvironmentVariable(_T("OCRAN_EXECUTABLE"), ImageFileName);
+   SetEnvironmentVariable(_T("OCRAN_EXECUTABLE"), image_path);
 
    SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE);
 
    /* Open the image (executable) */
-   HANDLE hImage = CreateFile(ImageFileName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+   HANDLE hImage = CreateFile(image_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
    if (hImage == INVALID_HANDLE_VALUE)
    {
-      FATAL("Failed to open executable (%s)", ImageFileName);
+      FATAL("Failed to open executable (%s)", image_path);
       return -1;
    }
 
