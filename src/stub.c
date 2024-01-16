@@ -372,7 +372,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
    Expands a specially formatted string, replacing | with the
    temporary installation directory.
 */
-void ExpandPath(LPTSTR* out, LPTSTR str)
+LPTSTR ReplaceInstDirPlaceholder(LPTSTR str)
 {
    DWORD OutSize = lstrlen(str) + 1;
    LPTSTR a = str;
@@ -382,9 +382,9 @@ void ExpandPath(LPTSTR* out, LPTSTR str)
       a++;
    }
 
-   *out = LocalAlloc(LMEM_FIXED, OutSize);
+   LPTSTR out = (LPTSTR)LocalAlloc(LMEM_FIXED, OutSize);
 
-   LPTSTR OutPtr = *out;
+   LPTSTR OutPtr = out;
    while ((a = _tcschr(str, L'|')))
    {
       int l = a - str;
@@ -399,6 +399,7 @@ void ExpandPath(LPTSTR* out, LPTSTR str)
       OutPtr += lstrlen(OutPtr);
    }
    lstrcpy(OutPtr, str);
+   return out;
 }
 
 /**
@@ -508,11 +509,9 @@ BOOL MakeDirectory(LPTSTR DirectoryName)
 
 void GetScriptInfo(LPTSTR ImageName, LPTSTR* pApplicationName, LPTSTR CmdLine, LPTSTR* pCommandLine)
 {
-   ExpandPath(pApplicationName, ImageName);
+   *pApplicationName = ReplaceInstDirPlaceholder(ImageName);
 
-   LPTSTR ExpandedCommandLine;
-   ExpandPath(&ExpandedCommandLine, CmdLine);
-
+   LPTSTR ExpandedCommandLine = ReplaceInstDirPlaceholder(CmdLine);
    LPTSTR MyCmdLine = GetCommandLine();
    LPTSTR MyArgs = SkipArg(MyCmdLine);
 
@@ -602,8 +601,8 @@ BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T
 
 BOOL SetEnv(LPTSTR Name, LPTSTR Value)
 {
-   LPTSTR ExpandedValue;
-   ExpandPath(&ExpandedValue, Value);
+   LPTSTR ExpandedValue = ReplaceInstDirPlaceholder(Value);
+
    DEBUG("SetEnv(%s, %s)", Name, ExpandedValue);
 
    BOOL Result = FALSE;
