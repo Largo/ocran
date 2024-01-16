@@ -209,9 +209,6 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
         return -1;
     }
 
-   /* Set up environment */
-   SetEnvironmentVariable(_T("OCRAN_EXECUTABLE"), image_path);
-
    SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE);
 
    /* Open the image (executable) */
@@ -261,24 +258,25 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
       FATAL("Failed to close executable.");
    }
 
-   if (ChdirBeforeRunEnabled)
-   {
-      DEBUG("Changing CWD to unpacked directory %s/src", InstDir);
-      SetCurrentDirectory(InstDir);
-      SetCurrentDirectory("./src");
-   }
+    if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
+        DEBUG("*** Starting app in %s", InstDir);
 
-   if (exit_code == 0 && Script_ApplicationName && Script_CommandLine)
-   {
-      DEBUG("**********");
-      DEBUG("Starting app in: %s", InstDir);
-      DEBUG("**********");
-      exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
-      LocalFree(Script_ApplicationName);
-      LocalFree(Script_CommandLine);
-      Script_ApplicationName = NULL;
-      Script_CommandLine = NULL;
-   }
+        if (ChdirBeforeRunEnabled) {
+            DEBUG("Changing CWD to unpacked directory %s/src", InstDir);
+            SetCurrentDirectory(InstDir);
+            SetCurrentDirectory("./src");
+        }
+
+        SetEnvironmentVariable(_T("OCRAN_EXECUTABLE"), image_path);
+
+        exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
+    }
+
+    LocalFree(Script_ApplicationName);
+    Script_ApplicationName = NULL;
+
+    LocalFree(Script_CommandLine);
+    Script_CommandLine = NULL;
 
    if (DeleteInstDirEnabled)
    {
