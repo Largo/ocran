@@ -28,18 +28,38 @@ BOOL DebugModeEnabled = FALSE;
 BOOL DeleteInstDirEnabled = FALSE;
 BOOL ChdirBeforeRunEnabled = TRUE;
 
+void PrintFatalMessage(LPTSTR format, ...)
+{
 #if _CONSOLE
-#define FATAL(...) { fprintf(stderr, "FATAL ERROR: "); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); }
+    _vftprintf_s(stderr, _T("%s"), _T("FATAL ERROR: "));
+    va_list args;
+    va_start(args, format);
+    _vftprintf_s(stderr, format, args);
+    va_end(args);
+    _vftprintf_s(stderr, _T("%s"), _T("\n"));
 #else
-#define FATAL(...) { \
-   TCHAR TextBuffer[1024]; \
-   _sntprintf(TextBuffer, 1024, __VA_ARGS__); \
-   MessageBox(NULL, TextBuffer, _T("OCRAN"), MB_OK | MB_ICONWARNING); \
-   }
+    TCHAR TextBuffer[1024];
+    va_list args;
+    va_start(args, format);
+    _sntprintf(TextBuffer, 1024, format, args);
+    va_end(args);
+    MessageBox(NULL, TextBuffer, _T("OCRAN"), MB_OK | MB_ICONWARNING);
 #endif
+}
+
+#define FATAL(...) PrintFatalMessage(__VA_ARGS__)
+#define LAST_ERROR(msg) PrintFatalMessage(_T("%s (error %lu)."), msg, GetLastError())
+
+void PrintDebugMessage(LPTSTR format, ...) {
+    va_list args;
+    va_start(args, format);
+    _vftprintf_s(stderr, format, args);
+    va_end(args);
+    _vftprintf_s(stderr, _T("%s"), _T("\n"));
+}
 
 #if _CONSOLE
-#define DEBUG(...) { if (DebugModeEnabled) { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } }
+#define DEBUG(...) { if (DebugModeEnabled) PrintDebugMessage(__VA_ARGS__); }
 #else
 #define DEBUG(...)
 #endif
@@ -153,7 +173,7 @@ BOOL CreateInstDirectory(BOOL DebugExtractMode)
       lstrcpy(TempPath, InstDir);
       if (strlen(TempPath) == 0)
       {
-         FATAL("Unable to find directory containing exe");
+         FATAL(_T("Unable to find directory containing exe"));
          return FALSE;
       }
    }
@@ -167,11 +187,11 @@ BOOL CreateInstDirectory(BOOL DebugExtractMode)
       UINT tempResult = GetTempFileName(TempPath, _T("ocranstub"), 0, InstDir);
       if (tempResult == 0u)
       {
-         FATAL("Failed to get temp file name.");
+         FATAL(_T("Failed to get temp file name."));
          return FALSE;
       }
 
-      DEBUG("Creating installation directory: '%s'", InstDir);
+      DEBUG(_T("Creating installation directory: '%s'"), InstDir);
 
       /* Attempt to delete the temp file created by GetTempFileName.
          Ignore errors, i.e. if it doesn't exist. */
@@ -183,7 +203,7 @@ BOOL CreateInstDirectory(BOOL DebugExtractMode)
       }
       else if (GetLastError() != ERROR_ALREADY_EXISTS)
       {
-         FATAL("Failed to create installation directory.");
+         FATAL(_T("Failed to create installation directory."));
          return FALSE;
       }
    }
@@ -198,14 +218,14 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
    /* Find name of image */
    if (!GetModuleFileName(NULL, image_path, MAX_PATH))
    {
-      FATAL("Failed to get executable name (error %lu).", GetLastError());
+      LAST_ERROR(_T("Failed to get executable name"));
       return -1;
    }
 
 
     /* By default, assume the installation directory is wherever the EXE is */
     if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
-        FATAL("Failed to set default installation directory.");
+        FATAL(_T("Failed to set default installation directory."));
         return -1;
     }
 
@@ -215,7 +235,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
    HANDLE hImage = CreateFile(image_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
    if (hImage == INVALID_HANDLE_VALUE)
    {
-      FATAL("Failed to open executable (%s)", image_path);
+      FATAL(_T("Failed to open executable (%s)"), image_path);
       return -1;
    }
 
@@ -224,7 +244,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
    HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, FileSize, NULL);
    if (hMem == INVALID_HANDLE_VALUE)
    {
-      FATAL("Failed to create file mapping (error %lu)", GetLastError());
+      LAST_ERROR(_T("Failed to create file mapping"));
       CloseHandle(hImage);
       return -1;
    }
@@ -233,7 +253,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
    LPVOID lpv = MapViewOfFile(hMem, FILE_MAP_READ, 0, 0, 0);
    if (lpv == NULL)
    {
-      FATAL("Failed to map view of executable into memory (error %lu).", GetLastError());
+      LAST_ERROR(_T("Failed to map view of executable into memory"));
    }
    else
    {
@@ -244,25 +264,25 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 
       if (!UnmapViewOfFile(lpv))
       {
-         FATAL("Failed to unmap view of executable.");
+         LAST_ERROR(_T("Failed to unmap view of executable"));
       }
    }
 
    if (!CloseHandle(hMem))
    {
-      FATAL("Failed to close file mapping.");
+      LAST_ERROR(_T("Failed to close file mapping"));
    }
 
    if (!CloseHandle(hImage))
    {
-      FATAL("Failed to close executable.");
+      LAST_ERROR(_T("Failed to close executable"));
    }
 
     if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
-        DEBUG("*** Starting app in %s", InstDir);
+        DEBUG(_T("*** Starting app in %s"), InstDir);
 
         if (ChdirBeforeRunEnabled) {
-            DEBUG("Changing CWD to unpacked directory %s/src", InstDir);
+            DEBUG(_T("Changing CWD to unpacked directory %s/src"), InstDir);
             SetCurrentDirectory(InstDir);
             SetCurrentDirectory("./src");
         }
@@ -280,7 +300,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 
    if (DeleteInstDirEnabled)
    {
-      DEBUG("Deleting temporary installation directory %s", InstDir);
+      DEBUG(_T("Deleting temporary installation directory %s"), InstDir);
       TCHAR SystemDirectory[MAX_PATH];
       if (GetSystemDirectory(SystemDirectory, MAX_PATH) > 0)
          SetCurrentDirectory(SystemDirectory);
@@ -305,10 +325,10 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 {
     LPVOID pSig = ptr + size - sizeof(Signature);
     if (memcmp(pSig, Signature, sizeof(Signature)) != 0) {
-        FATAL("Bad signature in executable.");
+        FATAL(_T("Bad signature in executable."));
         return FALSE;
     }
-    DEBUG("Good signature found.");
+    DEBUG(_T("Good signature found."));
 
     LPVOID data_tail = pSig - sizeof(DWORD);
     DWORD OpcodeOffset = *(DWORD*)(data_tail);
@@ -321,7 +341,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     BOOL compressed       = (BOOL)*(LPBYTE)pSeg; pSeg++;
 
     if (DebugModeEnabled)
-        DEBUG("Ocran stub running in debug mode");
+        DEBUG(_T("Ocran stub running in debug mode"));
 
     CreateInstDirectory(debug_extract);
 
@@ -330,22 +350,22 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     if (compressed) {
 #if WITH_LZMA
         DWORD data_len = data_tail - pSeg;
-        DEBUG("LzmaDecode(%ld)", data_len);
+        DEBUG(_T("LzmaDecode(%ld)"), data_len);
 
         ULONGLONG unpack_size = GetDecompressionSize(pSeg);
         if (unpack_size > (ULONGLONG)(DWORD)-1) {
-            FATAL("Decompression size is too large.");
+            FATAL(_T("Decompression size is too large."));
             return FALSE;
         }
 
         LPVOID unpack_data = LocalAlloc(LMEM_FIXED, unpack_size);
         if (unpack_data == NULL) {
-            FATAL("LocalAlloc failed with error %lu", GetLastError());
+            LAST_ERROR(_T("LocalAlloc failed"));
             return FALSE;
         }
 
         if (!DecompressLzma(unpack_data, unpack_size, pSeg, data_len)) {
-            FATAL("LZMA decompression failed.");
+            FATAL(_T("LZMA decompression failed."));
             LocalFree(unpack_data);
             return FALSE;
         }
@@ -354,7 +374,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
         last_opcode = ProcessOpcodes(&p);
         LocalFree(unpack_data);
 #else
-        FATAL("Does not support LZMA");
+        FATAL(_T("Does not support LZMA"));
         return FALSE;
 #endif
     } else {
@@ -362,7 +382,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     }
 
     if (last_opcode != OP_END) {
-        FATAL("Invalid opcode '%u'.", last_opcode);
+        FATAL(_T("Invalid opcode '%u'."), last_opcode);
         return FALSE;
     }
     return TRUE;
@@ -433,14 +453,14 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
    lstrcat(Fn, _T("\\"));
    lstrcat(Fn, FileName);
 
-   DEBUG("CreateFile(%s, %lu)", Fn, FileSize);
+   DEBUG(_T("CreateFile(%s, %lu)"), Fn, FileSize);
 
     TCHAR parent[MAX_PATH];
 
     if (ParentDirectoryPath(parent, sizeof(parent), FileName)) {
         if (!CheckInstDirPathExists(parent)) {
             if (!MakeDirectory(parent)) {
-                FATAL("Failed to create file '%s'", Fn);
+                FATAL(_T("Failed to create file '%s'"), Fn);
                 return FALSE;
             }
         }
@@ -452,19 +472,19 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
       DWORD BytesWritten;
       if (!WriteFile(hFile, Data, FileSize, &BytesWritten, NULL))
       {
-         FATAL("Write failure (%lu)", GetLastError());
+         LAST_ERROR(_T("Write failure"));
          Result = FALSE;
       }
       if (BytesWritten != FileSize)
       {
-         FATAL("Write size failure");
+         FATAL(_T("Write size failure"));
          Result = FALSE;
       }
       CloseHandle(hFile);
    }
    else
    {
-      FATAL("Failed to create file '%s'", Fn);
+      FATAL(_T("Failed to create file '%s'"), Fn);
       Result = FALSE;
    }
 
@@ -481,7 +501,7 @@ BOOL MakeDirectory(LPTSTR DirectoryName)
    lstrcat(DirName, _T("\\"));
    lstrcat(DirName, DirectoryName);
 
-   DEBUG("CreateDirectory(%s)", DirName);
+   DEBUG(_T("CreateDirectory(%s)"), DirName);
 
     if (CreateDirectory(DirName, NULL))
         return TRUE;
@@ -489,7 +509,7 @@ BOOL MakeDirectory(LPTSTR DirectoryName)
     DWORD e = GetLastError();
 
     if (e == ERROR_ALREADY_EXISTS) {
-        DEBUG("Directory already exists");
+        DEBUG(_T("Directory already exists"));
         return TRUE;
     }
 
@@ -502,7 +522,7 @@ BOOL MakeDirectory(LPTSTR DirectoryName)
                     return TRUE;
     }
 
-    FATAL("Failed to create directory '%s'.", DirName);
+    FATAL(_T("Failed to create directory '%s'."), DirName);
 
     return FALSE;
 }
@@ -534,7 +554,7 @@ DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
 
    if (!r)
    {
-      FATAL("Failed to create process (%s): %lu", ApplicationName, GetLastError());
+      FATAL(_T("Failed to create process (%s): %lu"), ApplicationName, GetLastError());
       return -1;
    }
 
@@ -543,7 +563,7 @@ DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
    DWORD exit_code;
    if (!GetExitCodeProcess(ProcessInformation.hProcess, &exit_code))
    {
-      FATAL("Failed to get exit status (error %lu).", GetLastError());
+      LAST_ERROR(_T("Failed to get exit status"));
    }
 
    CloseHandle(ProcessInformation.hProcess);
@@ -557,9 +577,9 @@ DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
  */
 BOOL SetScript(LPTSTR app_name, LPTSTR cmd_line)
 {
-    DEBUG("SetScript");
+    DEBUG(_T("SetScript"));
     if (Script_ApplicationName || Script_CommandLine) {
-        FATAL("Script is already set")
+        FATAL(_T("Script is already set"));
         return FALSE;
     }
 
@@ -603,12 +623,12 @@ BOOL SetEnv(LPTSTR Name, LPTSTR Value)
 {
    LPTSTR ExpandedValue = ReplaceInstDirPlaceholder(Value);
 
-   DEBUG("SetEnv(%s, %s)", Name, ExpandedValue);
+   DEBUG(_T("SetEnv(%s, %s)"), Name, ExpandedValue);
 
    BOOL Result = FALSE;
    if (!SetEnvironmentVariable(Name, ExpandedValue))
    {
-      FATAL("Failed to set environment variable (error %lu).", GetLastError());
+      LAST_ERROR(_T("Failed to set environment variable"));
       Result = FALSE;
    }
    else
