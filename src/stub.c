@@ -307,13 +307,25 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 
         if (ChdirBeforeRunEnabled) {
             DEBUG(_T("Changing CWD to unpacked directory %s/src"), InstDir);
-            SetCurrentDirectory(InstDir);
-            SetCurrentDirectory("./src");
+
+            LPTSTR script_dir = ExpandInstDirPath(_T("src"));
+
+            if (!SetCurrentDirectory(script_dir)) {
+                LAST_ERROR(_T("Failed to change CWD"));
+                exit_code = -1;
+            }
+
+            LocalFree(script_dir);
         }
 
-        SetEnvironmentVariable(_T("OCRAN_EXECUTABLE"), image_path);
-
-        exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
+        if (exit_code == 0) {
+            if (!SetEnvironmentVariable(_T("OCRAN_EXECUTABLE"), image_path)) {
+                LAST_ERROR(_T("Failed to set environment variable"));
+                exit_code = -1;
+            } else {
+                exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
+            }
+        }
     }
 
     LocalFree(Script_ApplicationName);
