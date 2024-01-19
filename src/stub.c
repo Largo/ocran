@@ -82,14 +82,38 @@ SIZE_T ParentDirectoryPath(LPTSTR dest, SIZE_T dest_len, LPTSTR path)
     return i;
 }
 
-BOOL CheckInstDirPathExists(LPTSTR rel_path)
+LPTSTR ExpandInstDirPath(LPTSTR rel_path)
 {
-    TCHAR path[MAX_PATH];
-    lstrcpy(path, InstDir);
+    if (rel_path == NULL)
+        return NULL;
+
+    SIZE_T rel_path_len = lstrlen(rel_path);
+
+    if (rel_path_len == 0)
+        return NULL;
+
+    SIZE_T len = lstrlen(InstDir) + 1 + rel_path_len + 1;
+    LPTSTR path = (LPTSTR)LocalAlloc(LPTR, len * sizeof(TCHAR));
+
+    if (path == NULL) {
+        LAST_ERROR(_T("LocalAlloc failed"));
+        return NULL;
+    }
+
+    lstrcat(path, InstDir);
     lstrcat(path, _T("\\"));
     lstrcat(path, rel_path);
 
-    return (BOOL)(GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES);
+    return path;
+}
+
+BOOL CheckInstDirPathExists(LPTSTR rel_path)
+{
+    LPTSTR path = ExpandInstDirPath(rel_path);
+    BOOL result = (GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES);
+    LocalFree(path);
+
+    return result;
 }
 
 /**
@@ -448,12 +472,12 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
 {
    BOOL Result = TRUE;
 
-   TCHAR Fn[MAX_PATH];
-   lstrcpy(Fn, InstDir);
-   lstrcat(Fn, _T("\\"));
-   lstrcat(Fn, FileName);
+    LPTSTR Fn = ExpandInstDirPath(FileName);
 
-   DEBUG(_T("CreateFile(%s, %lu)"), Fn, FileSize);
+    if (Fn == NULL)
+        return FALSE;
+
+    DEBUG(_T("CreateFile(%s, %lu)"), Fn, FileSize);
 
     TCHAR parent[MAX_PATH];
 
@@ -461,6 +485,7 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
         if (!CheckInstDirPathExists(parent)) {
             if (!MakeDirectory(parent)) {
                 FATAL(_T("Failed to create file '%s'"), Fn);
+                LocalFree(FileName);
                 return FALSE;
             }
         }
@@ -488,6 +513,8 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
       Result = FALSE;
    }
 
+    LocalFree(FileName);
+
    return Result;
 }
 
@@ -496,20 +523,23 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
 */
 BOOL MakeDirectory(LPTSTR DirectoryName)
 {
-   TCHAR DirName[MAX_PATH];
-   lstrcpy(DirName, InstDir);
-   lstrcat(DirName, _T("\\"));
-   lstrcat(DirName, DirectoryName);
+    LPTSTR dir = ExpandInstDirPath(DirectoryName);
 
-   DEBUG(_T("CreateDirectory(%s)"), DirName);
+    if (dir == NULL)
+        return FALSE;
 
-    if (CreateDirectory(DirName, NULL))
+    DEBUG(_T("CreateDirectory(%s)"), dir);
+
+    if (CreateDirectory(dir, NULL)) {
+        LocalFree(dir);
         return TRUE;
+    }
 
     DWORD e = GetLastError();
 
     if (e == ERROR_ALREADY_EXISTS) {
         DEBUG(_T("Directory already exists"));
+        LocalFree(dir);
         return TRUE;
     }
 
@@ -518,12 +548,15 @@ BOOL MakeDirectory(LPTSTR DirectoryName)
 
         if (ParentDirectoryPath(parent, sizeof(parent), DirectoryName))
             if (MakeDirectory(parent))
-                if (CreateDirectory(DirName, NULL))
+                if (CreateDirectory(dir, NULL)) {
+                    LocalFree(dir);
                     return TRUE;
+                }
     }
 
-    FATAL(_T("Failed to create directory '%s'."), DirName);
+    FATAL(_T("Failed to create directory '%s'."), dir);
 
+    LocalFree(dir);
     return FALSE;
 }
 
