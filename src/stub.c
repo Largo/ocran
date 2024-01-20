@@ -189,13 +189,28 @@ BOOL DeleteRecursively(LPTSTR path)
     }
 }
 
-void MarkForDeletion(LPTSTR path)
+#define DELETION_MAKER_SUFFIX _T(".ocran-delete-me")
+
+void MarkInstDirForDeletion(void)
 {
-   TCHAR marker[MAX_PATH];
-   lstrcpy(marker, path);
-   lstrcat(marker, ".ocran-delete-me");
-   HANDLE h = CreateFile(marker, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-   CloseHandle(h);
+    SIZE_T maker_len = lstrlen(InstDir) + 1 + lstrlen(DELETION_MAKER_SUFFIX) + 1;
+    LPTSTR marker = (LPTSTR)LocalAlloc(LPTR, maker_len * sizeof(TCHAR));
+
+    if (marker == NULL) {
+        LAST_ERROR(_T("LocalAlloc failed"));
+        return;
+    }
+
+    lstrcpy(marker, InstDir);
+    lstrcat(marker, DELETION_MAKER_SUFFIX);
+
+    HANDLE h = CreateFile(marker, 0, 0, NULL, CREATE_ALWAYS, 0, NULL);
+
+    if (h == INVALID_HANDLE_VALUE)
+        LAST_ERROR(_T("Failed to mark for deletion"));
+
+    CloseHandle(h);
+    LocalFree(marker);
 }
 
 BOOL CreateInstDirectory(BOOL DebugExtractMode)
@@ -355,7 +370,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
          SetCurrentDirectory("C:\\");
 
       if (!DeleteRecursively(InstDir))
-            MarkForDeletion(InstDir);
+            MarkInstDirForDeletion();
    }
 
    ExitProcess(exit_code);
