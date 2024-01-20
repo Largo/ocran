@@ -31,12 +31,12 @@ BOOL ChdirBeforeRunEnabled = TRUE;
 void PrintFatalMessage(LPTSTR format, ...)
 {
 #if _CONSOLE
-    _vftprintf_s(stderr, _T("%s"), _T("FATAL ERROR: "));
+    _ftprintf_s(stderr, _T("FATAL ERROR: "));
     va_list args;
     va_start(args, format);
     _vftprintf_s(stderr, format, args);
     va_end(args);
-    _vftprintf_s(stderr, _T("%s"), _T("\n"));
+    _ftprintf_s(stderr, _T("\n"));
 #else
     TCHAR TextBuffer[1024];
     va_list args;
@@ -48,14 +48,14 @@ void PrintFatalMessage(LPTSTR format, ...)
 }
 
 #define FATAL(...) PrintFatalMessage(__VA_ARGS__)
-#define LAST_ERROR(msg) PrintFatalMessage(_T("%s (error %lu)."), msg, GetLastError())
+#define LAST_ERROR(msg) _ftprintf_s(stderr, _T("FATAL ERROR: %s (error %lu)\n"), msg, GetLastError());
 
 void PrintDebugMessage(LPTSTR format, ...) {
     va_list args;
     va_start(args, format);
     _vftprintf_s(stderr, format, args);
     va_end(args);
-    _vftprintf_s(stderr, _T("%s"), _T("\n"));
+    _ftprintf_s(stderr, _T("\n"));
 }
 
 #if _CONSOLE
