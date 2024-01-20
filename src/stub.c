@@ -128,54 +128,65 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 
 BOOL DeleteRecursively(LPTSTR path)
 {
-   TCHAR findPath[MAX_PATH];
-   DWORD pathLength;
-   WIN32_FIND_DATA findData;
-   HANDLE handle;
-   BOOL AnyFailed = FALSE;
+    SIZE_T pathLen = lstrlen(path);
+    SIZE_T findPathLen = lstrlen(path) + 2 + 1; // Including places where '\*' is appended.
+    LPTSTR findPath = (LPTSTR)LocalAlloc(LPTR, findPathLen * sizeof(TCHAR));
 
-   lstrcpy(findPath, path);
-   pathLength = lstrlen(findPath);
-   if (pathLength > 1 && pathLength < MAX_PATH - 2) {
-      if (path[pathLength-1] == '\\')
-         lstrcat(findPath, "*");
-      else {
-         lstrcat(findPath, "\\*");
-         ++pathLength;
-      }
-      handle = FindFirstFile(findPath, &findData);
-      findPath[pathLength] = 0;
-      if (handle != INVALID_HANDLE_VALUE) {
-         do {
-            if (pathLength + lstrlen(findData.cFileName) < MAX_PATH) {
-               TCHAR subPath[MAX_PATH];
-               lstrcpy(subPath, findPath);
-               lstrcat(subPath, findData.cFileName);
-               if ((lstrcmp(findData.cFileName, ".") != 0) && (lstrcmp(findData.cFileName, "..") != 0)) {
-                  if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-                     if (!DeleteRecursively(subPath))
-                        AnyFailed = TRUE;
-                  } else {
-                     if (!DeleteFile(subPath)) {
-                        MoveFileEx(subPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
-                        AnyFailed = TRUE;
-                     }
-                  }
-               }
-            } else {
-               AnyFailed = TRUE;
+    if (findPath == NULL) {
+        LAST_ERROR(_T("LocalAlloc failed"));
+        return FALSE;
+    }
+
+    lstrcpy(findPath, path);
+
+    if (path[pathLen-1] == L'\\')
+        lstrcat(findPath, _T("*"));
+    else
+        lstrcat(findPath, _T("\\*"));
+
+    WIN32_FIND_DATA findData;
+    HANDLE handle = FindFirstFile(findPath, &findData);
+
+    if (handle != INVALID_HANDLE_VALUE) {
+        do {
+            if ((lstrcmp(findData.cFileName, _T(".")) == 0) || (lstrcmp(findData.cFileName, _T("..")) == 0))
+                continue;
+
+            SIZE_T subPathLen = pathLen + 1 + lstrlen(findData.cFileName) + 1;
+            LPTSTR subPath = (LPTSTR)LocalAlloc(LPTR, subPathLen * sizeof(TCHAR));
+
+            if (subPath == NULL) {
+                LAST_ERROR(_T("LocalAlloc failed"));
+                break;
             }
-         } while (FindNextFile(handle, &findData));
-         FindClose(handle);
-      }
-   } else {
-      AnyFailed = TRUE;
-   }
-   if (!RemoveDirectory(findPath)) {
-      MoveFileEx(findPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
-      AnyFailed = TRUE;
-   }
-   return AnyFailed;
+
+            lstrcpy(subPath, path);
+            lstrcat(subPath, _T("\\"));
+            lstrcat(subPath, findData.cFileName);
+
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                DeleteRecursively(subPath);
+            } else {
+                if (!DeleteFile(subPath)) {
+                    LAST_ERROR(_T("Failed to delete file"));
+                    MoveFileEx(subPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+                }
+            }
+
+            LocalFree(subPath);
+        } while (FindNextFile(handle, &findData));
+        FindClose(handle);
+    }
+
+    LocalFree(findPath);
+
+    if (!RemoveDirectory(path)) {
+        LAST_ERROR(_T("Failed to delete directory"));
+        MoveFileEx(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+        return FALSE;
+    } else {
+        return TRUE;
+    }
 }
 
 void MarkForDeletion(LPTSTR path)
