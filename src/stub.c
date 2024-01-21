@@ -454,34 +454,38 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
    Expands a specially formatted string, replacing | with the
    temporary installation directory.
 */
+
+#define PLACEHOLDER _T('|')
+
 LPTSTR ReplaceInstDirPlaceholder(LPTSTR str)
 {
-   DWORD OutSize = lstrlen(str) + 1;
-   LPTSTR a = str;
-   while ((a = _tcschr(a, L'|')))
-   {
-      OutSize += lstrlen(InstDir) - 1;
-      a++;
-   }
+    int InstDirLen = lstrlen(InstDir);
+    LPTSTR p;
+    int c = 0;
 
-   LPTSTR out = (LPTSTR)LocalAlloc(LMEM_FIXED, OutSize);
+    for (p = str; *p; p++) { if (*p == PLACEHOLDER) c++; }
+    SIZE_T out_len = lstrlen(str) - c + InstDirLen * c + 1;
+    LPTSTR out = (LPTSTR)LocalAlloc(LPTR, out_len * sizeof(TCHAR));
 
-   LPTSTR OutPtr = out;
-   while ((a = _tcschr(str, L'|')))
-   {
-      int l = a - str;
-      if (l > 0)
-      {
-         memcpy(OutPtr, str, l);
-         OutPtr += l;
-         str += l;
-      }
-      str += 1;
-      lstrcpy(OutPtr, InstDir);
-      OutPtr += lstrlen(OutPtr);
-   }
-   lstrcpy(OutPtr, str);
-   return out;
+    if (out == NULL) {
+        LAST_ERROR(_T("LocalAlloc failed"));
+        return NULL;
+    }
+
+    LPTSTR out_p = out;
+
+    for (p = str; *p; p++)  {
+        if (*p == PLACEHOLDER) {
+            lstrcat(out_p, InstDir);
+            out_p += InstDirLen;
+        } else {
+            *out_p = *p;
+            out_p++;
+        }
+    }
+    *out_p = _T('\0');
+
+    return out;
 }
 
 /**
