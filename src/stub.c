@@ -694,22 +694,23 @@ BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T
 }
 #endif
 
-BOOL SetEnv(LPTSTR Name, LPTSTR Value)
+BOOL SetEnv(LPTSTR name, LPTSTR value)
 {
-   LPTSTR ExpandedValue = ReplaceInstDirPlaceholder(Value);
+    LPTSTR replaced_value = ReplaceInstDirPlaceholder(value);
 
-   DEBUG(_T("SetEnv(%s, %s)"), Name, ExpandedValue);
+    if (replaced_value == NULL) {
+        FATAL(_T("Failed to replace the value placeholder"));
+        return FALSE;
+    }
 
-   BOOL Result = FALSE;
-   if (!SetEnvironmentVariable(Name, ExpandedValue))
-   {
-      LAST_ERROR(_T("Failed to set environment variable"));
-      Result = FALSE;
-   }
-   else
-   {
-      Result = TRUE;
-   }
-   LocalFree(ExpandedValue);
-   return Result;
+    DEBUG(_T("SetEnv(%s, %s)"), name, replaced_value);
+
+    BOOL result = SetEnvironmentVariable(name, replaced_value);
+
+    if (!result)
+        LAST_ERROR(_T("Failed to set environment variable"));
+
+    LocalFree(replaced_value);
+
+    return result;
 }
