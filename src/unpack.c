@@ -3,11 +3,11 @@
 #include "unpack.h"
 
 /** Decoder: Zero-terminated string */
-LPTSTR GetString(LPVOID* p)
+char *GetString(LPVOID* p)
 {
     SIZE_T len = (SIZE_T)*(LPWORD)*p;
     *p += sizeof(WORD);
-    LPTSTR str = *p;
+    char *str = *p;
     *p += len;
     return str;
 }
@@ -52,7 +52,7 @@ BOOL OpCreateDirectory(LPVOID* p)
 
 BOOL OpCreateFile(LPVOID* p)
 {
-    LPTSTR file_name = GetString(p);
+    char *file_name = GetString(p);
     DWORD file_size = GetInteger(p);
     LPVOID data = *p;
     *p += file_size;
@@ -62,16 +62,16 @@ BOOL OpCreateFile(LPVOID* p)
 
 BOOL OpSetEnv(LPVOID* p)
 {
-    LPTSTR name = GetString(p);
-    LPTSTR value = GetString(p);
+    char *name = GetString(p);
+    char *value = GetString(p);
 
     return SetEnv(name, value);
 }
 
 BOOL OpSetScript(LPVOID* p)
 {
-    LPTSTR app_name = GetString(p);
-    LPTSTR cmd_line = GetString(p);
+    char *app_name = GetString(p);
+    char *cmd_line = GetString(p);
 
     return SetScript(app_name, cmd_line);
 }

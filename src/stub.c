@@ -6,14 +6,13 @@
 
 #include <windows.h>
 #include <string.h>
-#include <tchar.h>
 #include <stdio.h>
 #include "unpack.h"
 
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
 BOOL ProcessImage(LPVOID p, DWORD size);
-DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine);
+DWORD CreateAndWaitForProcess(char *ApplicationName, char *CommandLine);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
@@ -21,41 +20,41 @@ ULONGLONG GetDecompressionSize(LPVOID src);
 BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T CompressedSize);
 #endif
 
-LPTSTR Script_ApplicationName = NULL;
-LPTSTR Script_CommandLine = NULL;
+char *Script_ApplicationName = NULL;
+char *Script_CommandLine = NULL;
 
 BOOL DebugModeEnabled = FALSE;
 BOOL DeleteInstDirEnabled = FALSE;
 BOOL ChdirBeforeRunEnabled = TRUE;
 
-void PrintFatalMessage(LPTSTR format, ...)
+void PrintFatalMessage(char *format, ...)
 {
 #if _CONSOLE
-    _ftprintf_s(stderr, _T("FATAL ERROR: "));
+    fprintf_s(stderr, "FATAL ERROR: ");
     va_list args;
     va_start(args, format);
-    _vftprintf_s(stderr, format, args);
+    vfprintf_s(stderr, format, args);
     va_end(args);
-    _ftprintf_s(stderr, _T("\n"));
+    fprintf_s(stderr, "\n");
 #else
-    TCHAR TextBuffer[1024];
+    char TextBuffer[1024];
     va_list args;
     va_start(args, format);
-    _sntprintf(TextBuffer, 1024, format, args);
+    snprintf(TextBuffer, 1024, format, args);
     va_end(args);
-    MessageBox(NULL, TextBuffer, _T("OCRAN"), MB_OK | MB_ICONWARNING);
+    MessageBox(NULL, TextBuffer, "OCRAN", MB_OK | MB_ICONWARNING);
 #endif
 }
 
 #define FATAL(...) PrintFatalMessage(__VA_ARGS__)
-#define LAST_ERROR(msg) _ftprintf_s(stderr, _T("FATAL ERROR: %s (error %lu)\n"), msg, GetLastError());
+#define LAST_ERROR(msg) fprintf_s(stderr, "FATAL ERROR: %s (error %lu)\n", msg, GetLastError());
 
-void PrintDebugMessage(LPTSTR format, ...) {
+void PrintDebugMessage(char *format, ...) {
     va_list args;
     va_start(args, format);
-    _vftprintf_s(stderr, format, args);
+    vfprintf_s(stderr, format, args);
     va_end(args);
-    _ftprintf_s(stderr, _T("\n"));
+    fprintf_s(stderr, "\n");
 }
 
 #if _CONSOLE
@@ -64,52 +63,52 @@ void PrintDebugMessage(LPTSTR format, ...) {
 #define DEBUG(...)
 #endif
 
-TCHAR InstDir[MAX_PATH];
+char InstDir[MAX_PATH];
 
-SIZE_T ParentDirectoryPath(LPTSTR dest, SIZE_T dest_len, LPTSTR path)
+SIZE_T ParentDirectoryPath(char *dest, SIZE_T dest_len, char *path)
 {
     if (path == NULL) return 0;
 
-    SIZE_T i = lstrlen(path);
+    SIZE_T i = strlen(path);
 
     for (; i > 0; i--)
-        if (path[i] == L'\\') break;
+        if (path[i] == '\\') break;
 
     if (dest != NULL)
-        if (_tcsncpy_s(dest, dest_len, path, i))
+        if (strncpy_s(dest, dest_len, path, i))
             return 0;
 
     return i;
 }
 
-LPTSTR ExpandInstDirPath(LPTSTR rel_path)
+char *ExpandInstDirPath(char *rel_path)
 {
     if (rel_path == NULL)
         return NULL;
 
-    SIZE_T rel_path_len = lstrlen(rel_path);
+    SIZE_T rel_path_len = strlen(rel_path);
 
     if (rel_path_len == 0)
         return NULL;
 
-    SIZE_T len = lstrlen(InstDir) + 1 + rel_path_len + 1;
-    LPTSTR path = (LPTSTR)LocalAlloc(LPTR, len * sizeof(TCHAR));
+    SIZE_T len = strlen(InstDir) + 1 + rel_path_len + 1;
+    char *path = (char *)LocalAlloc(LPTR, len);
 
     if (path == NULL) {
-        LAST_ERROR(_T("LocalAlloc failed"));
+        LAST_ERROR("LocalAlloc failed");
         return NULL;
     }
 
-    lstrcat(path, InstDir);
-    lstrcat(path, _T("\\"));
-    lstrcat(path, rel_path);
+    strcat(path, InstDir);
+    strcat(path, "\\");
+    strcat(path, rel_path);
 
     return path;
 }
 
-BOOL CheckInstDirPathExists(LPTSTR rel_path)
+BOOL CheckInstDirPathExists(char *rel_path)
 {
-    LPTSTR path = ExpandInstDirPath(rel_path);
+    char *path = ExpandInstDirPath(rel_path);
     BOOL result = (GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES);
     LocalFree(path);
 
@@ -126,49 +125,49 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
    return TRUE;
 }
 
-BOOL DeleteRecursively(LPTSTR path)
+BOOL DeleteRecursively(char *path)
 {
-    SIZE_T pathLen = lstrlen(path);
-    SIZE_T findPathLen = lstrlen(path) + 2 + 1; // Including places where '\*' is appended.
-    LPTSTR findPath = (LPTSTR)LocalAlloc(LPTR, findPathLen * sizeof(TCHAR));
+    SIZE_T pathLen = strlen(path);
+    SIZE_T findPathLen = strlen(path) + 2 + 1; // Including places where '\*' is appended.
+    char *findPath = (char *)LocalAlloc(LPTR, findPathLen);
 
     if (findPath == NULL) {
-        LAST_ERROR(_T("LocalAlloc failed"));
+        LAST_ERROR("LocalAlloc failed");
         return FALSE;
     }
 
-    lstrcpy(findPath, path);
+    strcpy(findPath, path);
 
-    if (path[pathLen-1] == L'\\')
-        lstrcat(findPath, _T("*"));
+    if (path[pathLen-1] == '\\')
+        strcat(findPath, "*");
     else
-        lstrcat(findPath, _T("\\*"));
+        strcat(findPath, "\\*");
 
     WIN32_FIND_DATA findData;
     HANDLE handle = FindFirstFile(findPath, &findData);
 
     if (handle != INVALID_HANDLE_VALUE) {
         do {
-            if ((lstrcmp(findData.cFileName, _T(".")) == 0) || (lstrcmp(findData.cFileName, _T("..")) == 0))
+            if ((strcmp(findData.cFileName, ".") == 0) || (strcmp(findData.cFileName, "..") == 0))
                 continue;
 
-            SIZE_T subPathLen = pathLen + 1 + lstrlen(findData.cFileName) + 1;
-            LPTSTR subPath = (LPTSTR)LocalAlloc(LPTR, subPathLen * sizeof(TCHAR));
+            SIZE_T subPathLen = pathLen + 1 + strlen(findData.cFileName) + 1;
+            char *subPath = (char *)LocalAlloc(LPTR, subPathLen);
 
             if (subPath == NULL) {
-                LAST_ERROR(_T("LocalAlloc failed"));
+                LAST_ERROR("LocalAlloc failed");
                 break;
             }
 
-            lstrcpy(subPath, path);
-            lstrcat(subPath, _T("\\"));
-            lstrcat(subPath, findData.cFileName);
+            strcpy(subPath, path);
+            strcat(subPath, "\\");
+            strcat(subPath, findData.cFileName);
 
             if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
                 DeleteRecursively(subPath);
             } else {
                 if (!DeleteFile(subPath)) {
-                    LAST_ERROR(_T("Failed to delete file"));
+                    LAST_ERROR("Failed to delete file");
                     MoveFileEx(subPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
                 }
             }
@@ -181,7 +180,7 @@ BOOL DeleteRecursively(LPTSTR path)
     LocalFree(findPath);
 
     if (!RemoveDirectory(path)) {
-        LAST_ERROR(_T("Failed to delete directory"));
+        LAST_ERROR("Failed to delete directory");
         MoveFileEx(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
         return FALSE;
     } else {
@@ -189,25 +188,25 @@ BOOL DeleteRecursively(LPTSTR path)
     }
 }
 
-#define DELETION_MAKER_SUFFIX _T(".ocran-delete-me")
+#define DELETION_MAKER_SUFFIX ".ocran-delete-me"
 
 void MarkInstDirForDeletion(void)
 {
-    SIZE_T maker_len = lstrlen(InstDir) + 1 + lstrlen(DELETION_MAKER_SUFFIX) + 1;
-    LPTSTR marker = (LPTSTR)LocalAlloc(LPTR, maker_len * sizeof(TCHAR));
+    SIZE_T maker_len = strlen(InstDir) + 1 + strlen(DELETION_MAKER_SUFFIX) + 1;
+    char *marker = (char *)LocalAlloc(LPTR, maker_len);
 
     if (marker == NULL) {
-        LAST_ERROR(_T("LocalAlloc failed"));
+        LAST_ERROR("LocalAlloc failed");
         return;
     }
 
-    lstrcpy(marker, InstDir);
-    lstrcat(marker, DELETION_MAKER_SUFFIX);
+    strcpy(marker, InstDir);
+    strcat(marker, DELETION_MAKER_SUFFIX);
 
     HANDLE h = CreateFile(marker, 0, 0, NULL, CREATE_ALWAYS, 0, NULL);
 
     if (h == INVALID_HANDLE_VALUE)
-        LAST_ERROR(_T("Failed to mark for deletion"));
+        LAST_ERROR("Failed to mark for deletion");
 
     CloseHandle(h);
     LocalFree(marker);
@@ -216,14 +215,14 @@ void MarkInstDirForDeletion(void)
 BOOL CreateInstDirectory(BOOL DebugExtractMode)
 {
    /* Create an installation directory that will hold the extracted files */
-   TCHAR TempPath[MAX_PATH];
+   char TempPath[MAX_PATH];
    if (DebugExtractMode)
    {
       // In debug extraction mode, create the temp directory next to the exe
-      lstrcpy(TempPath, InstDir);
+      strcpy(TempPath, InstDir);
       if (strlen(TempPath) == 0)
       {
-         FATAL(_T("Unable to find directory containing exe"));
+         FATAL("Unable to find directory containing exe");
          return FALSE;
       }
    }
@@ -234,14 +233,14 @@ BOOL CreateInstDirectory(BOOL DebugExtractMode)
 
    while (TRUE)
    {
-      UINT tempResult = GetTempFileName(TempPath, _T("ocranstub"), 0, InstDir);
+      UINT tempResult = GetTempFileName(TempPath, "ocranstub", 0, InstDir);
       if (tempResult == 0u)
       {
-         FATAL(_T("Failed to get temp file name."));
+         FATAL("Failed to get temp file name.");
          return FALSE;
       }
 
-      DEBUG(_T("Creating installation directory: '%s'"), InstDir);
+      DEBUG("Creating installation directory: '%s'", InstDir);
 
       /* Attempt to delete the temp file created by GetTempFileName.
          Ignore errors, i.e. if it doesn't exist. */
@@ -253,29 +252,29 @@ BOOL CreateInstDirectory(BOOL DebugExtractMode)
       }
       else if (GetLastError() != ERROR_ALREADY_EXISTS)
       {
-         FATAL(_T("Failed to create installation directory."));
+         FATAL("Failed to create installation directory.");
          return FALSE;
       }
    }
    return TRUE;
 }
 
-int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow)
+int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     DWORD exit_code = 0;
-    TCHAR image_path[MAX_PATH];
+    char image_path[MAX_PATH];
 
    /* Find name of image */
    if (!GetModuleFileName(NULL, image_path, MAX_PATH))
    {
-      LAST_ERROR(_T("Failed to get executable name"));
+      LAST_ERROR("Failed to get executable name");
       return -1;
    }
 
 
     /* By default, assume the installation directory is wherever the EXE is */
     if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
-        FATAL(_T("Failed to set default installation directory."));
+        FATAL("Failed to set default installation directory.");
         return -1;
     }
 
@@ -285,7 +284,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
    HANDLE hImage = CreateFile(image_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
    if (hImage == INVALID_HANDLE_VALUE)
    {
-      FATAL(_T("Failed to open executable (%s)"), image_path);
+      FATAL("Failed to open executable (%s)", image_path);
       return -1;
    }
 
@@ -294,7 +293,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
    HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, FileSize, NULL);
    if (hMem == INVALID_HANDLE_VALUE)
    {
-      LAST_ERROR(_T("Failed to create file mapping"));
+      LAST_ERROR("Failed to create file mapping");
       CloseHandle(hImage);
       return -1;
    }
@@ -303,7 +302,7 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
    LPVOID lpv = MapViewOfFile(hMem, FILE_MAP_READ, 0, 0, 0);
    if (lpv == NULL)
    {
-      LAST_ERROR(_T("Failed to map view of executable into memory"));
+      LAST_ERROR("Failed to map view of executable into memory");
    }
    else
    {
@@ -314,30 +313,30 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 
       if (!UnmapViewOfFile(lpv))
       {
-         LAST_ERROR(_T("Failed to unmap view of executable"));
+         LAST_ERROR("Failed to unmap view of executable");
       }
    }
 
    if (!CloseHandle(hMem))
    {
-      LAST_ERROR(_T("Failed to close file mapping"));
+      LAST_ERROR("Failed to close file mapping");
    }
 
    if (!CloseHandle(hImage))
    {
-      LAST_ERROR(_T("Failed to close executable"));
+      LAST_ERROR("Failed to close executable");
    }
 
     if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
-        DEBUG(_T("*** Starting app in %s"), InstDir);
+        DEBUG("*** Starting app in %s", InstDir);
 
         if (ChdirBeforeRunEnabled) {
-            DEBUG(_T("Changing CWD to unpacked directory %s/src"), InstDir);
+            DEBUG("Changing CWD to unpacked directory %s/src", InstDir);
 
-            LPTSTR script_dir = ExpandInstDirPath(_T("src"));
+            char *script_dir = ExpandInstDirPath("src");
 
             if (!SetCurrentDirectory(script_dir)) {
-                LAST_ERROR(_T("Failed to change CWD"));
+                LAST_ERROR("Failed to change CWD");
                 exit_code = -1;
             }
 
@@ -345,8 +344,8 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
         }
 
         if (exit_code == 0) {
-            if (!SetEnvironmentVariable(_T("OCRAN_EXECUTABLE"), image_path)) {
-                LAST_ERROR(_T("Failed to set environment variable"));
+            if (!SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
+                LAST_ERROR("Failed to set environment variable");
                 exit_code = -1;
             } else {
                 exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
@@ -362,8 +361,8 @@ int CALLBACK _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 
    if (DeleteInstDirEnabled)
    {
-      DEBUG(_T("Deleting temporary installation directory %s"), InstDir);
-      TCHAR SystemDirectory[MAX_PATH];
+      DEBUG("Deleting temporary installation directory %s", InstDir);
+      char SystemDirectory[MAX_PATH];
       if (GetSystemDirectory(SystemDirectory, MAX_PATH) > 0)
          SetCurrentDirectory(SystemDirectory);
       else
@@ -387,10 +386,10 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 {
     LPVOID pSig = ptr + size - sizeof(Signature);
     if (memcmp(pSig, Signature, sizeof(Signature)) != 0) {
-        FATAL(_T("Bad signature in executable."));
+        FATAL("Bad signature in executable.");
         return FALSE;
     }
-    DEBUG(_T("Good signature found."));
+    DEBUG("Good signature found.");
 
     LPVOID data_tail = pSig - sizeof(DWORD);
     DWORD OpcodeOffset = *(DWORD*)(data_tail);
@@ -403,7 +402,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     BOOL compressed       = (BOOL)*(LPBYTE)pSeg; pSeg++;
 
     if (DebugModeEnabled)
-        DEBUG(_T("Ocran stub running in debug mode"));
+        DEBUG("Ocran stub running in debug mode");
 
     CreateInstDirectory(debug_extract);
 
@@ -412,22 +411,22 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     if (compressed) {
 #if WITH_LZMA
         DWORD data_len = data_tail - pSeg;
-        DEBUG(_T("LzmaDecode(%ld)"), data_len);
+        DEBUG("LzmaDecode(%ld)", data_len);
 
         ULONGLONG unpack_size = GetDecompressionSize(pSeg);
         if (unpack_size > (ULONGLONG)(DWORD)-1) {
-            FATAL(_T("Decompression size is too large."));
+            FATAL("Decompression size is too large.");
             return FALSE;
         }
 
         LPVOID unpack_data = LocalAlloc(LMEM_FIXED, unpack_size);
         if (unpack_data == NULL) {
-            LAST_ERROR(_T("LocalAlloc failed"));
+            LAST_ERROR("LocalAlloc failed");
             return FALSE;
         }
 
         if (!DecompressLzma(unpack_data, unpack_size, pSeg, data_len)) {
-            FATAL(_T("LZMA decompression failed."));
+            FATAL("LZMA decompression failed.");
             LocalFree(unpack_data);
             return FALSE;
         }
@@ -436,7 +435,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
         last_opcode = ProcessOpcodes(&p);
         LocalFree(unpack_data);
 #else
-        FATAL(_T("Does not support LZMA"));
+        FATAL("Does not support LZMA");
         return FALSE;
 #endif
     } else {
@@ -444,7 +443,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     }
 
     if (last_opcode != OP_END) {
-        FATAL(_T("Invalid opcode '%u'."), last_opcode);
+        FATAL("Invalid opcode '%u'.", last_opcode);
         return FALSE;
     }
     return TRUE;
@@ -455,35 +454,35 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
    temporary installation directory.
 */
 
-#define PLACEHOLDER _T('|')
+#define PLACEHOLDER '|'
 
-LPTSTR ReplaceInstDirPlaceholder(LPTSTR str)
+char *ReplaceInstDirPlaceholder(char *str)
 {
-    int InstDirLen = lstrlen(InstDir);
-    LPTSTR p;
+    int InstDirLen = strlen(InstDir);
+    char *p;
     int c = 0;
 
     for (p = str; *p; p++) { if (*p == PLACEHOLDER) c++; }
-    SIZE_T out_len = lstrlen(str) - c + InstDirLen * c + 1;
-    LPTSTR out = (LPTSTR)LocalAlloc(LPTR, out_len * sizeof(TCHAR));
+    SIZE_T out_len = strlen(str) - c + InstDirLen * c + 1;
+    char *out = (char *)LocalAlloc(LPTR, out_len);
 
     if (out == NULL) {
-        LAST_ERROR(_T("LocalAlloc failed"));
+        LAST_ERROR("LocalAlloc failed");
         return NULL;
     }
 
-    LPTSTR out_p = out;
+    char *out_p = out;
 
     for (p = str; *p; p++)  {
         if (*p == PLACEHOLDER) {
-            lstrcat(out_p, InstDir);
+            strcat(out_p, InstDir);
             out_p += InstDirLen;
         } else {
             *out_p = *p;
             out_p++;
         }
     }
-    *out_p = _T('\0');
+    *out_p = '\0';
 
     return out;
 }
@@ -491,7 +490,7 @@ LPTSTR ReplaceInstDirPlaceholder(LPTSTR str)
 /**
    Finds the start of the first argument after the current one. Handles quoted arguments.
 */
-LPTSTR SkipArg(LPTSTR str)
+char *SkipArg(char *str)
 {
    if (*str == '"')
    {
@@ -510,23 +509,23 @@ LPTSTR SkipArg(LPTSTR str)
 /**
    Create a file (OP_CREATE_FILE opcode handler)
 */
-BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
+BOOL MakeFile(char *FileName, DWORD FileSize, LPVOID Data)
 {
    BOOL Result = TRUE;
 
-    LPTSTR Fn = ExpandInstDirPath(FileName);
+    char *Fn = ExpandInstDirPath(FileName);
 
     if (Fn == NULL)
         return FALSE;
 
-    DEBUG(_T("CreateFile(%s, %lu)"), Fn, FileSize);
+    DEBUG("CreateFile(%s, %lu)", Fn, FileSize);
 
-    TCHAR parent[MAX_PATH];
+    char parent[MAX_PATH];
 
     if (ParentDirectoryPath(parent, sizeof(parent), FileName)) {
         if (!CheckInstDirPathExists(parent)) {
             if (!MakeDirectory(parent)) {
-                FATAL(_T("Failed to create file '%s'"), Fn);
+                FATAL("Failed to create file '%s'", Fn);
                 LocalFree(FileName);
                 return FALSE;
             }
@@ -539,19 +538,19 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
       DWORD BytesWritten;
       if (!WriteFile(hFile, Data, FileSize, &BytesWritten, NULL))
       {
-         LAST_ERROR(_T("Write failure"));
+         LAST_ERROR("Write failure");
          Result = FALSE;
       }
       if (BytesWritten != FileSize)
       {
-         FATAL(_T("Write size failure"));
+         FATAL("Write size failure");
          Result = FALSE;
       }
       CloseHandle(hFile);
    }
    else
    {
-      FATAL(_T("Failed to create file '%s'"), Fn);
+      FATAL("Failed to create file '%s'", Fn);
       Result = FALSE;
    }
 
@@ -563,14 +562,14 @@ BOOL MakeFile(LPTSTR FileName, DWORD FileSize, LPVOID Data)
 /**
    Create a directory (OP_CREATE_DIRECTORY opcode handler)
 */
-BOOL MakeDirectory(LPTSTR DirectoryName)
+BOOL MakeDirectory(char *DirectoryName)
 {
-    LPTSTR dir = ExpandInstDirPath(DirectoryName);
+    char *dir = ExpandInstDirPath(DirectoryName);
 
     if (dir == NULL)
         return FALSE;
 
-    DEBUG(_T("CreateDirectory(%s)"), dir);
+    DEBUG("CreateDirectory(%s)", dir);
 
     if (CreateDirectory(dir, NULL)) {
         LocalFree(dir);
@@ -580,13 +579,13 @@ BOOL MakeDirectory(LPTSTR DirectoryName)
     DWORD e = GetLastError();
 
     if (e == ERROR_ALREADY_EXISTS) {
-        DEBUG(_T("Directory already exists"));
+        DEBUG("Directory already exists");
         LocalFree(dir);
         return TRUE;
     }
 
     if (e == ERROR_PATH_NOT_FOUND) {
-        TCHAR parent[MAX_PATH];
+        char parent[MAX_PATH];
 
         if (ParentDirectoryPath(parent, sizeof(parent), DirectoryName))
             if (MakeDirectory(parent))
@@ -596,29 +595,29 @@ BOOL MakeDirectory(LPTSTR DirectoryName)
                 }
     }
 
-    FATAL(_T("Failed to create directory '%s'."), dir);
+    FATAL("Failed to create directory '%s'.", dir);
 
     LocalFree(dir);
     return FALSE;
 }
 
-void GetScriptInfo(LPTSTR ImageName, LPTSTR* pApplicationName, LPTSTR CmdLine, LPTSTR* pCommandLine)
+void GetScriptInfo(char *ImageName, char **pApplicationName, char *CmdLine, char **pCommandLine)
 {
    *pApplicationName = ReplaceInstDirPlaceholder(ImageName);
 
-   LPTSTR ExpandedCommandLine = ReplaceInstDirPlaceholder(CmdLine);
-   LPTSTR MyCmdLine = GetCommandLine();
-   LPTSTR MyArgs = SkipArg(MyCmdLine);
+   char *ExpandedCommandLine = ReplaceInstDirPlaceholder(CmdLine);
+   char *MyCmdLine = GetCommandLine();
+   char *MyArgs = SkipArg(MyCmdLine);
 
-   *pCommandLine = LocalAlloc(LMEM_FIXED, lstrlen(ExpandedCommandLine) + 1 + lstrlen(MyArgs) + 1);
-   lstrcpy(*pCommandLine, ExpandedCommandLine);
-   lstrcat(*pCommandLine, _T(" "));
-   lstrcat(*pCommandLine, MyArgs);
+   *pCommandLine = LocalAlloc(LMEM_FIXED, strlen(ExpandedCommandLine) + 1 + strlen(MyArgs) + 1);
+   strcpy(*pCommandLine, ExpandedCommandLine);
+   strcat(*pCommandLine, " ");
+   strcat(*pCommandLine, MyArgs);
 
    LocalFree(ExpandedCommandLine);
 }
 
-DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
+DWORD CreateAndWaitForProcess(char *ApplicationName, char *CommandLine)
 {
    PROCESS_INFORMATION ProcessInformation;
    STARTUPINFO StartupInfo;
@@ -629,7 +628,7 @@ DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
 
    if (!r)
    {
-      FATAL(_T("Failed to create process (%s): %lu"), ApplicationName, GetLastError());
+      FATAL("Failed to create process (%s): %lu", ApplicationName, GetLastError());
       return -1;
    }
 
@@ -638,7 +637,7 @@ DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
    DWORD exit_code;
    if (!GetExitCodeProcess(ProcessInformation.hProcess, &exit_code))
    {
-      LAST_ERROR(_T("Failed to get exit status"));
+      LAST_ERROR("Failed to get exit status");
    }
 
    CloseHandle(ProcessInformation.hProcess);
@@ -650,11 +649,11 @@ DWORD CreateAndWaitForProcess(LPTSTR ApplicationName, LPTSTR CommandLine)
  * Sets up a process to be created after all other opcodes have been processed. This can be used to create processes
  * after the temporary files have all been created and memory has been freed.
  */
-BOOL SetScript(LPTSTR app_name, LPTSTR cmd_line)
+BOOL SetScript(char *app_name, char *cmd_line)
 {
-    DEBUG(_T("SetScript"));
+    DEBUG("SetScript");
     if (Script_ApplicationName || Script_CommandLine) {
-        FATAL(_T("Script is already set"));
+        FATAL("Script is already set");
         return FALSE;
     }
 
@@ -694,21 +693,21 @@ BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T
 }
 #endif
 
-BOOL SetEnv(LPTSTR name, LPTSTR value)
+BOOL SetEnv(char *name, char *value)
 {
-    LPTSTR replaced_value = ReplaceInstDirPlaceholder(value);
+    char *replaced_value = ReplaceInstDirPlaceholder(value);
 
     if (replaced_value == NULL) {
-        FATAL(_T("Failed to replace the value placeholder"));
+        FATAL("Failed to replace the value placeholder");
         return FALSE;
     }
 
-    DEBUG(_T("SetEnv(%s, %s)"), name, replaced_value);
+    DEBUG("SetEnv(%s, %s)", name, replaced_value);
 
     BOOL result = SetEnvironmentVariable(name, replaced_value);
 
     if (!result)
-        LAST_ERROR(_T("Failed to set environment variable"));
+        LAST_ERROR("Failed to set environment variable");
 
     LocalFree(replaced_value);
 

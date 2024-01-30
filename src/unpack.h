@@ -5,9 +5,9 @@
 #define OP_SET_SCRIPT (BYTE)4
 #define OP_MAX (BYTE)5
 
-BOOL MakeDirectory(LPTSTR dir_name);
-BOOL MakeFile(LPTSTR file_name, DWORD file_size, LPVOID data);
-BOOL SetEnv(LPTSTR name, LPTSTR value);
-BOOL SetScript(LPTSTR app_name, LPTSTR cmd_line);
+BOOL MakeDirectory(char *dir_name);
+BOOL MakeFile(char *file_name, DWORD file_size, LPVOID data);
+BOOL SetEnv(char *name, char *value);
+BOOL SetScript(char *app_name, char *cmd_line);
 
 BYTE ProcessOpcodes(LPVOID* p);
