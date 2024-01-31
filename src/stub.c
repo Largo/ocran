@@ -509,54 +509,59 @@ char *SkipArg(char *str)
 /**
    Create a file (OP_CREATE_FILE opcode handler)
 */
-BOOL MakeFile(char *FileName, DWORD FileSize, LPVOID Data)
+BOOL MakeFile(char *file_name, DWORD file_size, LPVOID data)
 {
-   BOOL Result = TRUE;
-
-    char *Fn = ExpandInstDirPath(FileName);
-
-    if (Fn == NULL)
+    if (file_name == NULL) {
+        FATAL("file_name is NULL");
         return FALSE;
+    }
 
-    DEBUG("CreateFile(%s, %lu)", Fn, FileSize);
+    char *path = ExpandInstDirPath(file_name);
+
+    if (path == NULL) {
+        FATAL("Failed to expand path to installation directory");
+        return FALSE;
+    }
+
+    DEBUG("CreateFile(%s)", path);
 
     char parent[MAX_PATH];
 
-    if (ParentDirectoryPath(parent, sizeof(parent), FileName)) {
-        if (!CheckInstDirPathExists(parent)) {
-            if (!MakeDirectory(parent)) {
-                FATAL("Failed to create file '%s'", Fn);
-                LocalFree(FileName);
-                return FALSE;
-            }
+    if (ParentDirectoryPath(parent, sizeof(parent), file_name)) {
+        if (!MakeDirectory(parent)) {
+            FATAL("Failed to create parent directory");
+            LocalFree(path);
+            return FALSE;
         }
     }
 
-   HANDLE hFile = CreateFile(Fn, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
-   if (hFile != INVALID_HANDLE_VALUE)
-   {
-      DWORD BytesWritten;
-      if (!WriteFile(hFile, Data, FileSize, &BytesWritten, NULL))
-      {
-         LAST_ERROR("Write failure");
-         Result = FALSE;
-      }
-      if (BytesWritten != FileSize)
-      {
-         FATAL("Write size failure");
-         Result = FALSE;
-      }
-      CloseHandle(hFile);
-   }
-   else
-   {
-      FATAL("Failed to create file '%s'", Fn);
-      Result = FALSE;
-   }
+    BOOL result = TRUE;
+    HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
 
-    LocalFree(FileName);
+    if (h != INVALID_HANDLE_VALUE) {
+        DWORD BytesWritten;
 
-   return Result;
+        DEBUG("Write data(%lu)", file_size);
+
+        if (!WriteFile(h, data, file_size, &BytesWritten, NULL)) {
+            LAST_ERROR("Write failure");
+            result = FALSE;
+        }
+
+        if (BytesWritten != file_size) {
+            FATAL("Write size failure");
+            result = FALSE;
+        }
+
+        CloseHandle(h);
+    } else {
+        LAST_ERROR("Failed to create file");
+        result = FALSE;
+    }
+
+    LocalFree(path);
+
+    return result;
 }
 
 /**
