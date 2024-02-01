@@ -115,6 +115,114 @@ BOOL CheckInstDirPathExists(char *rel_path)
     return result;
 }
 
+BOOL CreateDirectoriesRecursively(const char *dir)
+{
+    if (dir == NULL || *dir == '\0') {
+        DEBUG("dir is null or empty");
+        return FALSE;
+    }
+
+    DWORD dir_attr = GetFileAttributes(dir);
+
+    if (dir_attr != INVALID_FILE_ATTRIBUTES) {
+        if (dir_attr & FILE_ATTRIBUTE_DIRECTORY) {
+            return TRUE;
+        } else {
+            FATAL("Directory name conflicts with a file(%s)", dir);
+            return FALSE;
+        }
+    }
+
+    size_t dir_len = strlen(dir);
+    char *path = (char *)LocalAlloc(LPTR, dir_len + 1);
+
+    if (path == NULL) {
+        FATAL("LocalAlloc failed");
+        return FALSE;
+    }
+
+    strcpy(path, dir);
+
+    char *end = path + dir_len;
+    char *p = end;
+
+    for (; p >= path; p--) {
+        if (*p == '\\') {
+            *p = '\0';
+
+            DWORD path_attr = GetFileAttributes(path);
+
+            if (path_attr != INVALID_FILE_ATTRIBUTES) {
+                if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
+                    break;
+                } else {
+                    FATAL("Directory name conflicts with a file(%s)", path);
+                    LocalFree(path);
+                    return FALSE;
+                }
+            } else {
+                DWORD error = GetLastError();
+
+                if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+                    continue;
+                } else {
+                    LAST_ERROR("Cannot access the directory");
+                    LocalFree(path);
+                    return FALSE;
+                }
+            }
+        }
+    }
+
+    for (; p < end; p++) {
+        if (*p == '\0') {
+            *p = '\\';
+
+            DEBUG("CreateDirectory(%s)", path);
+
+            if (!CreateDirectory(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+                LAST_ERROR("Failed to create directory");
+                LocalFree(path);
+                return FALSE;
+            }
+        }
+    }
+
+    LocalFree(path);
+    return TRUE;
+}
+
+BOOL CreateParentDirectories(const char *file)
+{
+    if (file == NULL || *file == '\0') {
+        FATAL("file is null or empty");
+        return FALSE;
+    }
+
+    size_t i = strlen(file);
+
+    for (; i > 0; i--)
+        if (file[i] == '\\') break;
+
+    if (i == 0)
+        return TRUE;
+
+    char *dir = (char *)LocalAlloc(LPTR, i + 1);
+
+    if (dir == NULL) {
+        FATAL("LocalAlloc failed");
+        return FALSE;
+    }
+
+    strncpy(dir, file, i);
+    dir[i] = '\0';
+
+    BOOL result = CreateDirectoriesRecursively(dir);
+
+    LocalFree(dir);
+    return result;
+}
+
 /**
    Handler for console events.
 */
@@ -511,8 +619,8 @@ char *SkipArg(char *str)
 */
 BOOL MakeFile(char *file_name, DWORD file_size, LPVOID data)
 {
-    if (file_name == NULL) {
-        FATAL("file_name is NULL");
+    if (file_name == NULL || *file_name == '\0') {
+        FATAL("file_name is null or empty");
         return FALSE;
     }
 
@@ -525,14 +633,10 @@ BOOL MakeFile(char *file_name, DWORD file_size, LPVOID data)
 
     DEBUG("CreateFile(%s)", path);
 
-    char parent[MAX_PATH];
-
-    if (ParentDirectoryPath(parent, sizeof(parent), file_name)) {
-        if (!MakeDirectory(parent)) {
-            FATAL("Failed to create parent directory");
-            LocalFree(path);
-            return FALSE;
-        }
+    if (!CreateParentDirectories(path)) {
+        FATAL("Failed to create parent directory");
+        LocalFree(path);
+        return FALSE;
     }
 
     BOOL result = TRUE;
@@ -567,43 +671,26 @@ BOOL MakeFile(char *file_name, DWORD file_size, LPVOID data)
 /**
    Create a directory (OP_CREATE_DIRECTORY opcode handler)
 */
-BOOL MakeDirectory(char *DirectoryName)
+BOOL MakeDirectory(char *dir_name)
 {
-    char *dir = ExpandInstDirPath(DirectoryName);
+    DEBUG("MakeDirectory");
 
-    if (dir == NULL)
+    if (dir_name == NULL || *dir_name == '\0') {
+        DEBUG("dir_name is NULL or empty");
         return FALSE;
-
-    DEBUG("CreateDirectory(%s)", dir);
-
-    if (CreateDirectory(dir, NULL)) {
-        LocalFree(dir);
-        return TRUE;
     }
 
-    DWORD e = GetLastError();
+    char *dir = ExpandInstDirPath(dir_name);
 
-    if (e == ERROR_ALREADY_EXISTS) {
-        DEBUG("Directory already exists");
-        LocalFree(dir);
-        return TRUE;
+    if (dir == NULL) {
+        FATAL("Failed to expand rel_dir to installation directory");
+        return FALSE;
     }
 
-    if (e == ERROR_PATH_NOT_FOUND) {
-        char parent[MAX_PATH];
-
-        if (ParentDirectoryPath(parent, sizeof(parent), DirectoryName))
-            if (MakeDirectory(parent))
-                if (CreateDirectory(dir, NULL)) {
-                    LocalFree(dir);
-                    return TRUE;
-                }
-    }
-
-    FATAL("Failed to create directory '%s'.", dir);
+    BOOL result = CreateDirectoriesRecursively(dir);
 
     LocalFree(dir);
-    return FALSE;
+    return result;
 }
 
 void GetScriptInfo(char *ImageName, char **pApplicationName, char *CmdLine, char **pCommandLine)
