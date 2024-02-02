@@ -990,10 +990,8 @@ EOF
       sb.setenv("GEM_PATH", (TEMPDIR_ROOT / GEMHOMEDIR).to_native)
 
       # Add the opcode to launch the script
-      extra_arg = Ocran.arg.map { |arg| "\"#{arg.gsub("\"", "\\\"")}\"" }.join(" ")
-      installed_ruby_exe = TEMPDIR_ROOT / BINDIR / rubyexe
-      launch_script = (TEMPDIR_ROOT / target_script).to_native
-      sb.set_script(installed_ruby_exe, "#{rubyexe} \"#{launch_script}\" #{extra_arg}")
+      installed_ruby_exe = BINDIR / rubyexe
+      sb.set_script(installed_ruby_exe, target_script, *Ocran.arg)
     end
 
     unless Ocran.inno_script
@@ -1248,16 +1246,19 @@ EOF
     # You can omit setting OP_SET_SCRIPT without issues, in which case
     # the stub terminates without launching anything after performing other
     # runtime operations.
-    def set_script(image, cmdline)
+    def set_script(image, script, *argv)
       if @script_set
         raise "Script is already set"
       end
       @script_set = true
 
-      Ocran.verbose_msg "p #{show_path image} #{show_path cmdline}"
+      extra_argc = argv.map { |arg| "\"#{arg.gsub("\"", "\\\"")}\"" }.join(" ")
+
+      Ocran.verbose_msg "p #{image} #{script} #{show_path extra_argc}"
       write_opcode(OP_SET_SCRIPT)
       write_string(image.to_native)
-      write_string(cmdline)
+      write_string(script.to_native)
+      write_string(extra_argc)
     end
 
     def setenv(name, value)

@@ -693,22 +693,6 @@ BOOL MakeDirectory(char *dir_name)
     return result;
 }
 
-void GetScriptInfo(char *ImageName, char **pApplicationName, char *CmdLine, char **pCommandLine)
-{
-   *pApplicationName = ReplaceInstDirPlaceholder(ImageName);
-
-   char *ExpandedCommandLine = ReplaceInstDirPlaceholder(CmdLine);
-   char *MyCmdLine = GetCommandLine();
-   char *MyArgs = SkipArg(MyCmdLine);
-
-   *pCommandLine = LocalAlloc(LMEM_FIXED, strlen(ExpandedCommandLine) + 1 + strlen(MyArgs) + 1);
-   strcpy(*pCommandLine, ExpandedCommandLine);
-   strcat(*pCommandLine, " ");
-   strcat(*pCommandLine, MyArgs);
-
-   LocalFree(ExpandedCommandLine);
-}
-
 DWORD CreateAndWaitForProcess(char *ApplicationName, char *CommandLine)
 {
    PROCESS_INFORMATION ProcessInformation;
@@ -741,15 +725,64 @@ DWORD CreateAndWaitForProcess(char *ApplicationName, char *CommandLine)
  * Sets up a process to be created after all other opcodes have been processed. This can be used to create processes
  * after the temporary files have all been created and memory has been freed.
  */
-BOOL SetScript(char *app_name, char *cmd_line)
+BOOL SetScript(char *app_name, char *script_name, char *cmd_line)
 {
     DEBUG("SetScript");
+
     if (Script_ApplicationName || Script_CommandLine) {
         FATAL("Script is already set");
         return FALSE;
     }
 
-    GetScriptInfo(app_name, &Script_ApplicationName, cmd_line, &Script_CommandLine);
+    // Set Script_ApplicationName
+
+    Script_ApplicationName = ExpandInstDirPath(app_name);
+
+    if (Script_ApplicationName == NULL) {
+        FATAL("Failed to expand app_name to installation directory");
+        return FALSE;
+    }
+
+    // Set Script_CommandLine
+
+    char *arg_0 = "ruby"; // This is a dummy. Ruby will ignore this.
+
+    char *script_path = ExpandInstDirPath(script_name);
+
+    if (script_path == NULL) {
+        FATAL("Failed to expand script_name to installation directory");
+        return FALSE;
+    }
+
+    char *replaced_cmd_line = ReplaceInstDirPlaceholder(cmd_line);
+
+    if (replaced_cmd_line == NULL) {
+        FATAL("Failed to replace cmd_line placeholder");
+        LocalFree(script_path);
+        return FALSE;
+    }
+
+    char *MyArgs = SkipArg(GetCommandLine());
+
+    Script_CommandLine = (char *)LocalAlloc(LPTR, strlen(arg_0) + 2 + strlen(script_path) + 2 + strlen(replaced_cmd_line) + 1 + strlen(MyArgs) + 1);
+
+    if (Script_CommandLine == NULL) {
+        LAST_ERROR("LocalAlloc failed");
+        LocalFree(script_path);
+        LocalFree(replaced_cmd_line);
+        return FALSE;
+    }
+
+    strcpy(Script_CommandLine, arg_0);
+    strcat(Script_CommandLine, " \"");
+    strcat(Script_CommandLine, script_path);
+    strcat(Script_CommandLine, "\" ");
+    strcat(Script_CommandLine, replaced_cmd_line);
+    strcat(Script_CommandLine, " ");
+    strcat(Script_CommandLine, MyArgs);
+
+    LocalFree(script_path);
+    LocalFree(replaced_cmd_line);
 
     return TRUE;
 }

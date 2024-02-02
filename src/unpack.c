@@ -71,9 +71,10 @@ BOOL OpSetEnv(LPVOID* p)
 BOOL OpSetScript(LPVOID* p)
 {
     char *app_name = GetString(p);
+    char *script_name = GetString(p);
     char *cmd_line = GetString(p);
 
-    return SetScript(app_name, cmd_line);
+    return SetScript(app_name, script_name, cmd_line);
 }
 
 BYTE ProcessOpcodes(LPVOID* p)
