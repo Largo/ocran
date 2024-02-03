@@ -65,6 +65,35 @@ void PrintDebugMessage(char *format, ...) {
 
 char InstDir[MAX_PATH];
 
+char* ConcatStr(const char *first, ...) {
+    va_list args;
+    va_start(args, first);
+    size_t len = 0;
+    for (const char* s = first; s; s = va_arg(args, const char*)) {
+        len += strlen(s);
+    }
+    va_end(args);
+
+    char *str = LocalAlloc(LPTR, len + 1);
+
+    if (str == NULL) {
+        LAST_ERROR("LocalAlloc failed");
+        return NULL;
+    }
+
+    va_start(args, first);
+    char *p = str;
+    for (const char *s = first; s; s = va_arg(args, const char*)) {
+        size_t l = strlen(s);
+        memcpy(p, s, l);
+        p += l;
+    }
+    str[len] = '\0';
+    va_end(args);
+
+    return str;
+}
+
 SIZE_T ParentDirectoryPath(char *dest, SIZE_T dest_len, char *path)
 {
     if (path == NULL) return 0;
@@ -83,27 +112,12 @@ SIZE_T ParentDirectoryPath(char *dest, SIZE_T dest_len, char *path)
 
 char *ExpandInstDirPath(char *rel_path)
 {
-    if (rel_path == NULL)
-        return NULL;
-
-    SIZE_T rel_path_len = strlen(rel_path);
-
-    if (rel_path_len == 0)
-        return NULL;
-
-    SIZE_T len = strlen(InstDir) + 1 + rel_path_len + 1;
-    char *path = (char *)LocalAlloc(LPTR, len);
-
-    if (path == NULL) {
-        LAST_ERROR("LocalAlloc failed");
+    if (rel_path == NULL || *rel_path == '\0') {
+        DEBUG("rel_path is null or empty");
         return NULL;
     }
 
-    strcat(path, InstDir);
-    strcat(path, "\\");
-    strcat(path, rel_path);
-
-    return path;
+    return ConcatStr(InstDir, "\\", rel_path, NULL);
 }
 
 BOOL CheckInstDirPathExists(char *rel_path)
@@ -235,21 +249,17 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 
 BOOL DeleteRecursively(char *path)
 {
-    SIZE_T pathLen = strlen(path);
-    SIZE_T findPathLen = strlen(path) + 2 + 1; // Including places where '\*' is appended.
-    char *findPath = (char *)LocalAlloc(LPTR, findPathLen);
+    char *findPath = NULL;
+
+    if (path[strlen(path)-1] == '\\')
+        findPath = ConcatStr(path, "*", NULL);
+    else
+        findPath = ConcatStr(path, "\\*", NULL);
 
     if (findPath == NULL) {
-        LAST_ERROR("LocalAlloc failed");
+        FATAL("Failed to build find path for deletion");
         return FALSE;
     }
-
-    strcpy(findPath, path);
-
-    if (path[pathLen-1] == '\\')
-        strcat(findPath, "*");
-    else
-        strcat(findPath, "\\*");
 
     WIN32_FIND_DATA findData;
     HANDLE handle = FindFirstFile(findPath, &findData);
@@ -259,17 +269,12 @@ BOOL DeleteRecursively(char *path)
             if ((strcmp(findData.cFileName, ".") == 0) || (strcmp(findData.cFileName, "..") == 0))
                 continue;
 
-            SIZE_T subPathLen = pathLen + 1 + strlen(findData.cFileName) + 1;
-            char *subPath = (char *)LocalAlloc(LPTR, subPathLen);
+            char *subPath = ConcatStr(path, "\\", findData.cFileName, NULL);
 
             if (subPath == NULL) {
-                LAST_ERROR("LocalAlloc failed");
+                FATAL("Failed to build delete file path");
                 break;
             }
-
-            strcpy(subPath, path);
-            strcat(subPath, "\\");
-            strcat(subPath, findData.cFileName);
 
             if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
                 DeleteRecursively(subPath);
@@ -300,16 +305,10 @@ BOOL DeleteRecursively(char *path)
 
 void MarkInstDirForDeletion(void)
 {
-    SIZE_T maker_len = strlen(InstDir) + 1 + strlen(DELETION_MAKER_SUFFIX) + 1;
-    char *marker = (char *)LocalAlloc(LPTR, maker_len);
+    char *marker = ConcatStr(InstDir, DELETION_MAKER_SUFFIX, NULL);
 
-    if (marker == NULL) {
-        LAST_ERROR("LocalAlloc failed");
+    if (marker == NULL)
         return;
-    }
-
-    strcpy(marker, InstDir);
-    strcat(marker, DELETION_MAKER_SUFFIX);
 
     HANDLE h = CreateFile(marker, 0, 0, NULL, CREATE_ALWAYS, 0, NULL);
 
@@ -764,26 +763,17 @@ BOOL SetScript(char *app_name, char *script_name, char *cmd_line)
 
     char *MyArgs = SkipArg(GetCommandLine());
 
-    Script_CommandLine = (char *)LocalAlloc(LPTR, strlen(arg_0) + 2 + strlen(script_path) + 2 + strlen(replaced_cmd_line) + 1 + strlen(MyArgs) + 1);
+    Script_CommandLine = ConcatStr(arg_0, " \"", script_path, "\" ", replaced_cmd_line, " ", MyArgs, NULL);
 
     if (Script_CommandLine == NULL) {
-        LAST_ERROR("LocalAlloc failed");
+        FATAL("Failed to build command line");
         LocalFree(script_path);
         LocalFree(replaced_cmd_line);
         return FALSE;
     }
 
-    strcpy(Script_CommandLine, arg_0);
-    strcat(Script_CommandLine, " \"");
-    strcat(Script_CommandLine, script_path);
-    strcat(Script_CommandLine, "\" ");
-    strcat(Script_CommandLine, replaced_cmd_line);
-    strcat(Script_CommandLine, " ");
-    strcat(Script_CommandLine, MyArgs);
-
     LocalFree(script_path);
     LocalFree(replaced_cmd_line);
-
     return TRUE;
 }
 
