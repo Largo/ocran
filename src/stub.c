@@ -514,7 +514,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
         return FALSE;
     }
 
-    BOOL last_opcode;
+    BYTE last_opcode;
 
     if (compressed) {
 #if WITH_LZMA
