@@ -410,24 +410,20 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
       return -1;
    }
 
-   /* Map the image into memory */
-   LPVOID lpv = MapViewOfFile(hMem, FILE_MAP_READ, 0, 0, 0);
-   if (lpv == NULL)
-   {
-      LAST_ERROR("Failed to map view of executable into memory");
-   }
-   else
-   {
-      if (!ProcessImage(lpv, FileSize))
-      {
-         exit_code = -1;
-      }
+    /* Map the image into memory */
+    LPVOID lpv = MapViewOfFile(hMem, FILE_MAP_READ, 0, 0, 0);
+    if (lpv == NULL) {
+        LAST_ERROR("Failed to map view of executable into memory");
+        return -1;
+    }
 
-      if (!UnmapViewOfFile(lpv))
-      {
-         LAST_ERROR("Failed to unmap view of executable");
-      }
-   }
+    if (!ProcessImage(lpv, FileSize)) {
+        exit_code = -1;
+    }
+
+    if (!UnmapViewOfFile(lpv)) {
+        LAST_ERROR("Failed to unmap view of executable");
+    }
 
    if (!CloseHandle(hMem))
    {
@@ -484,10 +480,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
             MarkInstDirForDeletion();
    }
 
-   ExitProcess(exit_code);
-
-   /* Never gets here */
-   return 0;
+    return exit_code;
 }
 
 /**
