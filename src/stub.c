@@ -30,7 +30,7 @@ BOOL ChdirBeforeRunEnabled = TRUE;
 void PrintFatalMessage(char *format, ...)
 {
 #if _CONSOLE
-    fprintf_s(stderr, "FATAL ERROR: ");
+    fprintf_s(stderr, "FATAL: ");
     va_list args;
     va_start(args, format);
     vfprintf_s(stderr, format, args);
@@ -47,7 +47,12 @@ void PrintFatalMessage(char *format, ...)
 }
 
 #define FATAL(...) PrintFatalMessage(__VA_ARGS__)
-#define LAST_ERROR(msg) fprintf_s(stderr, "FATAL ERROR: %s (error %lu)\n", msg, GetLastError());
+
+void PrintLastError(char *msg) {
+    fprintf_s(stderr, "ERROR: %s (%lu)\n", msg, GetLastError());
+}
+
+#define LAST_ERROR(msg) PrintLastError(msg)
 
 void PrintDebugMessage(char *format, ...) {
     va_list args;
@@ -77,7 +82,7 @@ char* ConcatStr(const char *first, ...) {
     char *str = LocalAlloc(LPTR, len + 1);
 
     if (str == NULL) {
-        LAST_ERROR("LocalAlloc failed");
+        LAST_ERROR("Failed to allocate memory");
         return NULL;
     }
 
