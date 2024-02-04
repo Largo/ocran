@@ -509,7 +509,10 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
     if (DebugModeEnabled)
         DEBUG("Ocran stub running in debug mode");
 
-    CreateInstDirectory(debug_extract);
+    if (!CreateInstDirectory(debug_extract)) {
+        FATAL("Failed to create installation directory");
+        return FALSE;
+    }
 
     BOOL last_opcode;
 
