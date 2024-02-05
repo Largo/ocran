@@ -324,51 +324,45 @@ void MarkInstDirForDeletion(void)
     LocalFree(marker);
 }
 
-BOOL CreateInstDirectory(BOOL DebugExtractMode)
+BOOL CreateInstDirectory(BOOL debug_extract)
 {
-   /* Create an installation directory that will hold the extracted files */
-   char TempPath[MAX_PATH];
-   if (DebugExtractMode)
-   {
-      // In debug extraction mode, create the temp directory next to the exe
-      strcpy(TempPath, InstDir);
-      if (strlen(TempPath) == 0)
-      {
-         FATAL("Unable to find directory containing exe");
-         return FALSE;
-      }
-   }
-   else
-   {
-      GetTempPath(MAX_PATH, TempPath);
-   }
+    /* Create an installation directory that will hold the extracted files */
+    char temp_path[MAX_PATH];
 
-   while (TRUE)
-   {
-      UINT tempResult = GetTempFileName(TempPath, "ocranstub", 0, InstDir);
-      if (tempResult == 0u)
-      {
-         FATAL("Failed to get temp file name.");
-         return FALSE;
-      }
+    if (debug_extract) {
+        // In debug extraction mode, create the temp directory next to the exe
+        strcpy(temp_path, InstDir);
 
-      DEBUG("Creating installation directory: '%s'", InstDir);
+        if (strlen(temp_path) == 0) {
+            FATAL("Unable to find directory containing exe");
+            return FALSE;
+        }
+    } else {
+        if (!GetTempPath(MAX_PATH, temp_path)) {
+            LAST_ERROR("Failed to get temp path");
+            return FALSE;
+        }
+    }
 
-      /* Attempt to delete the temp file created by GetTempFileName.
-         Ignore errors, i.e. if it doesn't exist. */
-      (void)DeleteFile(InstDir);
+    while (TRUE) {
+        if (!GetTempFileName(temp_path, "ocran", 0, InstDir)) {
+            LAST_ERROR("Failed to get temp file name");
+            return FALSE;
+        }
 
-      if (CreateDirectory(InstDir, NULL))
-      {
-         break;
-      }
-      else if (GetLastError() != ERROR_ALREADY_EXISTS)
-      {
-         FATAL("Failed to create installation directory.");
-         return FALSE;
-      }
-   }
-   return TRUE;
+        DEBUG("Creating installation directory: %s", InstDir);
+
+        /* Attempt to delete the temp file created by GetTempFileName.
+           Ignore errors, i.e. if it doesn't exist. */
+        (void)DeleteFile(InstDir);
+
+        if (CreateDirectory(InstDir, NULL)) {
+            return TRUE;
+        } else if (GetLastError() != ERROR_ALREADY_EXISTS) {
+            LAST_ERROR("Failed to create installation directory");
+            return FALSE;
+        }
+    }
 }
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -511,7 +505,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 
     if (!CreateInstDirectory(debug_extract)) {
         FATAL("Failed to create installation directory");
-        return FALSE;
+        ExitProcess(-1);
     }
 
     BYTE last_opcode;
