@@ -417,17 +417,18 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     if (!UnmapViewOfFile(lpv)) {
         LAST_ERROR("Failed to unmap view of executable");
+        exit_code = -1;
     }
 
-   if (!CloseHandle(hMem))
-   {
-      LAST_ERROR("Failed to close file mapping");
-   }
+    if (!CloseHandle(hMem)) {
+        LAST_ERROR("Failed to close file mapping");
+        exit_code = -1;
+    }
 
-   if (!CloseHandle(hImage))
-   {
-      LAST_ERROR("Failed to close executable");
-   }
+    if (!CloseHandle(hImage)) {
+        LAST_ERROR("Failed to close executable");
+        exit_code = -1;
+    }
 
     if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
         DEBUG("*** Starting app in %s", InstDir);
