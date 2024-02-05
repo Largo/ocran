@@ -683,7 +683,7 @@ BOOL MakeDirectory(char *dir_name)
     char *dir = ExpandInstDirPath(dir_name);
 
     if (dir == NULL) {
-        FATAL("Failed to expand rel_dir to installation directory");
+        FATAL("Failed to expand dir_name to installation directory");
         return FALSE;
     }
 
