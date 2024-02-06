@@ -726,6 +726,7 @@ DWORD CreateAndWaitForProcess(char *ApplicationName, char *CommandLine)
    if (!GetExitCodeProcess(ProcessInformation.hProcess, &exit_code))
    {
       LAST_ERROR("Failed to get exit status");
+      exit_code = -1;
    }
 
    CloseHandle(ProcessInformation.hProcess);
