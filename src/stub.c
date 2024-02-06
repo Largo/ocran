@@ -99,6 +99,28 @@ char* ConcatStr(const char *first, ...) {
     return str;
 }
 
+char *JoinPath(const char *p1, const char *p2)
+{
+    if (p1 == NULL || *p1 == '\0') {
+        DEBUG("p1 is null or empty");
+        return NULL;
+    }
+
+    if (p2 == NULL || *p2 == '\0') {
+        DEBUG("p2 is null or empty");
+        return NULL;
+    }
+
+    // If p2 starts with a file path separator, skip it.
+    if (p2[0] == '\\') p2++;
+
+    // If p1 doesn't end with a file path separator, add the separator and concatenate.
+    if (p1[strlen(p1) - 1] != '\\')
+        return ConcatStr(p1, "\\", p2, NULL);
+    else
+        return ConcatStr(p1, p2, NULL);
+}
+
 SIZE_T ParentDirectoryPath(char *dest, SIZE_T dest_len, char *path)
 {
     if (path == NULL) return 0;
@@ -122,7 +144,7 @@ char *ExpandInstDirPath(char *rel_path)
         return NULL;
     }
 
-    return ConcatStr(InstDir, "\\", rel_path, NULL);
+    return JoinPath(InstDir, rel_path);
 }
 
 BOOL CheckInstDirPathExists(char *rel_path)
@@ -254,12 +276,7 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 
 BOOL DeleteRecursively(char *path)
 {
-    char *findPath = NULL;
-
-    if (path[strlen(path)-1] == '\\')
-        findPath = ConcatStr(path, "*", NULL);
-    else
-        findPath = ConcatStr(path, "\\*", NULL);
+    char *findPath = JoinPath(path, "*");
 
     if (findPath == NULL) {
         FATAL("Failed to build find path for deletion");
@@ -274,7 +291,7 @@ BOOL DeleteRecursively(char *path)
             if ((strcmp(findData.cFileName, ".") == 0) || (strcmp(findData.cFileName, "..") == 0))
                 continue;
 
-            char *subPath = ConcatStr(path, "\\", findData.cFileName, NULL);
+            char *subPath = JoinPath(path, findData.cFileName);
 
             if (subPath == NULL) {
                 FATAL("Failed to build delete file path");
