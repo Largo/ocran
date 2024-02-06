@@ -777,4 +777,13 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # With --debug option
+  def test_debug
+    with_fixture 'helloworld' do
+      assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--debug"]))
+      pristine_env "helloworld-debug.exe" do
+        assert system("helloworld-debug.exe")
+      end
+    end
+  end
 end

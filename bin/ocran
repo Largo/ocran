@@ -80,8 +80,8 @@ module Ocran
       end
     end
 
-    def append_to_filename!(s)
-      @path = sub(/(\.[^.]*?|)$/) { s.to_s + $1 }
+    def append_to_filename(s)
+      sub(/(\.[^.]*?|)$/) { |m| s.to_s + m }
     end
 
     def sub(*a, &b)
@@ -887,7 +887,7 @@ EOF
       executable = Ocran.output_override
     else
       executable = Ocran.files.first.basename.sub_ext(".exe")
-      executable.append_to_filename!("-debug") if Ocran.debug
+      executable = executable.append_to_filename("-debug") if Ocran.debug
     end
 
     windowed = (Ocran.files.first.ext?(".rbw") || Ocran.force_windows) && !Ocran.force_console
