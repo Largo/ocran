@@ -430,8 +430,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
    SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE);
 
-   /* Open the image (executable) */
-   HANDLE hImage = CreateFile(image_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    /* Open the image (executable) */
+    HANDLE hImage = CreateFile(image_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (hImage == INVALID_HANDLE_VALUE) {
         return LAST_ERROR("Failed to open executable file");
     }
