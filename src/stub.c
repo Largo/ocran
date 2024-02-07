@@ -621,7 +621,7 @@ char *ReplaceInstDirPlaceholder(char *str)
 
     char *out_p = out;
 
-    for (p = str; *p; p++)  {
+    for (p = str; *p; p++) {
         if (*p == PLACEHOLDER) {
             memcpy(out_p, InstDir, InstDirLen);
             out_p += InstDirLen;
