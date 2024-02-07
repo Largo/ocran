@@ -16,8 +16,36 @@ DWORD CreateAndWaitForProcess(char *ApplicationName, char *CommandLine);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
-ULONGLONG GetDecompressionSize(LPVOID src);
-BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T CompressedSize);
+
+#define LZMA_UNPACKSIZE_SIZE 8
+
+ULONGLONG GetDecompressionSize(void *src)
+{
+    ULONGLONG size = 0;
+
+    for (int i = 0; i < LZMA_UNPACKSIZE_SIZE; i++)
+        size += ((BYTE *)src)[LZMA_PROPS_SIZE + i] << (i * 8);
+
+    return size;
+}
+
+#define LZMA_HEADER_SIZE (LZMA_PROPS_SIZE + LZMA_UNPACKSIZE_SIZE)
+
+void *SzAlloc(const ISzAlloc *p, size_t size) { p = p; return LocalAlloc(LMEM_FIXED, size); }
+void SzFree(const ISzAlloc *p, void *address) { p = p; LocalFree(address); }
+ISzAlloc alloc = { SzAlloc, SzFree };
+
+BOOL DecompressLzma(void *unpack_data, size_t unpack_size, void *src, size_t src_size)
+{
+    SizeT lzmaDecompressedSize = unpack_size;
+    SizeT inSizePure = src_size - LZMA_HEADER_SIZE;
+    ELzmaStatus status;
+
+    SRes res = LzmaDecode((Byte *)unpack_data, &lzmaDecompressedSize, (Byte *)src + LZMA_HEADER_SIZE, &inSizePure,
+                          (Byte *)src, LZMA_PROPS_SIZE, LZMA_FINISH_ANY, &status, &alloc);
+
+    return (BOOL)(res == SZ_OK);
+}
 #endif
 
 char *Script_ApplicationName = NULL;
@@ -790,37 +818,6 @@ BOOL SetScript(char *app_name, char *script_name, char *cmd_line)
     LocalFree(replaced_cmd_line);
     return TRUE;
 }
-
-#if WITH_LZMA
-void* SzAlloc(void* p, size_t size) { p = p; return LocalAlloc(LMEM_FIXED, size); }
-void SzFree(void* p, void* address) { p = p; LocalFree(address); }
-ISzAlloc alloc = { SzAlloc, SzFree };
-
-#define LZMA_UNPACKSIZE_SIZE 8
-#define LZMA_HEADER_SIZE (LZMA_PROPS_SIZE + LZMA_UNPACKSIZE_SIZE)
-
-ULONGLONG GetDecompressionSize(LPVOID src)
-{
-    ULONGLONG size = 0;
-
-    for (int i = 0; i < LZMA_UNPACKSIZE_SIZE; i++)
-        size += ((LPBYTE)src)[LZMA_PROPS_SIZE + i] << (i * 8);
-
-    return size;
-}
-
-BOOL DecompressLzma(LPVOID DecompressedData, SIZE_T unpackSize, LPVOID p, SIZE_T CompressedSize)
-{
-   Byte* src = (Byte*)p;
-   SizeT lzmaDecompressedSize = unpackSize;
-   SizeT inSizePure = CompressedSize - LZMA_HEADER_SIZE;
-   ELzmaStatus status;
-   SRes res = LzmaDecode(DecompressedData, &lzmaDecompressedSize, src + LZMA_HEADER_SIZE, &inSizePure,
-                         src, LZMA_PROPS_SIZE, LZMA_FINISH_ANY, &status, &alloc);
-
-   return (BOOL)(res == SZ_OK);
-}
-#endif
 
 BOOL SetEnv(char *name, char *value)
 {
