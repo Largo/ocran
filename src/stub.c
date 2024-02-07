@@ -76,8 +76,10 @@ void PrintFatalMessage(char *format, ...)
 
 #define FATAL(...) PrintFatalMessage(__VA_ARGS__)
 
-void PrintLastError(char *msg) {
-    fprintf_s(stderr, "ERROR: %s (%lu)\n", msg, GetLastError());
+DWORD PrintLastError(char *msg) {
+    DWORD err = GetLastError();
+    fprintf_s(stderr, "ERROR: %s (%lu)\n", msg, err);
+    return err;
 }
 
 #define LAST_ERROR(msg) PrintLastError(msg)
@@ -415,13 +417,10 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     DWORD exit_code = 0;
     char image_path[MAX_PATH];
 
-   /* Find name of image */
-   if (!GetModuleFileName(NULL, image_path, MAX_PATH))
-   {
-      LAST_ERROR("Failed to get executable name");
-      return -1;
-   }
-
+    /* Find name of image */
+    if (!GetModuleFileName(NULL, image_path, MAX_PATH)) {
+        return LAST_ERROR("Failed to get executable name");
+    }
 
     /* By default, assume the installation directory is wherever the EXE is */
     if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
@@ -433,27 +432,21 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
    /* Open the image (executable) */
    HANDLE hImage = CreateFile(image_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
-   if (hImage == INVALID_HANDLE_VALUE)
-   {
-      FATAL("Failed to open executable (%s)", image_path);
-      return -1;
-   }
+    if (hImage == INVALID_HANDLE_VALUE) {
+        return LAST_ERROR("Failed to open executable file");
+    }
 
    /* Create a file mapping */
    DWORD FileSize = GetFileSize(hImage, NULL);
    HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, FileSize, NULL);
-   if (hMem == INVALID_HANDLE_VALUE)
-   {
-      LAST_ERROR("Failed to create file mapping");
-      CloseHandle(hImage);
-      return -1;
-   }
+    if (hMem == INVALID_HANDLE_VALUE) {
+        return LAST_ERROR("Failed to create file mapping");
+    }
 
     /* Map the image into memory */
     LPVOID lpv = MapViewOfFile(hMem, FILE_MAP_READ, 0, 0, 0);
     if (lpv == NULL) {
-        LAST_ERROR("Failed to map view of executable into memory");
-        return -1;
+        return LAST_ERROR("Failed to map view of executable into memory");
     }
 
     if (!ProcessImage(lpv, FileSize)) {
@@ -461,18 +454,15 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     }
 
     if (!UnmapViewOfFile(lpv)) {
-        LAST_ERROR("Failed to unmap view of executable");
-        exit_code = -1;
+        exit_code = LAST_ERROR("Failed to unmap view of executable");
     }
 
     if (!CloseHandle(hMem)) {
-        LAST_ERROR("Failed to close file mapping");
-        exit_code = -1;
+        exit_code = LAST_ERROR("Failed to close file mapping");
     }
 
     if (!CloseHandle(hImage)) {
-        LAST_ERROR("Failed to close executable");
-        exit_code = -1;
+        exit_code = LAST_ERROR("Failed to close executable");
     }
 
     if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
@@ -484,8 +474,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
             char *script_dir = ExpandInstDirPath("src");
 
             if (!SetCurrentDirectory(script_dir)) {
-                LAST_ERROR("Failed to change CWD");
-                exit_code = -1;
+                exit_code = LAST_ERROR("Failed to change CWD");
             }
 
             LocalFree(script_dir);
@@ -493,8 +482,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
         if (exit_code == 0) {
             if (!SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
-                LAST_ERROR("Failed to set environment variable");
-                exit_code = -1;
+                exit_code = LAST_ERROR("Failed to set environment variable");
             } else {
                 exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
             }
