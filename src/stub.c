@@ -55,7 +55,9 @@ BOOL DebugModeEnabled = FALSE;
 BOOL DeleteInstDirEnabled = FALSE;
 BOOL ChdirBeforeRunEnabled = TRUE;
 
-void PrintFatalMessage(char *format, ...)
+#define EXIT_CODE_FAILURE ((DWORD)-1)
+
+DWORD PrintFatalMessage(char *format, ...)
 {
 #if _CONSOLE
     fprintf_s(stderr, "FATAL: ");
@@ -72,6 +74,8 @@ void PrintFatalMessage(char *format, ...)
     va_end(args);
     MessageBox(NULL, TextBuffer, "OCRAN", MB_OK | MB_ICONWARNING);
 #endif
+
+    return EXIT_CODE_FAILURE;
 }
 
 #define FATAL(...) PrintFatalMessage(__VA_ARGS__)
@@ -424,8 +428,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     /* By default, assume the installation directory is wherever the EXE is */
     if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
-        FATAL("Failed to set default installation directory.");
-        return -1;
+        return FATAL("Failed to set default installation directory");
     }
 
    SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE);
@@ -450,7 +453,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     }
 
     if (!ProcessImage(lpv, FileSize)) {
-        exit_code = -1;
+        exit_code = EXIT_CODE_FAILURE;
     }
 
     if (!UnmapViewOfFile(lpv)) {
@@ -539,7 +542,7 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 
     if (!CreateInstDirectory(debug_extract)) {
         FATAL("Failed to create installation directory");
-        ExitProcess(-1);
+        ExitProcess(EXIT_CODE_FAILURE);
     }
 
     BYTE last_opcode;
