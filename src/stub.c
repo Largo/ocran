@@ -518,7 +518,8 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 {
     LPVOID pSig = ptr + size - sizeof(Signature);
     if (memcmp(pSig, Signature, sizeof(Signature)) != 0) {
-        ExitProcess(FATAL("Bad signature in executable"));
+        FATAL("Bad signature in executable.");
+        return FALSE;
     }
     DEBUG("Good signature found.");
 
@@ -536,7 +537,8 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
         DEBUG("Ocran stub running in debug mode");
 
     if (!CreateInstDirectory(debug_extract)) {
-        ExitProcess(FATAL("Failed to create installation directory"));
+        FATAL("Failed to create installation directory");
+        ExitProcess(EXIT_CODE_FAILURE);
     }
 
     BYTE last_opcode;
@@ -548,24 +550,28 @@ BOOL ProcessImage(LPVOID ptr, DWORD size)
 
         ULONGLONG unpack_size = GetDecompressionSize(pSeg);
         if (unpack_size > (ULONGLONG)(DWORD)-1) {
-            ExitProcess(FATAL("Decompression size is too large"));
+            FATAL("Decompression size is too large.");
+            return FALSE;
         }
 
         LPVOID unpack_data = LocalAlloc(LMEM_FIXED, unpack_size);
         if (unpack_data == NULL) {
-            ExitProcess(LAST_ERROR("LocalAlloc failed"));
+            LAST_ERROR("LocalAlloc failed");
+            return FALSE;
         }
 
         if (!DecompressLzma(unpack_data, unpack_size, pSeg, data_len)) {
+            FATAL("LZMA decompression failed.");
             LocalFree(unpack_data);
-            ExitProcess(FATAL("LZMA decompression failed"));
+            return FALSE;
         }
 
         LPVOID p = unpack_data;
         last_opcode = ProcessOpcodes(&p);
         LocalFree(unpack_data);
 #else
-        ExitProcess(FATAL("Does not support LZMA"));
+        FATAL("Does not support LZMA");
+        return FALSE;
 #endif
     } else {
         last_opcode = ProcessOpcodes(&pSeg);
