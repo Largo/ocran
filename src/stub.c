@@ -12,7 +12,7 @@
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
 BOOL ProcessImage(LPVOID p, DWORD size);
-DWORD CreateAndWaitForProcess(char *ApplicationName, char *CommandLine);
+DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
@@ -721,32 +721,31 @@ BOOL MakeDirectory(char *dir_name)
     return result;
 }
 
-DWORD CreateAndWaitForProcess(char *ApplicationName, char *CommandLine)
+DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line)
 {
-   PROCESS_INFORMATION ProcessInformation;
-   STARTUPINFO StartupInfo;
-   ZeroMemory(&StartupInfo, sizeof(StartupInfo));
-   StartupInfo.cb = sizeof(StartupInfo);
-   BOOL r = CreateProcess(ApplicationName, CommandLine, NULL, NULL,
-                          TRUE, 0, NULL, NULL, &StartupInfo, &ProcessInformation);
+    PROCESS_INFORMATION p_info;
+    ZeroMemory(&p_info, sizeof(p_info));
+    STARTUPINFO s_info;
+    ZeroMemory(&s_info, sizeof(s_info));
+    s_info.cb = sizeof(s_info);
 
-   if (!r)
-   {
-      FATAL("Failed to create process (%s): %lu", ApplicationName, GetLastError());
-      return -1;
-   }
+    DEBUG("Create process (%s, %s)", app_name, cmd_line);
 
-   WaitForSingleObject(ProcessInformation.hProcess, INFINITE);
+    if (!CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &s_info, &p_info)) {
+        return LAST_ERROR("Failed to create process");
+    }
 
-   DWORD exit_code;
-   if (!GetExitCodeProcess(ProcessInformation.hProcess, &exit_code))
-   {
-      LAST_ERROR("Failed to get exit status");
-   }
+    WaitForSingleObject(p_info.hProcess, INFINITE);
 
-   CloseHandle(ProcessInformation.hProcess);
-   CloseHandle(ProcessInformation.hThread);
-   return exit_code;
+    DWORD exit_code;
+
+    if (!GetExitCodeProcess(p_info.hProcess, &exit_code)) {
+        exit_code = LAST_ERROR("Failed to get exit status");
+    }
+
+    CloseHandle(p_info.hProcess);
+    CloseHandle(p_info.hThread);
+    return exit_code;
 }
 
 /**
