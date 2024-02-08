@@ -11,7 +11,7 @@
 
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
-BOOL ProcessImage(LPVOID p, DWORD size);
+BOOL ProcessImage(LPVOID pSeg, DWORD data_len, BOOL compressed);
 DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line);
 
 #if WITH_LZMA
@@ -52,8 +52,6 @@ char *Script_ApplicationName = NULL;
 char *Script_CommandLine = NULL;
 
 BOOL DebugModeEnabled = FALSE;
-BOOL DeleteInstDirEnabled = FALSE;
-BOOL ChdirBeforeRunEnabled = TRUE;
 
 #define EXIT_CODE_FAILURE ((DWORD)-1)
 
@@ -426,11 +424,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         return LAST_ERROR("Failed to get executable name");
     }
 
-    /* By default, assume the installation directory is wherever the EXE is */
-    if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
-        return FATAL("Failed to set default installation directory");
-    }
-
    SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE);
 
     /* Open the image (executable) */
@@ -439,9 +432,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         return LAST_ERROR("Failed to open executable file");
     }
 
-   /* Create a file mapping */
-   DWORD FileSize = GetFileSize(hImage, NULL);
-   HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, FileSize, NULL);
+    /* Create a file mapping */
+    DWORD image_size = GetFileSize(hImage, NULL);
+    HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, image_size, NULL);
     if (hMem == INVALID_HANDLE_VALUE) {
         return LAST_ERROR("Failed to create file mapping");
     }
@@ -452,10 +445,45 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         return LAST_ERROR("Failed to map view of executable into memory");
     }
 
-    if (!ProcessImage(lpv, FileSize)) {
+    /* Process the image by checking the signature and locating the first opcode */
+    void *sig = lpv + image_size - sizeof(Signature);
+
+    if (memcmp(sig, Signature, sizeof(Signature)) != 0) {
+        return FATAL("Bad signature in executable");
+    }
+
+    void *tail = sig - sizeof(DWORD);
+    DWORD OpcodeOffset = *(DWORD*)(tail);
+    void *head = lpv + OpcodeOffset;
+
+    /* Read header of packed data */
+    DebugModeEnabled      = (BOOL)*(BYTE *)head; head++;
+
+    if (DebugModeEnabled) {
+        DEBUG("Ocran stub running in debug mode");
+    }
+
+    BOOL debug_extract    = (BOOL)*(BYTE *)head; head++;
+
+    /* By default, assume the installation directory is wherever the EXE is */
+    if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
+        return FATAL("Failed to set default installation directory");
+    }
+
+    if (!CreateInstDirectory(debug_extract)) {
+        return FATAL("Failed to create installation directory");
+    }
+
+    BOOL delete_inst_dir  = (BOOL)*(BYTE *)head; head++;
+    BOOL chdir_before_run = (BOOL)*(BYTE *)head; head++;
+    BOOL compressed       = (BOOL)*(BYTE *)head; head++;
+
+    /* Unpacking process */
+    if (!ProcessImage(head, tail - head, compressed)) {
         exit_code = EXIT_CODE_FAILURE;
     }
 
+    /* Release resources used for image reading */
     if (!UnmapViewOfFile(lpv)) {
         exit_code = LAST_ERROR("Failed to unmap view of executable");
     } else if (!CloseHandle(hMem)) {
@@ -464,10 +492,11 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         exit_code = LAST_ERROR("Failed to close executable");
     }
 
+    /* Launching the script, provided there are no errors in file extraction from the image */
     if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
         DEBUG("*** Starting app in %s", InstDir);
 
-        if (ChdirBeforeRunEnabled) {
+        if (chdir_before_run) {
             DEBUG("Changing CWD to unpacked directory %s/src", InstDir);
 
             char *script_dir = ExpandInstDirPath("src");
@@ -494,8 +523,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     LocalFree(Script_CommandLine);
     Script_CommandLine = NULL;
 
-   if (DeleteInstDirEnabled)
-   {
+    /* If necessary, recursively delete the installation directory */
+    if (delete_inst_dir) {
       DEBUG("Deleting temporary installation directory %s", InstDir);
       char SystemDirectory[MAX_PATH];
       if (GetSystemDirectory(SystemDirectory, MAX_PATH) > 0)
@@ -505,47 +534,17 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
       if (!DeleteRecursively(InstDir))
             MarkInstDirForDeletion();
-   }
+    }
 
     return exit_code;
 }
 
-/**
-   Process the image by checking the signature and locating the first
-   opcode.
-*/
-BOOL ProcessImage(LPVOID ptr, DWORD size)
+BOOL ProcessImage(LPVOID pSeg, DWORD data_len, BOOL compressed)
 {
-    LPVOID pSig = ptr + size - sizeof(Signature);
-    if (memcmp(pSig, Signature, sizeof(Signature)) != 0) {
-        FATAL("Bad signature in executable.");
-        return FALSE;
-    }
-    DEBUG("Good signature found.");
-
-    LPVOID data_tail = pSig - sizeof(DWORD);
-    DWORD OpcodeOffset = *(DWORD*)(data_tail);
-    LPVOID pSeg = ptr + OpcodeOffset;
-
-    DebugModeEnabled      = (BOOL)*(LPBYTE)pSeg; pSeg++;
-    BOOL debug_extract    = (BOOL)*(LPBYTE)pSeg; pSeg++;
-    DeleteInstDirEnabled  = (BOOL)*(LPBYTE)pSeg; pSeg++;
-    ChdirBeforeRunEnabled = (BOOL)*(LPBYTE)pSeg; pSeg++;
-    BOOL compressed       = (BOOL)*(LPBYTE)pSeg; pSeg++;
-
-    if (DebugModeEnabled)
-        DEBUG("Ocran stub running in debug mode");
-
-    if (!CreateInstDirectory(debug_extract)) {
-        FATAL("Failed to create installation directory");
-        ExitProcess(EXIT_CODE_FAILURE);
-    }
-
     BYTE last_opcode;
 
     if (compressed) {
 #if WITH_LZMA
-        DWORD data_len = data_tail - pSeg;
         DEBUG("LzmaDecode(%ld)", data_len);
 
         ULONGLONG unpack_size = GetDecompressionSize(pSeg);
