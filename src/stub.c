@@ -458,13 +458,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     if (!UnmapViewOfFile(lpv)) {
         exit_code = LAST_ERROR("Failed to unmap view of executable");
-    }
-
-    if (!CloseHandle(hMem)) {
+    } else if (!CloseHandle(hMem)) {
         exit_code = LAST_ERROR("Failed to close file mapping");
-    }
-
-    if (!CloseHandle(hImage)) {
+    } else if (!CloseHandle(hImage)) {
         exit_code = LAST_ERROR("Failed to close executable");
     }
 
