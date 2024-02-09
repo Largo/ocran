@@ -361,14 +361,18 @@ void MarkInstDirForDeletion(void)
 {
     char *marker = ConcatStr(InstDir, DELETION_MAKER_SUFFIX, NULL);
 
-    if (marker == NULL)
+    if (marker == NULL) {
+        FATAL("Marker is null");
         return;
+    }
 
     HANDLE h = CreateFile(marker, 0, 0, NULL, CREATE_ALWAYS, 0, NULL);
 
-    if (h == INVALID_HANDLE_VALUE)
+    if (h == INVALID_HANDLE_VALUE) {
         LAST_ERROR("Failed to mark for deletion");
+    }
 
+    FATAL("Deletion marker path is %s", marker);
     CloseHandle(h);
     LocalFree(marker);
 }
