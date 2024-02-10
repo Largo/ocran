@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
+#include "stub.h"
 #include "unpack.h"
 
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
@@ -461,29 +462,25 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     void *head = lpv + OpcodeOffset;
 
     /* Read header of packed data */
-    DebugModeEnabled      = (BOOL)*(BYTE *)head; head++;
+    OperationModes flags = (OperationModes)*(BYTE *)head; head++;
+
+    DebugModeEnabled = IS_DEBUG_MODE_ENABLED(flags);
 
     if (DebugModeEnabled) {
         DEBUG("Ocran stub running in debug mode");
     }
-
-    BOOL debug_extract    = (BOOL)*(BYTE *)head; head++;
 
     /* By default, assume the installation directory is wherever the EXE is */
     if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
         return FATAL("Failed to set default installation directory");
     }
 
-    if (!CreateInstDirectory(debug_extract)) {
+    if (!CreateInstDirectory(IS_EXTRACT_TO_EXE_DIR_ENABLED(flags))) {
         return FATAL("Failed to create installation directory");
     }
 
-    BOOL delete_inst_dir  = (BOOL)*(BYTE *)head; head++;
-    BOOL chdir_before_run = (BOOL)*(BYTE *)head; head++;
-    BOOL compressed       = (BOOL)*(BYTE *)head; head++;
-
     /* Unpacking process */
-    if (!ProcessImage(head, tail - head, compressed)) {
+    if (!ProcessImage(head, tail - head, IS_DATA_COMPRESSED(flags))) {
         exit_code = EXIT_CODE_FAILURE;
     }
 
@@ -500,7 +497,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
         DEBUG("*** Starting app in %s", InstDir);
 
-        if (chdir_before_run) {
+        if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
             DEBUG("Changing CWD to unpacked directory %s/src", InstDir);
 
             char *script_dir = ExpandInstDirPath("src");
@@ -528,7 +525,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     Script_CommandLine = NULL;
 
     /* If necessary, recursively delete the installation directory */
-    if (delete_inst_dir) {
+    if (IS_AUTO_CLEAN_INST_DIR_ENABLED(flags)) {
       DEBUG("Deleting temporary installation directory %s", InstDir);
       char SystemDirectory[MAX_PATH];
       if (GetSystemDirectory(SystemDirectory, MAX_PATH) > 0)

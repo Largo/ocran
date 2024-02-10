@@ -1079,6 +1079,12 @@ EOF
     OP_SETENV = 3
     OP_SET_SCRIPT = 4
 
+    DEBUG_MODE          = 0x01
+    EXTRACT_TO_EXE_DIR  = 0x02
+    AUTO_CLEAN_INST_DIR = 0x04
+    CHDIR_BEFORE_SCRIPT = 0x08
+    DATA_COMPRESSED     = 0x10
+
     base_dir = File.join(File.dirname(__FILE__), "../share/ocran")
     STUB_PATH = File.join(base_dir, "stub.exe")
     STUBW_PATH = File.join(base_dir, "stubw.exe")
@@ -1296,11 +1302,13 @@ EOF
     private :compress
 
     def write_header(debug_mode, next_to_exe, delete_after, chdir_before, compressed)
-      write_bool(debug_mode)
-      write_bool(next_to_exe)
-      write_bool(delete_after)
-      write_bool(chdir_before)
-      write_bool(compressed)
+      @of << [
+        (debug_mode ? DEBUG_MODE : 0) |
+        (next_to_exe ? EXTRACT_TO_EXE_DIR : 0) |
+        (delete_after ? AUTO_CLEAN_INST_DIR : 0) |
+        (chdir_before ? CHDIR_BEFORE_SCRIPT : 0) |
+        (compressed ? DATA_COMPRESSED : 0)
+      ].pack("C")
     end
     private :write_header
 

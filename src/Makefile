@@ -22,10 +22,10 @@ stubw.exe: $(OBJS) stubw.o
 edicon.exe: edicon.o
 	$(CC) $(CFLAGS) edicon.o -o edicon
 
-stub.o: stub.c
+stub.o: stub.c stub.h
 	$(CC) $(STUB_CFLAGS) -o $@ -c $<
 
-stubw.o: stub.c
+stubw.o: stub.c stub.h
 	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
 
 unpack.o: unpack.c unpack.h
