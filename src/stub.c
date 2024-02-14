@@ -644,7 +644,7 @@ char *SkipArg(char *str)
 /**
    Create a file (OP_CREATE_FILE opcode handler)
 */
-BOOL MakeFile(const char *file_name, DWORD file_size, const void *data)
+BOOL MakeFile(const char *file_name, size_t file_size, const void *data)
 {
     if (file_name == NULL || *file_name == '\0') {
         FATAL("file_name is null or empty");
@@ -674,7 +674,7 @@ BOOL MakeFile(const char *file_name, DWORD file_size, const void *data)
 
         DEBUG("Write data(%lu)", file_size);
 
-        if (!WriteFile(h, data, file_size, &BytesWritten, NULL)) {
+        if (!WriteFile(h, data, (DWORD)file_size, &BytesWritten, NULL)) {
             LAST_ERROR("Write failure");
             result = FALSE;
         }

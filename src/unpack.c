@@ -2,37 +2,46 @@
 #include <string.h>
 #include "unpack.h"
 
+size_t GetLength(void **p) {
+    unsigned char *b = *p;
+    *p = b + 2;
+    return ((size_t)(b[0]) << 0) |
+           ((size_t)(b[1]) << 8);
+}
+
 /** Decoder: Zero-terminated string */
-char *GetString(LPVOID* p)
+const char *GetString(void **p)
 {
-    SIZE_T len = (SIZE_T)*(LPWORD)*p;
-    *p += sizeof(WORD);
-    char *str = *p;
-    *p += len;
+    size_t len = GetLength(p);
+    const char *str = (const char *)*p;
+    *p = (char *)(*p) + len;
     return str;
 }
 
 /** Decoder: 32 bit unsigned integer */
-DWORD GetInteger(LPVOID* p)
+size_t GetInteger(void **p)
 {
-    DWORD dw = *(DWORD*)*p;
-    *p += sizeof(DWORD);
-    return dw;
+    unsigned char *b = *p;
+    *p = b + 4;
+    return ((size_t)(b[0]) <<  0) |
+           ((size_t)(b[1]) <<  8) |
+           ((size_t)(b[2]) << 16) |
+           ((size_t)(b[3]) << 24);
 }
 
-BYTE GetOpcode(LPVOID* p)
+unsigned char GetOpcode(void **p)
 {
-    BYTE op = *(LPBYTE)*p;
-    *p += sizeof(BYTE);
+    unsigned char op = *(unsigned char *)*p;
+    *p = (unsigned char *)(*p) + 1;
     return op;
 }
 
-BOOL OpCreateDirectory(LPVOID* p);
-BOOL OpCreateFile(LPVOID* p);
-BOOL OpSetEnv(LPVOID* p);
-BOOL OpSetScript(LPVOID* p);
+BOOL OpCreateDirectory(void **p);
+BOOL OpCreateFile(void **p);
+BOOL OpSetEnv(void **p);
+BOOL OpSetScript(void **p);
 
-typedef BOOL (*POpcodeHandler)(LPVOID*);
+typedef BOOL (*POpcodeHandler)(void **);
 
 POpcodeHandler OpcodeHandlers[OP_MAX] =
 {
@@ -43,43 +52,43 @@ POpcodeHandler OpcodeHandlers[OP_MAX] =
     &OpSetScript,
 };
 
-BOOL OpCreateDirectory(LPVOID* p)
+BOOL OpCreateDirectory(void **p)
 {
-    LPTSTR dir_name = GetString(p);
+    const char *dir_name = GetString(p);
 
     return MakeDirectory(dir_name);
 }
 
-BOOL OpCreateFile(LPVOID* p)
+BOOL OpCreateFile(void **p)
 {
-    char *file_name = GetString(p);
-    DWORD file_size = GetInteger(p);
-    LPVOID data = *p;
-    *p += file_size;
+    const char *file_name = GetString(p);
+    size_t file_size = GetInteger(p);
+    const void *data = *p;
+    *p = (char *)(*p) + file_size;
 
     return MakeFile(file_name, file_size, data);
 }
 
-BOOL OpSetEnv(LPVOID* p)
+BOOL OpSetEnv(void **p)
 {
-    char *name = GetString(p);
-    char *value = GetString(p);
+    const char *name = GetString(p);
+    const char *value = GetString(p);
 
     return SetEnv(name, value);
 }
 
-BOOL OpSetScript(LPVOID* p)
+BOOL OpSetScript(void **p)
 {
-    char *app_name = GetString(p);
-    char *script_name = GetString(p);
-    char *cmd_line = GetString(p);
+    const char *app_name = GetString(p);
+    const char *script_name = GetString(p);
+    const char *cmd_line = GetString(p);
 
     return SetScript(app_name, script_name, cmd_line);
 }
 
-BYTE ProcessOpcodes(LPVOID* p)
+unsigned char ProcessOpcodes(void **p)
 {
-    BYTE op;
+    unsigned char op;
 
     do {
         op = GetOpcode(p);
