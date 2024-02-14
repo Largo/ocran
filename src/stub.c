@@ -154,7 +154,7 @@ char *JoinPath(const char *p1, const char *p2)
         return ConcatStr(p1, p2, NULL);
 }
 
-SIZE_T ParentDirectoryPath(char *dest, SIZE_T dest_len, char *path)
+SIZE_T ParentDirectoryPath(char *dest, SIZE_T dest_len, const char *path)
 {
     if (path == NULL) return 0;
 
@@ -170,7 +170,7 @@ SIZE_T ParentDirectoryPath(char *dest, SIZE_T dest_len, char *path)
     return i;
 }
 
-char *ExpandInstDirPath(char *rel_path)
+char *ExpandInstDirPath(const char *rel_path)
 {
     if (rel_path == NULL || *rel_path == '\0') {
         DEBUG("rel_path is null or empty");
@@ -180,7 +180,7 @@ char *ExpandInstDirPath(char *rel_path)
     return JoinPath(InstDir, rel_path);
 }
 
-BOOL CheckInstDirPathExists(char *rel_path)
+BOOL CheckInstDirPathExists(const char *rel_path)
 {
     char *path = ExpandInstDirPath(rel_path);
     BOOL result = (GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES);
@@ -307,7 +307,7 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
    return TRUE;
 }
 
-BOOL DeleteRecursively(char *path)
+BOOL DeleteRecursively(const char *path)
 {
     char *findPath = JoinPath(path, "*");
 
@@ -591,10 +591,10 @@ BOOL ProcessImage(LPVOID pSeg, DWORD data_len, BOOL compressed)
 
 #define PLACEHOLDER '|'
 
-char *ReplaceInstDirPlaceholder(char *str)
+char *ReplaceInstDirPlaceholder(const char *str)
 {
     int InstDirLen = strlen(InstDir);
-    char *p;
+    const char *p;
     int c = 0;
 
     for (p = str; *p; p++) { if (*p == PLACEHOLDER) c++; }
@@ -644,7 +644,7 @@ char *SkipArg(char *str)
 /**
    Create a file (OP_CREATE_FILE opcode handler)
 */
-BOOL MakeFile(char *file_name, DWORD file_size, LPVOID data)
+BOOL MakeFile(const char *file_name, DWORD file_size, const void *data)
 {
     if (file_name == NULL || *file_name == '\0') {
         FATAL("file_name is null or empty");
@@ -698,7 +698,7 @@ BOOL MakeFile(char *file_name, DWORD file_size, LPVOID data)
 /**
    Create a directory (OP_CREATE_DIRECTORY opcode handler)
 */
-BOOL MakeDirectory(char *dir_name)
+BOOL MakeDirectory(const char *dir_name)
 {
     DEBUG("MakeDirectory");
 
@@ -751,7 +751,7 @@ DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line)
  * Sets up a process to be created after all other opcodes have been processed. This can be used to create processes
  * after the temporary files have all been created and memory has been freed.
  */
-BOOL SetScript(char *app_name, char *script_name, char *cmd_line)
+BOOL SetScript(const char *app_name, const char *script_name, const char *cmd_line)
 {
     DEBUG("SetScript");
 
@@ -804,7 +804,7 @@ BOOL SetScript(char *app_name, char *script_name, char *cmd_line)
     return TRUE;
 }
 
-BOOL SetEnv(char *name, char *value)
+BOOL SetEnv(const char *name, const char *value)
 {
     char *replaced_value = ReplaceInstDirPlaceholder(value);
 
