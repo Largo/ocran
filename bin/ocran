@@ -185,6 +185,10 @@ module Ocran
         @bindir ||= Ocran.Pathname(RbConfig::CONFIG["bindir"])
       end
 
+      def libdir
+        @libdir ||= Ocran.Pathname(RbConfig::CONFIG["libdir"])
+      end
+
       def libruby_so
         @libruby_so ||= Ocran.Pathname(RbConfig::CONFIG["LIBRUBY_SO"])
       end
@@ -257,6 +261,7 @@ module Ocran
     :rubyopt => nil,
     :gemfile => nil,
     :inno_script => nil,
+    :no_stub => nil,
     :quiet => false,
     :verbose => false,
     :autodll => true,
@@ -400,6 +405,10 @@ EOF
         path = argv.shift
         Ocran.fatal_error "Inno Script #{path} not found.\n" unless path && File.exist?(path)
         @options[:inno_script] = Pathname.new(path)
+      when /\A--no-stub\z/
+        @options[:no_stub] = true
+        @options[:chdir_first] = true
+        @options[:lzma_mode] = false
       when /\A--no-autodll\z/
         @options[:autodll] = false
       when /\A--version\z/
@@ -931,7 +940,10 @@ EOF
       Ocran.msg "Adding ruby executable #{rubyexe}"
       sb.create_file(Host.bindir / rubyexe, BINDIR / rubyexe)
       if Host.libruby_so
-        sb.create_file(Host.bindir / Host.libruby_so, BINDIR / Host.libruby_so)
+        #sb.create_file(Host.bindir / Host.libruby_so, BINDIR / Host.libruby_so)
+        if File.exist?(Host.libdir / Host.libruby_so)
+          sb.create_file(Host.libdir / Host.libruby_so, BINDIR / Host.libruby_so)
+        end
       end
 
       # Add detected DLLs
@@ -985,16 +997,16 @@ EOF
       end
 
       # Set environment variable
-      sb.setenv("RUBYOPT", Ocran.rubyopt || ENV["RUBYOPT"] || "")
-      sb.setenv("RUBYLIB", load_path.map { |path| path.to_native }.uniq.join(";"))
-      sb.setenv("GEM_PATH", (TEMPDIR_ROOT / GEMHOMEDIR).to_native)
+#      sb.setenv("RUBYOPT", Ocran.rubyopt || ENV["RUBYOPT"] || "")
+#      sb.setenv("RUBYLIB", load_path.map { |path| path.to_native }.uniq.join(";"))
+#      sb.setenv("GEM_PATH", (TEMPDIR_ROOT / GEMHOMEDIR).to_native)
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / rubyexe
-      sb.set_script(installed_ruby_exe, target_script, *Ocran.arg)
+#      sb.set_script(installed_ruby_exe, target_script, *Ocran.arg)
     end
 
-    unless Ocran.inno_script
+    unless Ocran.inno_script || Ocran.no_stub
       Ocran.msg "Finished building #{executable} (#{File.size(executable)} bytes)"
     end
   end
@@ -1119,7 +1131,7 @@ EOF
         Ocran.fatal_error "Stub image not available"
       else
         File.binwrite(path, image)
-      end
+      end unless Ocran.no_stub
 
       begin
         if Ocran.icon_filename
@@ -1139,6 +1151,8 @@ EOF
 
           if Ocran.inno_script
             write_header(debug_mode, false, false, true, compress_mode)
+          #elsif Ocran.no_stub
+            #write_header(debug_mode, false, false, true, compress_mode)
           else
             next_to_exe, delete_after = debug_extract, !debug_extract
             write_header(debug_mode, next_to_exe, delete_after, chdir_before, compress_mode)
@@ -1160,7 +1174,7 @@ EOF
       rescue Exception => e
         File.unlink(path) if File.exist?(path)
         Ocran.fatal_error("Ocran building failed: #{e.message}")
-      end
+      end unless Ocran.no_stub
 
       if Ocran.inno_script
         esc = -> (s) { s.to_s.gsub('"', '""') }
@@ -1205,6 +1219,26 @@ EOF
           File.unlink(path) if File.exist?(path)
         end
       end
+      if true
+        filesToCopy = []
+        yield(self)
+        esc = -> (s) { s.to_s.gsub('"', '""') }
+
+        require "fileutils"
+        @files.each_value do |tgt, src|
+          dest_dir = Ocran.Pathname(tgt).dirname
+          puts "Source: \"#{ esc.(src) }\"; DestDir: \"{app}/#{ esc.(dest_dir) }\""
+          destination = File.join("app", esc.(dest_dir))
+          FileUtils.mkdir_p(destination)
+          filesToCopy.push([esc.(src), destination])
+        end
+
+        require "fileutils"
+        FileUtils.mkdir_p "app"
+        filesToCopy.each do |item|
+          FileUtils.cp item[0], item[1]
+        end
+      end
     end
 
     def mkdir(path)
@@ -1236,7 +1270,7 @@ EOF
       tgt = Ocran.Pathname(tgt)
 
       # InnoSetup will install the file with a [Files] statement
-      return if Ocran.inno_script
+      return if Ocran.inno_script or Ocran.no_stub
 
       Ocran.verbose_msg "a #{show_path tgt}"
       src = Ocran.Pathname(src)
