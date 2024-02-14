@@ -63,7 +63,6 @@ GEM
     time (0.2.2)
       date
     timeout (0.3.2)
-    tiny_tds (2.1.5)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
     tzinfo-data (1.2023.3)
@@ -100,7 +99,6 @@ DEPENDENCIES
   rufus-scheduler
   sequel
   sqlite3 (~> 1.6)
-  tiny_tds (~> 2.1)
   tzinfo
   tzinfo-data
   win32-process (~> 0.9.0)

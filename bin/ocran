@@ -1159,7 +1159,7 @@ EOF
         end
       rescue Exception => e
         File.unlink(path) if File.exist?(path)
-        Ocran.fatal_error("Ocran building failed: #{e.message}")
+        Ocran.fatal_error("Ocran building failed: #{e.message} - #{e.backtrace}")
       end
 
       if Ocran.inno_script

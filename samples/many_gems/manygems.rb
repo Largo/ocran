@@ -26,14 +26,14 @@ require 'openssl/win/root'
 require 'ruby-measurement'
 require 'loofah'
 require 'lumberjack'
-require 'tiny_tds'
-require 'tiny_tds/tiny_tds'
+#require 'tiny_tds'
+#require 'tiny_tds/tiny_tds'
 
 # Your application code goes here
 puts "All gems have been successfully loaded!"
 
 # Example usage of some gems
-puts TinyTds::VERSION
+#puts TinyTds::VERSION
 puts SQLite3::VERSION
 puts TZInfo::VERSION if Gem.win_platform?
 puts Rufus::Scheduler::VERSION
