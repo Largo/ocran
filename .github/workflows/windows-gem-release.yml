@@ -12,12 +12,16 @@ jobs:
 
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: 3.2.2
+          ruby-version: 3.3.0
           bundler-cache: true
+
+      - name: Build stub and run tests 
+        run: |
+          rake build_stub 
+          rake test
 
       - name: Build Gem 
         run: |
-          rake build_stub 
           gem build
 
       - name: Get Gem File Name

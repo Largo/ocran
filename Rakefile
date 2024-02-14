@@ -85,4 +85,13 @@ task :release_docs => :redocs do
   sh "pscp -r doc/* larsch@ocran.rubyforge.org:/var/www/gforge-projects/ocran"
 end
 
+task :test_single, [:test_name] do |t, args|
+  if args[:test_name].nil?
+    puts "You must provide a test name. e.g., rake test_single[YourTestClassName]"
+  else
+    sh "ruby #{File.join("test", "test_ocra.rb")} -n test_#{args[:test_name]}"
+  end
+end
+
+
 # vim: syntax=Ruby
