@@ -100,17 +100,27 @@ class TestOcran < Minitest::Test
     end
   end
 
+  def relative_or_absolute_path(from_path, to_path)
+    begin
+      # Attempt to generate a relative path
+      Pathname.new(to_path).relative_path_from(Pathname.new(from_path)).to_s
+    rescue ArgumentError
+      # If a relative path cannot be computed, return the absolute path
+      Pathname.new(to_path).realpath.to_s
+    end
+  end
+
   def each_path_combo(*files)
     # In same directory as first file
     basedir = Pathname.new(files[0]).realpath.parent
-    args = files.map{|p|Pathname.new(p).realpath.relative_path_from(basedir).to_s}
+    args = files.map{|p| relative_or_absolute_path(basedir, p) }
     cd basedir do
       yield(*args)
     end
 
     # In parent directory of first file
     basedir = basedir.parent
-    args = files.map{|p|Pathname.new(p).realpath.relative_path_from(basedir).to_s}
+    args = files.map{|p| relative_or_absolute_path(basedir, p) }
     cd basedir do
       yield(*args)
     end
