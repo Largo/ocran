@@ -17,8 +17,8 @@ jobs:
 
       - name: Build stub and run tests 
         run: |
-          rake build_stub 
-          rake test
+          bundle exec rake build_stub 
+          bundle exec rake test
 
       - name: Build Gem 
         run: |
