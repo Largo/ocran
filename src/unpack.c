@@ -79,11 +79,11 @@ BOOL OpSetEnv(void **p)
 
 BOOL OpSetScript(void **p)
 {
-    size_t args_size = GetInteger(p);
-    const char *args = *p;
-    *p = (char *)(*p) + args_size;
+    const char *app_name = GetString(p);
+    const char *script_name = GetString(p);
+    const char *cmd_line = GetString(p);
 
-    return SetScript(args, args_size);
+    return SetScript(app_name, script_name, cmd_line);
 }
 
 unsigned char ProcessOpcodes(void **p)

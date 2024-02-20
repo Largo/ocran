@@ -1,10 +1,10 @@
-# class Pathname
-#   alias original_relative_path_from relative_path_from
-#   def relative_path_from(other)
-#     puts "#{caller[0]} 123"
-#     original_relative_path_from(other)
-#   end
-# end
+class Pathname
+  alias original_relative_path_from relative_path_from
+  def relative_path_from(other)
+    puts "#{caller[0]} 123"
+    original_relative_path_from(other)
+  end
+end
 
 require "minitest/autorun"
 

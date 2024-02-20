@@ -8,6 +8,6 @@
 BOOL MakeDirectory(const char *dir_name);
 BOOL MakeFile(const char *file_name, size_t file_size, const void *data);
 BOOL SetEnv(const char *name, const char *value);
-BOOL SetScript(const char *args, size_t args_size);
+BOOL SetScript(const char *app_name, const char *script_name, const char *cmd_line);
 
 unsigned char ProcessOpcodes(void **p);

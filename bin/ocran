@@ -1262,7 +1262,9 @@ EOF
 
       Ocran.verbose_msg "p #{image} #{script} #{show_path extra_argc}"
       write_opcode(OP_SET_SCRIPT)
-      write_string_array(image.to_native, script.to_native, *argv)
+      write_string(image.to_native)
+      write_string(script.to_native)
+      write_string(extra_argc)
     end
 
     def setenv(name, value)
@@ -1335,13 +1337,6 @@ EOF
       @of << [len, str].pack("vZ*")
     end
     private :write_string
-
-    def write_string_array(*array)
-      ary = array.map(&:to_s)
-      write_size(ary.sum(0) { |s| s.bytesize + 1 })
-      ary.each_slice(1) { |a| @of << a.pack("Z*") }
-    end
-    private :write_string_array
   end # class OcranBuilder
 end # module Ocran
 
