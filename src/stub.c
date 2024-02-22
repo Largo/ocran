@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
+#include "error.h"
 #include "stub.h"
 #include "unpack.h"
 
@@ -53,53 +54,6 @@ char *Script_ApplicationName = NULL;
 char *Script_CommandLine = NULL;
 
 BOOL DebugModeEnabled = FALSE;
-
-#define EXIT_CODE_FAILURE ((DWORD)-1)
-
-DWORD PrintFatalMessage(char *format, ...)
-{
-#if _CONSOLE
-    fprintf_s(stderr, "FATAL: ");
-    va_list args;
-    va_start(args, format);
-    vfprintf_s(stderr, format, args);
-    va_end(args);
-    fprintf_s(stderr, "\n");
-#else
-    char TextBuffer[1024];
-    va_list args;
-    va_start(args, format);
-    snprintf(TextBuffer, 1024, format, args);
-    va_end(args);
-    MessageBox(NULL, TextBuffer, "OCRAN", MB_OK | MB_ICONWARNING);
-#endif
-
-    return EXIT_CODE_FAILURE;
-}
-
-#define FATAL(...) PrintFatalMessage(__VA_ARGS__)
-
-DWORD PrintLastError(char *msg) {
-    DWORD err = GetLastError();
-    fprintf_s(stderr, "ERROR: %s (%lu)\n", msg, err);
-    return err;
-}
-
-#define LAST_ERROR(msg) PrintLastError(msg)
-
-void PrintDebugMessage(char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    vfprintf_s(stderr, format, args);
-    va_end(args);
-    fprintf_s(stderr, "\n");
-}
-
-#if _CONSOLE
-#define DEBUG(...) { if (DebugModeEnabled) PrintDebugMessage(__VA_ARGS__); }
-#else
-#define DEBUG(...)
-#endif
 
 char InstDir[MAX_PATH];
 
