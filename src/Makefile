@@ -13,11 +13,11 @@ all: stub.exe stubw.exe edicon.exe
 stubicon.o: stub.rc
 	windres -i $< -o $@
 
-stub.exe: $(OBJS) stub.o error_console.o
-	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o error_console.o -o $@
+stub.exe: $(OBJS) stub.o error_console.o filesystem_utils_console.o inst_dir_console.o
+	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o error_console.o  filesystem_utils_console.o inst_dir_console.o -o $@
 
-stubw.exe: $(OBJS) stubw.o error_window.o
-	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o error_window.o -o $@
+stubw.exe: $(OBJS) stubw.o error_window.o filesystem_utils_window.o inst_dir_window.o
+	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o error_window.o  filesystem_utils_window.o inst_dir_window.o -o $@
 
 edicon.exe: edicon.o
 	$(CC) $(CFLAGS) edicon.o -o edicon
@@ -37,9 +37,15 @@ stubw.o: stub.c stub.h
 unpack.o: unpack.c unpack.h
 	$(CC) $(CFLAGS) -o $@ -c $<
 
+filesystem_utils_console.o: filesystem_utils.c filesystem_utils.h
+	$(CC) $(STUB_CFLAGS) -o $@ -c $<
+
+filesystem_utils_window.o: filesystem_utils.c filesystem_utils.h
+	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
+
 clean:
 	rm -f $(OBJS) stub.exe stubw.exe edicon.exe edicon.o stubw.o stub.o \
-	error_console.o error_window.o
+	error_console.o error_window.o filesystem_utils_console.o filesystem_utils_window.o
 
 install: stub.exe stubw.exe edicon.exe
 	cp -f stub.exe $(BINDIR)/stub.exe

@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "error.h"
+#include "filesystem_utils.h"
 #include "stub.h"
 #include "unpack.h"
 
@@ -84,44 +85,6 @@ char* ConcatStr(const char *first, ...) {
     return str;
 }
 
-char *JoinPath(const char *p1, const char *p2)
-{
-    if (p1 == NULL || *p1 == '\0') {
-        DEBUG("p1 is null or empty");
-        return NULL;
-    }
-
-    if (p2 == NULL || *p2 == '\0') {
-        DEBUG("p2 is null or empty");
-        return NULL;
-    }
-
-    // If p2 starts with a file path separator, skip it.
-    if (p2[0] == '\\') p2++;
-
-    // If p1 doesn't end with a file path separator, add the separator and concatenate.
-    if (p1[strlen(p1) - 1] != '\\')
-        return ConcatStr(p1, "\\", p2, NULL);
-    else
-        return ConcatStr(p1, p2, NULL);
-}
-
-SIZE_T ParentDirectoryPath(char *dest, SIZE_T dest_len, const char *path)
-{
-    if (path == NULL) return 0;
-
-    SIZE_T i = strlen(path);
-
-    for (; i > 0; i--)
-        if (path[i] == '\\') break;
-
-    if (dest != NULL)
-        if (strncpy_s(dest, dest_len, path, i))
-            return 0;
-
-    return i;
-}
-
 char *ExpandInstDirPath(const char *rel_path)
 {
     if (rel_path == NULL || *rel_path == '\0') {
@@ -141,114 +104,6 @@ BOOL CheckInstDirPathExists(const char *rel_path)
     return result;
 }
 
-BOOL CreateDirectoriesRecursively(const char *dir)
-{
-    if (dir == NULL || *dir == '\0') {
-        DEBUG("dir is null or empty");
-        return FALSE;
-    }
-
-    DWORD dir_attr = GetFileAttributes(dir);
-
-    if (dir_attr != INVALID_FILE_ATTRIBUTES) {
-        if (dir_attr & FILE_ATTRIBUTE_DIRECTORY) {
-            return TRUE;
-        } else {
-            FATAL("Directory name conflicts with a file(%s)", dir);
-            return FALSE;
-        }
-    }
-
-    size_t dir_len = strlen(dir);
-    char *path = (char *)LocalAlloc(LPTR, dir_len + 1);
-
-    if (path == NULL) {
-        FATAL("LocalAlloc failed");
-        return FALSE;
-    }
-
-    strcpy(path, dir);
-
-    char *end = path + dir_len;
-    char *p = end;
-
-    for (; p >= path; p--) {
-        if (*p == '\\') {
-            *p = '\0';
-
-            DWORD path_attr = GetFileAttributes(path);
-
-            if (path_attr != INVALID_FILE_ATTRIBUTES) {
-                if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
-                    break;
-                } else {
-                    FATAL("Directory name conflicts with a file(%s)", path);
-                    LocalFree(path);
-                    return FALSE;
-                }
-            } else {
-                DWORD error = GetLastError();
-
-                if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
-                    continue;
-                } else {
-                    LAST_ERROR("Cannot access the directory");
-                    LocalFree(path);
-                    return FALSE;
-                }
-            }
-        }
-    }
-
-    for (; p < end; p++) {
-        if (*p == '\0') {
-            *p = '\\';
-
-            DEBUG("CreateDirectory(%s)", path);
-
-            if (!CreateDirectory(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
-                LAST_ERROR("Failed to create directory");
-                LocalFree(path);
-                return FALSE;
-            }
-        }
-    }
-
-    LocalFree(path);
-    return TRUE;
-}
-
-BOOL CreateParentDirectories(const char *file)
-{
-    if (file == NULL || *file == '\0') {
-        FATAL("file is null or empty");
-        return FALSE;
-    }
-
-    size_t i = strlen(file);
-
-    for (; i > 0; i--)
-        if (file[i] == '\\') break;
-
-    if (i == 0)
-        return TRUE;
-
-    char *dir = (char *)LocalAlloc(LPTR, i + 1);
-
-    if (dir == NULL) {
-        FATAL("LocalAlloc failed");
-        return FALSE;
-    }
-
-    strncpy(dir, file, i);
-    dir[i] = '\0';
-
-    BOOL result = CreateDirectoriesRecursively(dir);
-
-    LocalFree(dir);
-    return result;
-}
-
 /**
    Handler for console events.
 */
@@ -257,55 +112,6 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
    // Ignore all events. They will also be dispatched to the child procress (Ruby) which should
    // exit quickly, allowing us to clean up.
    return TRUE;
-}
-
-BOOL DeleteRecursively(const char *path)
-{
-    char *findPath = JoinPath(path, "*");
-
-    if (findPath == NULL) {
-        FATAL("Failed to build find path for deletion");
-        return FALSE;
-    }
-
-    WIN32_FIND_DATA findData;
-    HANDLE handle = FindFirstFile(findPath, &findData);
-
-    if (handle != INVALID_HANDLE_VALUE) {
-        do {
-            if ((strcmp(findData.cFileName, ".") == 0) || (strcmp(findData.cFileName, "..") == 0))
-                continue;
-
-            char *subPath = JoinPath(path, findData.cFileName);
-
-            if (subPath == NULL) {
-                FATAL("Failed to build delete file path");
-                break;
-            }
-
-            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-                DeleteRecursively(subPath);
-            } else {
-                if (!DeleteFile(subPath)) {
-                    LAST_ERROR("Failed to delete file");
-                    MoveFileEx(subPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
-                }
-            }
-
-            LocalFree(subPath);
-        } while (FindNextFile(handle, &findData));
-        FindClose(handle);
-    }
-
-    LocalFree(findPath);
-
-    if (!RemoveDirectory(path)) {
-        LAST_ERROR("Failed to delete directory");
-        MoveFileEx(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
-        return FALSE;
-    } else {
-        return TRUE;
-    }
 }
 
 #define DELETION_MAKER_SUFFIX ".ocran-delete-me"
@@ -333,51 +139,53 @@ void MarkInstDirForDeletion(void)
 BOOL CreateInstDirectory(BOOL debug_extract)
 {
     /* Create an installation directory that will hold the extracted files */
-    char temp_path[MAX_PATH];
+    char *target_dir = NULL;
 
     if (debug_extract) {
         // In debug extraction mode, create the temp directory next to the exe
-        strcpy(temp_path, InstDir);
-
-        if (strlen(temp_path) == 0) {
-            FATAL("Unable to find directory containing exe");
+        char *image_dir = GetImageDirectoryPath();
+        if (image_dir == NULL) {
+            FATAL("Failed to obtain the directory path of the executable file");
             return FALSE;
         }
+        target_dir = image_dir;
     } else {
-        if (!GetTempPath(MAX_PATH, temp_path)) {
-            LAST_ERROR("Failed to get temp path");
+        char *temp_dir = GetTempDirectoryPath();
+        if (temp_dir == NULL) {
+            FATAL("Failed to obtain the temporary directory path");
             return FALSE;
         }
+        target_dir = temp_dir;
     }
 
-    while (TRUE) {
-        if (!GetTempFileName(temp_path, "ocran", 0, InstDir)) {
-            LAST_ERROR("Failed to get temp file name");
-            return FALSE;
-        }
+    DEBUG("Creating installation directory: %s", target_dir);
 
-        DEBUG("Creating installation directory: %s", InstDir);
-
-        /* Attempt to delete the temp file created by GetTempFileName.
-           Ignore errors, i.e. if it doesn't exist. */
-        (void)DeleteFile(InstDir);
-
-        if (CreateDirectory(InstDir, NULL)) {
-            return TRUE;
-        } else if (GetLastError() != ERROR_ALREADY_EXISTS) {
-            LAST_ERROR("Failed to create installation directory");
-            return FALSE;
-        }
+    char *inst_dir = CreateUniqueDirectory(target_dir, "ocran");
+    LocalFree(target_dir);
+    if (inst_dir == NULL) {
+        FATAL("Failed to create a unique installation directory within the specified target directory");
+        return FALSE;
     }
+
+    DEBUG("Created installation directory: %s", inst_dir);
+
+    if ((strlen(inst_dir) + 1) > MAX_PATH) {
+        FATAL("Installation directory path exceeds the MAX_PATH limit");
+        LocalFree(inst_dir);
+        return FALSE;
+    }
+
+    strcpy(InstDir, inst_dir);
+    return TRUE;
 }
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     DWORD exit_code = 0;
-    char image_path[MAX_PATH];
 
     /* Find name of image */
-    if (!GetModuleFileName(NULL, image_path, MAX_PATH)) {
+    char *image_path = GetImagePath();
+    if (image_path == NULL) {
         return LAST_ERROR("Failed to get executable name");
     }
 
@@ -420,11 +228,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     if (DebugModeEnabled) {
         DEBUG("Ocran stub running in debug mode");
-    }
-
-    /* By default, assume the installation directory is wherever the EXE is */
-    if (!ParentDirectoryPath(InstDir, sizeof(InstDir), image_path)) {
-        return FATAL("Failed to set default installation directory");
     }
 
     if (!CreateInstDirectory(IS_EXTRACT_TO_EXE_DIR_ENABLED(flags))) {
