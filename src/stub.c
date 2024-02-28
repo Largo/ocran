@@ -53,8 +53,6 @@ BOOL DecompressLzma(void *unpack_data, size_t unpack_size, void *src, size_t src
 char *Script_ApplicationName = NULL;
 char *Script_CommandLine = NULL;
 
-BOOL DebugModeEnabled = FALSE;
-
 char InstDir[MAX_PATH];
 
 char* ConcatStr(const char *first, ...) {

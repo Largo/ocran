@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include "error.h"
 
+BOOL DebugModeEnabled = FALSE;
+
 DWORD PrintFatalMessage(char *format, ...)
 {
     fprintf_s(stderr, "FATAL: ");

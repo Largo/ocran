@@ -1,5 +1,7 @@
 #define EXIT_CODE_FAILURE ((DWORD)-1)
 
+extern BOOL DebugModeEnabled;
+
 void PrintDebugMessage(char *format, ...);
 
 #if _CONSOLE
