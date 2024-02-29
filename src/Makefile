@@ -1,5 +1,5 @@
 SRCS = lzma/LzmaDec.c unpack.c
-OBJS = $(SRCS:.c=.o) stubicon.o error.o
+OBJS = $(SRCS:.c=.o) stubicon.o
 CC = gcc
 BINDIR = $(CURDIR)/../share/ocran
 
@@ -13,17 +13,20 @@ all: stub.exe stubw.exe edicon.exe
 stubicon.o: stub.rc
 	windres -i $< -o $@
 
-stub.exe: $(OBJS) stub.o
-	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o -o $@
+stub.exe: $(OBJS) stub.o error_console.o
+	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o error_console.o -o $@
 
-stubw.exe: $(OBJS) stubw.o
-	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o -o $@
+stubw.exe: $(OBJS) stubw.o error_window.o
+	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o error_window.o -o $@
 
 edicon.exe: edicon.o
 	$(CC) $(CFLAGS) edicon.o -o edicon
 
-error.o: error.c error.h
-	$(CC) $(CFLAGS) -o $@ -c $<
+error_console.o: error.c error.h
+	$(CC) $(STUB_CFLAGS) -o $@ -c $<
+
+error_window.o: error.c error.h
+	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
 
 stub.o: stub.c stub.h
 	$(CC) $(STUB_CFLAGS) -o $@ -c $<
@@ -35,7 +38,8 @@ unpack.o: unpack.c unpack.h
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 clean:
-	rm -f $(OBJS) stub.exe stubw.exe edicon.exe edicon.o stubw.o stub.o error.o
+	rm -f $(OBJS) stub.exe stubw.exe edicon.exe edicon.o stubw.o stub.o \
+	error_console.o error_window.o
 
 install: stub.exe stubw.exe edicon.exe
 	cp -f stub.exe $(BINDIR)/stub.exe
