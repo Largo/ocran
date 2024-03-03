@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include "error.h"
 #include "filesystem_utils.h"
+#include "inst_dir.h"
 #include "stub.h"
 #include "unpack.h"
 
@@ -54,8 +55,6 @@ BOOL DecompressLzma(void *unpack_data, size_t unpack_size, void *src, size_t src
 char *Script_ApplicationName = NULL;
 char *Script_CommandLine = NULL;
 
-char InstDir[MAX_PATH];
-
 char* ConcatStr(const char *first, ...) {
     va_list args;
     va_start(args, first);
@@ -85,25 +84,6 @@ char* ConcatStr(const char *first, ...) {
     return str;
 }
 
-char *ExpandInstDirPath(const char *rel_path)
-{
-    if (rel_path == NULL || *rel_path == '\0') {
-        DEBUG("rel_path is null or empty");
-        return NULL;
-    }
-
-    return JoinPath(InstDir, rel_path);
-}
-
-BOOL CheckInstDirPathExists(const char *rel_path)
-{
-    char *path = ExpandInstDirPath(rel_path);
-    BOOL result = (GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES);
-    LocalFree(path);
-
-    return result;
-}
-
 /**
    Handler for console events.
 */
@@ -112,71 +92,6 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
    // Ignore all events. They will also be dispatched to the child procress (Ruby) which should
    // exit quickly, allowing us to clean up.
    return TRUE;
-}
-
-#define DELETION_MAKER_SUFFIX ".ocran-delete-me"
-
-void MarkInstDirForDeletion(void)
-{
-    char *marker = ConcatStr(InstDir, DELETION_MAKER_SUFFIX, NULL);
-
-    if (marker == NULL) {
-        FATAL("Marker is null");
-        return;
-    }
-
-    HANDLE h = CreateFile(marker, 0, 0, NULL, CREATE_ALWAYS, 0, NULL);
-
-    if (h == INVALID_HANDLE_VALUE) {
-        LAST_ERROR("Failed to mark for deletion");
-    }
-
-    FATAL("Deletion marker path is %s", marker);
-    CloseHandle(h);
-    LocalFree(marker);
-}
-
-BOOL CreateInstDirectory(BOOL debug_extract)
-{
-    /* Create an installation directory that will hold the extracted files */
-    char *target_dir = NULL;
-
-    if (debug_extract) {
-        // In debug extraction mode, create the temp directory next to the exe
-        char *image_dir = GetImageDirectoryPath();
-        if (image_dir == NULL) {
-            FATAL("Failed to obtain the directory path of the executable file");
-            return FALSE;
-        }
-        target_dir = image_dir;
-    } else {
-        char *temp_dir = GetTempDirectoryPath();
-        if (temp_dir == NULL) {
-            FATAL("Failed to obtain the temporary directory path");
-            return FALSE;
-        }
-        target_dir = temp_dir;
-    }
-
-    DEBUG("Creating installation directory: %s", target_dir);
-
-    char *inst_dir = CreateUniqueDirectory(target_dir, "ocran");
-    LocalFree(target_dir);
-    if (inst_dir == NULL) {
-        FATAL("Failed to create a unique installation directory within the specified target directory");
-        return FALSE;
-    }
-
-    DEBUG("Created installation directory: %s", inst_dir);
-
-    if ((strlen(inst_dir) + 1) > MAX_PATH) {
-        FATAL("Installation directory path exceeds the MAX_PATH limit");
-        LocalFree(inst_dir);
-        return FALSE;
-    }
-
-    strcpy(InstDir, inst_dir);
-    return TRUE;
 }
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -230,9 +145,25 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         DEBUG("Ocran stub running in debug mode");
     }
 
-    if (!CreateInstDirectory(IS_EXTRACT_TO_EXE_DIR_ENABLED(flags))) {
+    BOOL created;
+
+    if (IS_EXTRACT_TO_EXE_DIR_ENABLED(flags)) {
+        created = InitializeDebugExtractInstDir();
+    } else {
+        created = InitializeTemporaryInstDir();
+    }
+
+    if (!created) {
         return FATAL("Failed to create installation directory");
     }
+
+    const char *inst_dir = GetInstDir();
+
+    if (inst_dir == NULL) {
+        return FATAL("Failed to get installation directory");
+    }
+
+    DEBUG("Created installation directory: %s", inst_dir);
 
     /* Unpacking process */
     if (!ProcessImage(head, tail - head, IS_DATA_COMPRESSED(flags))) {
@@ -250,18 +181,22 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     /* Launching the script, provided there are no errors in file extraction from the image */
     if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
-        DEBUG("*** Starting app in %s", InstDir);
+        DEBUG("*** Starting app in %s", inst_dir);
 
         if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
-            DEBUG("Changing CWD to unpacked directory %s/src", InstDir);
-
             char *script_dir = ExpandInstDirPath("src");
 
-            if (!SetCurrentDirectory(script_dir)) {
-                exit_code = LAST_ERROR("Failed to change CWD");
-            }
+            if (script_dir) {
+                DEBUG("Changing CWD to unpacked directory %s", script_dir);
 
-            LocalFree(script_dir);
+                if (!SetCurrentDirectory(script_dir)) {
+                    exit_code = LAST_ERROR("Failed to change CWD");
+                }
+
+                LocalFree(script_dir);
+            } else {
+                exit_code = FATAL("Failed to build path for CWD");
+            }
         }
 
         if (exit_code == 0) {
@@ -281,17 +216,20 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     /* If necessary, recursively delete the installation directory */
     if (IS_AUTO_CLEAN_INST_DIR_ENABLED(flags)) {
-      DEBUG("Deleting temporary installation directory %s", InstDir);
+        DEBUG("Deleting temporary installation directory %s", inst_dir);
       char SystemDirectory[MAX_PATH];
       if (GetSystemDirectory(SystemDirectory, MAX_PATH) > 0)
          SetCurrentDirectory(SystemDirectory);
       else
          SetCurrentDirectory("C:\\");
 
-      if (!DeleteRecursively(InstDir))
+        if (!DeleteInstDirRecursively()) {
             MarkInstDirForDeletion();
+        }
     }
 
+    inst_dir = NULL;
+    FreeInstDir();
     return exit_code;
 }
 
@@ -337,44 +275,6 @@ BOOL ProcessImage(LPVOID pSeg, DWORD data_len, BOOL compressed)
         return FALSE;
     }
     return TRUE;
-}
-
-/**
-   Expands a specially formatted string, replacing | with the
-   temporary installation directory.
-*/
-
-#define PLACEHOLDER '|'
-
-char *ReplaceInstDirPlaceholder(const char *str)
-{
-    int InstDirLen = strlen(InstDir);
-    const char *p;
-    int c = 0;
-
-    for (p = str; *p; p++) { if (*p == PLACEHOLDER) c++; }
-    SIZE_T out_len = strlen(str) - c + InstDirLen * c + 1;
-    char *out = (char *)LocalAlloc(LPTR, out_len);
-
-    if (out == NULL) {
-        LAST_ERROR("LocalAlloc failed");
-        return NULL;
-    }
-
-    char *out_p = out;
-
-    for (p = str; *p; p++) {
-        if (*p == PLACEHOLDER) {
-            memcpy(out_p, InstDir, InstDirLen);
-            out_p += InstDirLen;
-        } else {
-            *out_p = *p;
-            out_p++;
-        }
-    }
-    *out_p = '\0';
-
-    return out;
 }
 
 /**

@@ -43,9 +43,16 @@ filesystem_utils_console.o: filesystem_utils.c filesystem_utils.h
 filesystem_utils_window.o: filesystem_utils.c filesystem_utils.h
 	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
 
+inst_dir_console.o: inst_dir.c inst_dir.h
+	$(CC) $(STUB_CFLAGS) -o $@ -c $<
+
+inst_dir_window.o: inst_dir.c inst_dir.h
+	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
+
 clean:
 	rm -f $(OBJS) stub.exe stubw.exe edicon.exe edicon.o stubw.o stub.o \
-	error_console.o error_window.o filesystem_utils_console.o filesystem_utils_window.o
+	error_console.o error_window.o filesystem_utils_console.o filesystem_utils_window.o \
+	inst_dir_console.o inst_dir_window.o
 
 install: stub.exe stubw.exe edicon.exe
 	cp -f stub.exe $(BINDIR)/stub.exe
