@@ -182,11 +182,27 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     /* If necessary, recursively delete the installation directory */
     if (IS_AUTO_CLEAN_INST_DIR_ENABLED(flags)) {
         DEBUG("Deleting temporary installation directory %s", inst_dir);
-      char SystemDirectory[MAX_PATH];
-      if (GetSystemDirectory(SystemDirectory, MAX_PATH) > 0)
-         SetCurrentDirectory(SystemDirectory);
-      else
-         SetCurrentDirectory("C:\\");
+
+        if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
+            char *working_dir = GetTempDirectoryPath();
+            BOOL changed = working_dir && SetCurrentDirectory(working_dir);
+            LocalFree(working_dir);
+
+            if (!changed) {
+                DEBUG("Failed to change to temporary directory. Trying executable's directory");
+                working_dir = GetImageDirectoryPath();
+                changed = working_dir && SetCurrentDirectory(working_dir);
+                LocalFree(working_dir);
+
+                if (!changed) {
+                    DEBUG("Failed to change to executable's directory");
+                }
+            }
+
+            if (!changed) {
+                FATAL("Failed to change the current directory to a safe location");
+            }
+        }
 
         if (!DeleteInstDirRecursively()) {
             MarkInstDirForDeletion();
