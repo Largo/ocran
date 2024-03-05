@@ -13,11 +13,11 @@ all: stub.exe stubw.exe edicon.exe
 stubicon.o: stub.rc
 	windres -i $< -o $@
 
-stub.exe: $(OBJS) stub.o error_console.o filesystem_utils_console.o inst_dir_console.o
-	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o error_console.o  filesystem_utils_console.o inst_dir_console.o -o $@
+stub.exe: $(OBJS) stub.o error_console.o filesystem_utils_console.o inst_dir_console.o script_info_console.o
+	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o error_console.o  filesystem_utils_console.o inst_dir_console.o script_info_console.o -o $@
 
-stubw.exe: $(OBJS) stubw.o error_window.o filesystem_utils_window.o inst_dir_window.o
-	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o error_window.o  filesystem_utils_window.o inst_dir_window.o -o $@
+stubw.exe: $(OBJS) stubw.o error_window.o filesystem_utils_window.o inst_dir_window.o script_info_window.o
+	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o error_window.o  filesystem_utils_window.o inst_dir_window.o script_info_window.o -o $@
 
 edicon.exe: edicon.o
 	$(CC) $(CFLAGS) edicon.o -o edicon
@@ -49,10 +49,16 @@ inst_dir_console.o: inst_dir.c inst_dir.h
 inst_dir_window.o: inst_dir.c inst_dir.h
 	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
 
+script_info_console.o: script_info.c script_info.h
+	$(CC) $(STUB_CFLAGS) -o $@ -c $<
+
+script_info_window.o: script_info.c script_info.h
+	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
+
 clean:
 	rm -f $(OBJS) stub.exe stubw.exe edicon.exe edicon.o stubw.o stub.o \
 	error_console.o error_window.o filesystem_utils_console.o filesystem_utils_window.o \
-	inst_dir_console.o inst_dir_window.o
+	inst_dir_console.o inst_dir_window.o script_info_console.o script_info_window.o
 
 install: stub.exe stubw.exe edicon.exe
 	cp -f stub.exe $(BINDIR)/stub.exe

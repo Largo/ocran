@@ -10,6 +10,7 @@
 #include "error.h"
 #include "filesystem_utils.h"
 #include "inst_dir.h"
+#include "script_info.h"
 #include "stub.h"
 #include "unpack.h"
 
@@ -51,38 +52,6 @@ BOOL DecompressLzma(void *unpack_data, size_t unpack_size, void *src, size_t src
     return (BOOL)(res == SZ_OK);
 }
 #endif
-
-char *Script_ApplicationName = NULL;
-char *Script_CommandLine = NULL;
-
-char* ConcatStr(const char *first, ...) {
-    va_list args;
-    va_start(args, first);
-    size_t len = 0;
-    for (const char* s = first; s; s = va_arg(args, const char*)) {
-        len += strlen(s);
-    }
-    va_end(args);
-
-    char *str = LocalAlloc(LPTR, len + 1);
-
-    if (str == NULL) {
-        LAST_ERROR("Failed to allocate memory");
-        return NULL;
-    }
-
-    va_start(args, first);
-    char *p = str;
-    for (const char *s = first; s; s = va_arg(args, const char*)) {
-        size_t l = strlen(s);
-        memcpy(p, s, l);
-        p += l;
-    }
-    str[len] = '\0';
-    va_end(args);
-
-    return str;
-}
 
 /**
    Handler for console events.
@@ -177,42 +146,38 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         exit_code = LAST_ERROR("Failed to close file mapping");
     } else if (!CloseHandle(hImage)) {
         exit_code = LAST_ERROR("Failed to close executable");
-    }
+    } else {
+        /* Launching the script, provided there are no errors in file extraction from the image */
+        const char *app_name;
+        char *cmd_line;
+        if (GetScriptInfo(&app_name, &cmd_line)) {
+            DEBUG("*** Starting app in %s", inst_dir);
 
-    /* Launching the script, provided there are no errors in file extraction from the image */
-    if (exit_code == 0 && Script_ApplicationName && Script_CommandLine) {
-        DEBUG("*** Starting app in %s", inst_dir);
+            if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
+                char *script_dir = ExpandInstDirPath("src");
+                if (script_dir) {
+                    DEBUG("Changing CWD to unpacked directory %s", script_dir);
 
-        if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
-            char *script_dir = ExpandInstDirPath("src");
-
-            if (script_dir) {
-                DEBUG("Changing CWD to unpacked directory %s", script_dir);
-
-                if (!SetCurrentDirectory(script_dir)) {
-                    exit_code = LAST_ERROR("Failed to change CWD");
+                    if (!SetCurrentDirectory(script_dir)) {
+                        exit_code = LAST_ERROR("Failed to change CWD");
+                    }
+                    LocalFree(script_dir);
+                } else {
+                    exit_code = FATAL("Failed to build path for CWD");
                 }
-
-                LocalFree(script_dir);
-            } else {
-                exit_code = FATAL("Failed to build path for CWD");
             }
-        }
 
-        if (exit_code == 0) {
-            if (!SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
-                exit_code = LAST_ERROR("Failed to set environment variable");
-            } else {
-                exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
+            if (exit_code == 0) {
+                if (SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
+                    exit_code = CreateAndWaitForProcess(app_name, cmd_line);
+                } else {
+                    exit_code = LAST_ERROR("Failed to set the 'OCRAN_EXECUTABLE' environment variable");
+                }
             }
         }
     }
 
-    LocalFree(Script_ApplicationName);
-    Script_ApplicationName = NULL;
-
-    LocalFree(Script_CommandLine);
-    Script_CommandLine = NULL;
+    FreeScriptInfo();
 
     /* If necessary, recursively delete the installation directory */
     if (IS_AUTO_CLEAN_INST_DIR_ENABLED(flags)) {
@@ -402,101 +367,6 @@ DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line)
     return exit_code;
 }
 
-char *EscapeAndQuoteCmdArg(const char* arg)
-{
-    size_t arg_len = strlen(arg);
-    size_t count = 0;
-    for (size_t i = 0; i < arg_len; i++) { if (arg[i] == '\"') count++; }
-    char *sanitized = (char *)LocalAlloc(LPTR, arg_len + count * 2 + 3);
-    if (sanitized == NULL) {
-        LAST_ERROR("Failed to allocate memory");
-        return NULL;
-    }
-
-    char *p = sanitized;
-    *p++ = '\"';
-    for (size_t i = 0; i < arg_len; i++) {
-        if (arg[i] == '\"') { *p++ = '\\'; }
-        *p++ = arg[i];
-    }
-    *p++ = '\"';
-    *p = '\0';
-
-    return sanitized;
-}
-
-BOOL ParseArguments(const char *args, size_t args_size, size_t *out_argc, const char ***out_argv) {
-    size_t local_argc = 0;
-    for (const char *s = args; s < (args + args_size); s += strlen(s) + 1) {
-        local_argc++;
-    }
-
-    const char **local_argv = (const char **)LocalAlloc(LPTR, (local_argc + 1) * sizeof(char *));
-    if (local_argv == NULL) {
-        FATAL("Failed to memory allocate for argv");
-        return FALSE;
-    }
-
-    const char *s = args;
-    for (size_t i = 0; i < local_argc; i++) {
-        local_argv[i] = s;
-        s += strlen(s) + 1;
-    }
-    local_argv[local_argc] = NULL;
-
-    *out_argc = local_argc;
-    *out_argv = local_argv;
-    return TRUE;
-}
-
-char *BuildCommandLine(size_t argc, const char *argv[])
-{
-    char *command_line = EscapeAndQuoteCmdArg(argv[0]);
-    if (command_line == NULL) {
-        FATAL("Failed to initialize command line with first arg");
-        return NULL;
-    }
-
-    for (size_t i = 1; i < argc; i++) {
-        char *str;
-        if (i == 1) {
-            str = ExpandInstDirPath(argv[1]);
-            if (str == NULL) {
-                FATAL("Failed to expand script name to installation directory at arg index 1");
-                goto cleanup;
-            }
-        } else {
-            str = ReplaceInstDirPlaceholder(argv[i]);
-            if (str == NULL) {
-                FATAL("Failed to replace arg placeholder at arg index %d", i);
-                goto cleanup;
-            }
-        }
-
-        char *sanitized = EscapeAndQuoteCmdArg(str);
-        LocalFree(str);
-        if (sanitized == NULL) {
-            FATAL("Failed to sanitize arg at arg index %d", i);
-            goto cleanup;
-        }
-        char *base = command_line;
-        command_line = ConcatStr(base, " ", sanitized, NULL);
-        LocalFree(base);
-        LocalFree(sanitized);
-        if (command_line == NULL) {
-            FATAL("Failed to build command line after adding arg at arg index %d", i);
-            goto cleanup;
-        }
-    }
-
-    return command_line;
-
-cleanup:
-    LocalFree(command_line);
-
-    return NULL;
-}
-
 /**
  * Sets up a process to be created after all other opcodes have been processed. This can be used to create processes
  * after the temporary files have all been created and memory has been freed.
@@ -505,49 +375,9 @@ BOOL SetScript(const char *args, size_t args_size)
 {
     DEBUG("SetScript");
 
-    if (Script_ApplicationName || Script_CommandLine) {
-        FATAL("Script is already set");
-        return FALSE;
-    }
-
-    size_t argc;
-    const char **argv = NULL;
-    if (!ParseArguments(args, args_size, &argc, &argv)) {
-        FATAL("Failed to parse arguments");
-        return FALSE;
-    }
-
-    /**
-     * Set Script_ApplicationName
-     */
-    Script_ApplicationName = ExpandInstDirPath(argv[0]);
-    if (Script_ApplicationName == NULL) {
-        FATAL("Failed to expand application name to installation directory");
-        LocalFree(argv);
-        return FALSE;
-    }
-
-    /**
-     * Set Script_CommandLine
-     */
-    char *command_line = BuildCommandLine(argc, argv);
-    if (command_line == NULL) {
-        FATAL("Failed to build command line");
-        LocalFree(argv);
-        return FALSE;
-    }
-
     char *MyArgs = SkipArg(GetCommandLine());
 
-    Script_CommandLine = ConcatStr(command_line, " ", MyArgs, NULL);
-    LocalFree(argv);
-    LocalFree(command_line);
-    if (Script_CommandLine == NULL) {
-        FATAL("Failed to build command line");
-        return FALSE;
-    }
-
-    return TRUE;
+    return InitializeScriptInfo(args, args_size, MyArgs);
 }
 
 BOOL SetEnv(const char *name, const char *value)
