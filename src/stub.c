@@ -342,28 +342,28 @@ BOOL MakeDirectory(const char *dir_name)
 
 DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line)
 {
+    DEBUG("Create process (%s, %s)", app_name, cmd_line);
+
+    DWORD exit_code = 0;
     PROCESS_INFORMATION p_info;
     ZeroMemory(&p_info, sizeof(p_info));
     STARTUPINFO s_info;
     ZeroMemory(&s_info, sizeof(s_info));
     s_info.cb = sizeof(s_info);
-
-    DEBUG("Create process (%s, %s)", app_name, cmd_line);
-
-    if (!CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &s_info, &p_info)) {
-        return LAST_ERROR("Failed to create process");
+    if (CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &s_info, &p_info)) {
+        if (WaitForSingleObject(p_info.hProcess, INFINITE) == WAIT_FAILED) {
+            exit_code = LAST_ERROR("Failed to wait script process");
+        } else {
+            if (!GetExitCodeProcess(p_info.hProcess, &exit_code)) {
+                exit_code = LAST_ERROR("Failed to get exit status");
+            }
+        }
+        CloseHandle(p_info.hProcess);
+        CloseHandle(p_info.hThread);
+    } else {
+        exit_code = LAST_ERROR("Failed to create process");
     }
 
-    WaitForSingleObject(p_info.hProcess, INFINITE);
-
-    DWORD exit_code;
-
-    if (!GetExitCodeProcess(p_info.hProcess, &exit_code)) {
-        exit_code = LAST_ERROR("Failed to get exit status");
-    }
-
-    CloseHandle(p_info.hProcess);
-    CloseHandle(p_info.hThread);
     return exit_code;
 }
 
