@@ -17,7 +17,6 @@
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
 BOOL ProcessImage(LPVOID pSeg, DWORD data_len, BOOL compressed);
-DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line);
 
 #if WITH_LZMA
 #include <LzmaDec.h>
@@ -201,7 +200,10 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
             if (exit_code == 0) {
                 if (SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
-                    exit_code = CreateAndWaitForProcess(app_name, cmd_line);
+                    DEBUG("Create process (%s, %s)", app_name, cmd_line);
+                    if (!RunScript(&exit_code)) {
+                        FATAL("Failed to execute script");
+                    }
                 } else {
                     exit_code = LAST_ERROR("Failed to set the 'OCRAN_EXECUTABLE' environment variable");
                 }
@@ -371,33 +373,6 @@ BOOL MakeDirectory(const char *dir_name)
 
     LocalFree(dir);
     return result;
-}
-
-DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line)
-{
-    DEBUG("Create process (%s, %s)", app_name, cmd_line);
-
-    DWORD exit_code = 0;
-    PROCESS_INFORMATION p_info;
-    ZeroMemory(&p_info, sizeof(p_info));
-    STARTUPINFO s_info;
-    ZeroMemory(&s_info, sizeof(s_info));
-    s_info.cb = sizeof(s_info);
-    if (CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &s_info, &p_info)) {
-        if (WaitForSingleObject(p_info.hProcess, INFINITE) == WAIT_FAILED) {
-            exit_code = LAST_ERROR("Failed to wait script process");
-        } else {
-            if (!GetExitCodeProcess(p_info.hProcess, &exit_code)) {
-                exit_code = LAST_ERROR("Failed to get exit status");
-            }
-        }
-        CloseHandle(p_info.hProcess);
-        CloseHandle(p_info.hThread);
-    } else {
-        exit_code = LAST_ERROR("Failed to create process");
-    }
-
-    return exit_code;
 }
 
 /**
