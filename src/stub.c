@@ -53,6 +53,26 @@ BOOL DecompressLzma(void *unpack_data, size_t unpack_size, void *src, size_t src
 }
 #endif
 
+BOOL ChangeDirectoryToScriptDirectory(void)
+{
+    char *script_dir = ExpandInstDirPath("src");
+    if (script_dir == NULL) {
+        FATAL("Failed to build path for CWD");
+        return FALSE;
+    }
+
+    DEBUG("Changing CWD to unpacked directory %s", script_dir);
+
+    BOOL changed = SetCurrentDirectory(script_dir);
+    LocalFree(script_dir);
+
+    if (!changed) {
+        LAST_ERROR("Failed to change CWD");
+    }
+
+    return changed;
+}
+
 BOOL ChangeDirectoryToSafeDirectory(void)
 {
     char *working_dir = GetTempDirectoryPath();
@@ -174,16 +194,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
             DEBUG("*** Starting app in %s", inst_dir);
 
             if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
-                char *script_dir = ExpandInstDirPath("src");
-                if (script_dir) {
-                    DEBUG("Changing CWD to unpacked directory %s", script_dir);
-
-                    if (!SetCurrentDirectory(script_dir)) {
-                        exit_code = LAST_ERROR("Failed to change CWD");
-                    }
-                    LocalFree(script_dir);
-                } else {
-                    exit_code = FATAL("Failed to build path for CWD");
+                if (!ChangeDirectoryToScriptDirectory()) {
+                    exit_code = FATAL("Failed to change directory to the script location");
                 }
             }
 
