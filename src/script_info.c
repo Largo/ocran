@@ -209,28 +209,32 @@ void FreeScriptInfo(void)
     Script_CommandLine = NULL;
 }
 
-DWORD CreateAndWaitForProcess(const char *app_name, char *cmd_line)
+BOOL CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_code)
 {
-    DWORD exit_code = 0;
     PROCESS_INFORMATION p_info;
     ZeroMemory(&p_info, sizeof(p_info));
     STARTUPINFO s_info;
     ZeroMemory(&s_info, sizeof(s_info));
     s_info.cb = sizeof(s_info);
+    BOOL result = FALSE;
 
     if (CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &s_info, &p_info)) {
-        if (WaitForSingleObject(p_info.hProcess, INFINITE) == WAIT_FAILED) {
-            exit_code = LAST_ERROR("Failed to wait script process");
-        } else if (!GetExitCodeProcess(p_info.hProcess, &exit_code)) {
-            exit_code = LAST_ERROR("Failed to get exit status");
+        if (WaitForSingleObject(p_info.hProcess, INFINITE) != WAIT_FAILED) {
+            if (GetExitCodeProcess(p_info.hProcess, exit_code)) {
+                result = TRUE;
+            } else {
+                *exit_code = LAST_ERROR("Failed to get exit status");
+            }
+        } else {
+            *exit_code = LAST_ERROR("Failed to wait script process");
         }
         CloseHandle(p_info.hProcess);
         CloseHandle(p_info.hThread);
     } else {
-        exit_code = LAST_ERROR("Failed to create process");
+        *exit_code = LAST_ERROR("Failed to create process");
     }
 
-    return exit_code;
+    return result;
 }
 
 BOOL RunScript(DWORD *exit_code)
@@ -240,6 +244,5 @@ BOOL RunScript(DWORD *exit_code)
         return FALSE;
     }
 
-    *exit_code = CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine);
-    return (*exit_code == 0);
+    return CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine, exit_code);
 }
