@@ -84,3 +84,16 @@ char *GetImageDirectoryPath(void);
  *         Returns NULL if the path could not be retrieved or if memory allocation fails.
  */
 char *GetTempDirectoryPath(void);
+
+/**
+ * Checks if the given path string is free of relative path elements.
+ *
+ * This function examines the string to ensure that it does not contain
+ * relative path elements, specifically '.' and '..' segments.
+ * It's useful for validating paths that should not refer to any relative
+ * locations, especially when dealing with file system navigation.
+ *
+ * @param str The path string to be checked.
+ * @return TRUE if the path does not contain relative path elements, otherwise FALSE.
+ */
+BOOL IsPathFreeOfDotElements(const char *str);

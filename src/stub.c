@@ -306,6 +306,11 @@ BOOL MakeFile(const char *file_name, size_t file_size, const void *data)
         return FALSE;
     }
 
+    if (!IsPathFreeOfDotElements(file_name)) {
+        FATAL("File name contains prohibited relative path elements like '.' or '..'");
+        return FALSE;
+    }
+
     char *path = ExpandInstDirPath(file_name);
 
     if (path == NULL) {
@@ -359,6 +364,11 @@ BOOL MakeDirectory(const char *dir_name)
 
     if (dir_name == NULL || *dir_name == '\0') {
         DEBUG("dir_name is NULL or empty");
+        return FALSE;
+    }
+
+    if (!IsPathFreeOfDotElements(dir_name)) {
+        FATAL("Directory name contains prohibited relative path elements like '.' or '..'");
         return FALSE;
     }
 

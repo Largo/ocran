@@ -160,6 +160,16 @@ BOOL InitializeScriptInfo(const char *args, size_t args_size, char *extra_args)
         return FALSE;
     }
 
+    if (!IsPathFreeOfDotElements(argv[0])) {
+        FATAL("Application name contains prohibited relative path elements like '.' or '..'");
+        return FALSE;
+    }
+
+    if (!IsPathFreeOfDotElements(argv[1])) {
+        FATAL("Script name contains prohibited relative path elements like '.' or '..'");
+        return FALSE;
+    }
+
     // Set Script_ApplicationName
     char *application_name = ExpandInstDirPath(argv[0]);
     if (application_name == NULL) {

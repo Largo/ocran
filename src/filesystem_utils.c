@@ -341,3 +341,24 @@ char *GetTempDirectoryPath(void)
 
     return temp_dir;
 }
+
+// Checks if the given path string is free of relative path elements.
+BOOL IsPathFreeOfDotElements(const char *str)
+{
+    const char *pos = str;
+    if ((pos[0] == '.' && (pos[1] == PATH_SEPARATOR || pos[1] == '\0')) ||
+        (pos[0] == '.' && pos[1] == '.' && (pos[2] == PATH_SEPARATOR || pos[2] == '\0'))) {
+        return FALSE; // Path starts with './' or '../'
+    }
+
+    while ((pos = strstr(pos, ".")) != NULL) {
+        if ((pos == str || *(pos - 1) == PATH_SEPARATOR) &&
+            (pos[1] == PATH_SEPARATOR || pos[1] == '\0' ||
+            (pos[1] == '.' && (pos[2] == PATH_SEPARATOR || pos[2] == '\0')))) {
+            return FALSE; // Found '/./', '/../', or 'dir/.' in the path
+        }
+        pos++;
+    }
+
+    return TRUE;
+}
