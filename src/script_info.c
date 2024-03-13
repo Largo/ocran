@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <string.h>
 #include "error.h"
+#include "filesystem_utils.h"
 #include "inst_dir.h"
 
 static char* ConcatStr(const char *first, ...) {
