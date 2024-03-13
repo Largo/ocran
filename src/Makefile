@@ -1,5 +1,7 @@
 SRCS = lzma/LzmaDec.c unpack.c
 OBJS = $(SRCS:.c=.o) stubicon.o
+CONSOLE_OBJS = error_console.o filesystem_utils_console.o inst_dir_console.o script_info_console.o
+WINDOW_OBJS = error_window.o filesystem_utils_window.o inst_dir_window.o script_info_window.o
 CC = gcc
 BINDIR = $(CURDIR)/../share/ocran
 
@@ -13,11 +15,11 @@ all: stub.exe stubw.exe edicon.exe
 stubicon.o: stub.rc
 	windres -i $< -o $@
 
-stub.exe: $(OBJS) stub.o error_console.o filesystem_utils_console.o inst_dir_console.o script_info_console.o
-	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o error_console.o  filesystem_utils_console.o inst_dir_console.o script_info_console.o -o $@
+stub.exe: $(OBJS) stub.o $(CONSOLE_OBJS)
+	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o $(CONSOLE_OBJS) -o $@
 
-stubw.exe: $(OBJS) stubw.o error_window.o filesystem_utils_window.o inst_dir_window.o script_info_window.o
-	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o error_window.o  filesystem_utils_window.o inst_dir_window.o script_info_window.o -o $@
+stubw.exe: $(OBJS) stubw.o $(WINDOW_OBJS)
+	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o $(WINDOW_OBJS) -o $@
 
 edicon.exe: edicon.o
 	$(CC) $(CFLAGS) edicon.o -o edicon
@@ -57,8 +59,7 @@ script_info_window.o: script_info.c script_info.h
 
 clean:
 	rm -f $(OBJS) stub.exe stubw.exe edicon.exe edicon.o stubw.o stub.o \
-	error_console.o error_window.o filesystem_utils_console.o filesystem_utils_window.o \
-	inst_dir_console.o inst_dir_window.o script_info_console.o script_info_window.o
+	$(CONSOLE_OBJS) $(WINDOW_OBJS)
 
 install: stub.exe stubw.exe edicon.exe
 	cp -f stub.exe $(BINDIR)/stub.exe
