@@ -1,7 +1,7 @@
-SRCS = lzma/LzmaDec.c unpack.c
+SRCS = lzma/LzmaDec.c
 OBJS = $(SRCS:.c=.o) stubicon.o
-CONSOLE_OBJS = error_console.o filesystem_utils_console.o inst_dir_console.o script_info_console.o
-WINDOW_OBJS = error_window.o filesystem_utils_window.o inst_dir_window.o script_info_window.o
+CONSOLE_OBJS = error_console.o filesystem_utils_console.o inst_dir_console.o script_info_console.o unpack_console.o
+WINDOW_OBJS = error_window.o filesystem_utils_window.o inst_dir_window.o script_info_window.o unpack_window.o
 CC = gcc
 BINDIR = $(CURDIR)/../share/ocran
 
@@ -36,8 +36,11 @@ stub.o: stub.c stub.h
 stubw.o: stub.c stub.h
 	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
 
-unpack.o: unpack.c unpack.h
-	$(CC) $(CFLAGS) -o $@ -c $<
+unpack_console.o: unpack.c unpack.h
+	$(CC) $(STUB_CFLAGS) -o $@ -c $<
+
+unpack_window.o: unpack.c unpack.h
+	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
 
 filesystem_utils_console.o: filesystem_utils.c filesystem_utils.h
 	$(CC) $(STUB_CFLAGS) -o $@ -c $<

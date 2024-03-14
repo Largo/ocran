@@ -1,5 +1,9 @@
 #include <windows.h>
 #include <string.h>
+#include "error.h"
+#include "filesystem_utils.h"
+#include "inst_dir.h"
+#include "script_info.h"
 #include "unpack.h"
 
 size_t GetLength(void **p) {
@@ -52,13 +56,36 @@ POpcodeHandler OpcodeHandlers[OP_MAX] =
     &OpSetScript,
 };
 
+// Create a directory (OP_CREATE_DIRECTORY opcode handler)
 BOOL OpCreateDirectory(void **p)
 {
     const char *dir_name = GetString(p);
 
-    return MakeDirectory(dir_name);
+    if (dir_name == NULL || *dir_name == '\0') {
+        DEBUG("dir_name is NULL or empty");
+        return FALSE;
+    }
+
+    if (!IsPathFreeOfDotElements(dir_name)) {
+        FATAL("Directory name contains prohibited relative path elements like '.' or '..'");
+        return FALSE;
+    }
+
+    char *dir = ExpandInstDirPath(dir_name);
+    if (dir == NULL) {
+        FATAL("Failed to expand dir_name to installation directory");
+        return FALSE;
+    }
+
+    DEBUG("Create directory: %s", dir);
+
+    BOOL result = CreateDirectoriesRecursively(dir);
+
+    LocalFree(dir);
+    return result;
 }
 
+// Create a file (OP_CREATE_FILE opcode handler)
 BOOL OpCreateFile(void **p)
 {
     const char *file_name = GetString(p);
@@ -66,24 +93,87 @@ BOOL OpCreateFile(void **p)
     const void *data = *p;
     *p = (char *)(*p) + file_size;
 
-    return MakeFile(file_name, file_size, data);
+    if (file_name == NULL || *file_name == '\0') {
+        FATAL("file_name is null or empty");
+        return FALSE;
+    }
+
+    if (!IsPathFreeOfDotElements(file_name)) {
+        FATAL("File name contains prohibited relative path elements like '.' or '..'");
+        return FALSE;
+    }
+
+    char *path = ExpandInstDirPath(file_name);
+    if (path == NULL) {
+        FATAL("Failed to expand path to installation directory");
+        return FALSE;
+    }
+
+    DEBUG("Create file: %s", path);
+
+    if (!CreateParentDirectories(path)) {
+        FATAL("Failed to create parent directory");
+        LocalFree(path);
+        return FALSE;
+    }
+
+    BOOL result = FALSE;
+    HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+    if (h != INVALID_HANDLE_VALUE) {
+        DEBUG("Write data(%lu)", file_size);
+
+        DWORD BytesWritten;
+        if (WriteFile(h, data, (DWORD)file_size, &BytesWritten, NULL)) {
+            if (BytesWritten == (DWORD)file_size) {
+                result = TRUE;
+            } else {
+                FATAL("Write size failure");
+            }
+        } else {
+            LAST_ERROR("Write failure");
+        }
+        CloseHandle(h);
+    } else {
+        LAST_ERROR("Failed to create file");
+    }
+
+    LocalFree(path);
+    return result;
 }
 
+// Set a environment variable (OP_SETENV opcode handler)
 BOOL OpSetEnv(void **p)
 {
     const char *name = GetString(p);
     const char *value = GetString(p);
 
-    return SetEnv(name, value);
+    char *replaced_value = ReplaceInstDirPlaceholder(value);
+    if (replaced_value == NULL) {
+        FATAL("Failed to replace the value placeholder");
+        return FALSE;
+    }
+
+    DEBUG("SetEnv(%s, %s)", name, replaced_value);
+
+    BOOL result = SetEnvironmentVariable(name, replaced_value);
+    LocalFree(replaced_value);
+    if (!result) {
+        LAST_ERROR("Failed to set environment variable");
+    }
+
+    return result;
 }
 
+// Set a application script info (OP_SET_SCRIPT opcode handler)
 BOOL OpSetScript(void **p)
 {
     size_t args_size = GetInteger(p);
     const char *args = *p;
     *p = (char *)(*p) + args_size;
 
-    return SetScript(args, args_size);
+    DEBUG("SetScript");
+
+    return InitializeScriptInfo(args, args_size);
 }
 
 unsigned char ProcessOpcodes(void **p)

@@ -11,8 +11,8 @@
 #include "filesystem_utils.h"
 #include "inst_dir.h"
 #include "script_info.h"
-#include "stub.h"
 #include "unpack.h"
+#include "stub.h"
 
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
@@ -275,125 +275,4 @@ BOOL ProcessImage(LPVOID pSeg, DWORD data_len, BOOL compressed)
         return FALSE;
     }
     return TRUE;
-}
-
-/**
-   Create a file (OP_CREATE_FILE opcode handler)
-*/
-BOOL MakeFile(const char *file_name, size_t file_size, const void *data)
-{
-    if (file_name == NULL || *file_name == '\0') {
-        FATAL("file_name is null or empty");
-        return FALSE;
-    }
-
-    if (!IsPathFreeOfDotElements(file_name)) {
-        FATAL("File name contains prohibited relative path elements like '.' or '..'");
-        return FALSE;
-    }
-
-    char *path = ExpandInstDirPath(file_name);
-
-    if (path == NULL) {
-        FATAL("Failed to expand path to installation directory");
-        return FALSE;
-    }
-
-    DEBUG("CreateFile(%s)", path);
-
-    if (!CreateParentDirectories(path)) {
-        FATAL("Failed to create parent directory");
-        LocalFree(path);
-        return FALSE;
-    }
-
-    BOOL result = TRUE;
-    HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
-
-    if (h != INVALID_HANDLE_VALUE) {
-        DWORD BytesWritten;
-
-        DEBUG("Write data(%lu)", file_size);
-
-        if (!WriteFile(h, data, (DWORD)file_size, &BytesWritten, NULL)) {
-            LAST_ERROR("Write failure");
-            result = FALSE;
-        }
-
-        if (BytesWritten != file_size) {
-            FATAL("Write size failure");
-            result = FALSE;
-        }
-
-        CloseHandle(h);
-    } else {
-        LAST_ERROR("Failed to create file");
-        result = FALSE;
-    }
-
-    LocalFree(path);
-
-    return result;
-}
-
-/**
-   Create a directory (OP_CREATE_DIRECTORY opcode handler)
-*/
-BOOL MakeDirectory(const char *dir_name)
-{
-    DEBUG("MakeDirectory");
-
-    if (dir_name == NULL || *dir_name == '\0') {
-        DEBUG("dir_name is NULL or empty");
-        return FALSE;
-    }
-
-    if (!IsPathFreeOfDotElements(dir_name)) {
-        FATAL("Directory name contains prohibited relative path elements like '.' or '..'");
-        return FALSE;
-    }
-
-    char *dir = ExpandInstDirPath(dir_name);
-
-    if (dir == NULL) {
-        FATAL("Failed to expand dir_name to installation directory");
-        return FALSE;
-    }
-
-    BOOL result = CreateDirectoriesRecursively(dir);
-
-    LocalFree(dir);
-    return result;
-}
-
-/**
- * Sets up a process to be created after all other opcodes have been processed. This can be used to create processes
- * after the temporary files have all been created and memory has been freed.
- */
-BOOL SetScript(const char *args, size_t args_size)
-{
-    DEBUG("SetScript");
-
-    return InitializeScriptInfo(args, args_size);
-}
-
-BOOL SetEnv(const char *name, const char *value)
-{
-    char *replaced_value = ReplaceInstDirPlaceholder(value);
-
-    if (replaced_value == NULL) {
-        FATAL("Failed to replace the value placeholder");
-        return FALSE;
-    }
-
-    DEBUG("SetEnv(%s, %s)", name, replaced_value);
-
-    BOOL result = SetEnvironmentVariable(name, replaced_value);
-
-    if (!result)
-        LAST_ERROR("Failed to set environment variable");
-
-    LocalFree(replaced_value);
-
-    return result;
 }
