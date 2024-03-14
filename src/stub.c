@@ -190,7 +190,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         const char *app_name;
         char *cmd_line;
         if (GetScriptInfo(&app_name, &cmd_line)) {
-            DEBUG("*** Starting app in %s", inst_dir);
+            DEBUG("*** Starting application script in %s", inst_dir);
 
             if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
                 if (!ChangeDirectoryToScriptDirectory()) {
@@ -200,9 +200,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
             if (exit_code == 0) {
                 if (SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
-                    DEBUG("Create process (%s, %s)", app_name, cmd_line);
-                    if (!RunScript(&exit_code)) {
-                        FATAL("Failed to execute script");
+                    DEBUG("Run application script: %s %s %s", app_name, cmd_line, lpCmdLine);
+                    if (!RunScript(lpCmdLine, &exit_code)) {
+                        FATAL("Failed to run script");
                     }
                 } else {
                     exit_code = LAST_ERROR("Failed to set the 'OCRAN_EXECUTABLE' environment variable");
@@ -275,25 +275,6 @@ BOOL ProcessImage(LPVOID pSeg, DWORD data_len, BOOL compressed)
         return FALSE;
     }
     return TRUE;
-}
-
-/**
-   Finds the start of the first argument after the current one. Handles quoted arguments.
-*/
-char *SkipArg(char *str)
-{
-   if (*str == '"')
-   {
-      str++;
-      while (*str && *str != '"') { str++; }
-      if (*str == '"') { str++; }
-   }
-   else
-   {
-      while (*str && *str != ' ') { str++; }
-   }
-   while (*str && *str != ' ') { str++; }
-   return str;
 }
 
 /**
@@ -393,9 +374,7 @@ BOOL SetScript(const char *args, size_t args_size)
 {
     DEBUG("SetScript");
 
-    char *MyArgs = SkipArg(GetCommandLine());
-
-    return InitializeScriptInfo(args, args_size, MyArgs);
+    return InitializeScriptInfo(args, args_size);
 }
 
 BOOL SetEnv(const char *name, const char *value)

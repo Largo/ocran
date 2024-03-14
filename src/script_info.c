@@ -147,7 +147,7 @@ BOOL GetScriptInfo(const char **app_name, char **cmd_line)
     }
 }
 
-BOOL InitializeScriptInfo(const char *args, size_t args_size, char *extra_args)
+BOOL InitializeScriptInfo(const char *args, size_t args_size)
 {
     if (HAS_SCRIPT_INFO) {
         FATAL("Script info is already set");
@@ -180,20 +180,14 @@ BOOL InitializeScriptInfo(const char *args, size_t args_size, char *extra_args)
     }
 
     // Set Script_CommandLine
-    char *cmd_line = BuildCommandLine(argc, argv);
-    if (cmd_line == NULL) {
+    char *command_line = BuildCommandLine(argc, argv);
+    if (command_line == NULL) {
         FATAL("Failed to build command line");
         LocalFree(argv);
         return FALSE;
     }
 
-    char *command_line = CONCAT_STR3(cmd_line, " ", extra_args);
     LocalFree(argv);
-    LocalFree(cmd_line);
-    if (command_line == NULL) {
-        FATAL("Failed to build command line");
-        return FALSE;
-    }
 
     Script_ApplicationName = application_name;
     Script_CommandLine = command_line;
@@ -238,12 +232,21 @@ BOOL CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_c
     return result;
 }
 
-BOOL RunScript(DWORD *exit_code)
+BOOL RunScript(const char *extra_args, DWORD *exit_code)
 {
     if (!HAS_SCRIPT_INFO) {
-        FATAL("Application name or command line is null or empty");
+        FATAL("Script info is not initialized");
         return FALSE;
     }
 
-    return CreateAndWaitForProcess(Script_ApplicationName, Script_CommandLine, exit_code);
+    char *cmd_line = CONCAT_STR3(Script_CommandLine, " ", extra_args);
+    if (cmd_line == NULL) {
+        FATAL("Failed to build command line for script execution");
+        return FALSE;
+    }
+
+    BOOL result = CreateAndWaitForProcess(Script_ApplicationName, cmd_line, exit_code);
+
+    LocalFree(cmd_line);
+    return result;
 }
