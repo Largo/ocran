@@ -320,14 +320,14 @@ app into an installer. Save the following as `someapp.iss`:
   OutputBaseFilename=SomeAppInstaller
 
   [Icons]
-  Name: "{group}\SomeApp"; Filename: "{app}\someapp.exe"
+  Name: "{group}\SomeApp"; Filename: "{app}\someapp.bat"; IconFilename: "{app}\someapp.ico"; Flags: runminimized;
   Name: "{group}\Uninstall SomeApp"; Filename: "{uninstallexe}"
 
 Then, run Ocran with this command:
 
     ocran someapp/script/rails someapp --output someapp.exe --add-all-core \
     --gemfile someapp/Gemfile --no-dep-run --gem-full --chdir-first --no-lzma \
-    --innosetup someapp.iss -- server
+    --icon someapp.ico --innosetup someapp.iss -- server
 
 If all goes well, a file named "SomeAppInstaller.exe" will be placed
 into the Output directory.
