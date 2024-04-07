@@ -992,10 +992,8 @@ EOF
       sb.set_script(installed_ruby_exe, target_script, *Ocran.arg)
     end
 
-    require_relative "../lib/ocran/stub_builder"
-    require_relative "../lib/ocran/inno_setup_builder"
-
     unless Ocran.inno_script
+      require_relative "../lib/ocran/stub_builder"
       StubBuilder.new(executable,
                       chdir_before: Ocran.chdir_first,
                       debug_extract: Ocran.debug_extract,
@@ -1006,6 +1004,7 @@ EOF
                       &direction)
       Ocran.msg "Finished building #{executable} (#{File.size(executable)} bytes)"
     else
+      require_relative "../lib/ocran/inno_setup_builder"
       InnoSetupBuilder.new(executable,
                            chdir_before: Ocran.chdir_first,
                            icon_path: Ocran.icon_filename,
