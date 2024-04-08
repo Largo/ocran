@@ -155,14 +155,11 @@ module Ocran
     alias to_s to_posix
   end
 
-  # Type conversion for the Pathname class. Works with Pathname,
-  # String, NilClass and arrays of any of these.
+  # Type conversion for the Pathname class. Works with Pathname and String only.
   def self.Pathname(obj)
     case obj
     when Pathname
       obj
-    when Array
-      obj.map { |x| Pathname(x) }
     when String
       Pathname.new(obj)
     else
@@ -593,7 +590,7 @@ EOF
       features.each do |feature|
         # Detect load path unless absolute
         if not feature.absolute?
-          feature = find_load_path(Pathname($:), feature)
+          feature = find_load_path($LOAD_PATH.map { |path| Pathname(path) }, feature)
           next if feature.nil? # Could be enumerator.so
         end
         # Skip if found in known Gem dir
@@ -691,7 +688,7 @@ EOF
         include.each do |set|
           case set
           when :spec
-            files << Pathname(spec.files)
+            files << spec.files.map { |file| Pathname(file) }
           when :loaded
             files << features_from_gems.select { |feature| feature.subpath?(gem_root) }
           when :files
