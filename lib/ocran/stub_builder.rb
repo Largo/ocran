@@ -68,6 +68,7 @@ module Ocran
         @opcode_offset = File.size(path)
 
         File.open(path, "ab") do |ocran_file|
+          @data_size = 0
           @of = ocran_file
 
           if debug_mode
@@ -166,20 +167,19 @@ module Ocran
     private :show_path
 
     def compress
-      require "tempfile"
-      tmp = Tempfile.open(mode: IO::BINARY) do |tmp|
-        _of = @of
-        @of = tmp
-
-        yield(self)
-
-        Ocran.msg "Compressing #{tmp.size} bytes"
+      IO.popen([LZMA_PATH, "e", "-si", "-so"], "r+b") do |lzma|
+        _of, @of = @of, lzma
+        Thread.new { yield(self); lzma.close_write }
+        IO.copy_stream(lzma, _of)
         @of = _of
-        tmp
       end
 
-      out = IO.popen([LZMA_PATH, "e", tmp.path, "-so"])
-      IO.copy_stream(out, @of)
+      Ocran.msg "After decompression, the data will expand to #{@data_size} bytes."
+      # Calculate the position to write the LZMA decompressed size (64-bit unsigned integer)
+      # @opcode_offset: start position of the data section
+      # 1: size of the header byte
+      # 5: size of the LZMA header in bytes
+      File.binwrite(@of.path, [@data_size].pack("Q<"), @opcode_offset + 1 + 5)
     end
     private :compress
 
@@ -196,6 +196,7 @@ module Ocran
 
     def write_opcode(op)
       @of << [op].pack("C")
+      @data_size += 1
     end
     private :write_opcode
 
@@ -205,6 +206,7 @@ module Ocran
       end
 
       @of << [i].pack("V")
+      @data_size += 4
     end
     private :write_size
 
@@ -216,14 +218,24 @@ module Ocran
       end
 
       @of << [len, str].pack("vZ*")
+      @data_size += 2 + len
     end
     private :write_string
 
     def write_string_array(*str_array)
       ary = str_array.map(&:to_s)
-      write_size(ary.sum(0) { |s| s.bytesize + 1 })
+      size = ary.sum(0) { |s| s.bytesize + 1 }
+      write_size(size)
       ary.each_slice(1) { |a| @of << a.pack("Z*") }
+      @data_size += size
     end
     private :write_string_array
+
+    def write_file(src)
+      size = src.size
+      write_size(size)
+      IO.copy_stream(src, @of)
+      @data_size += size
+    end
   end
 end
