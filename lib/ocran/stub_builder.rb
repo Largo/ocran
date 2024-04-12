@@ -237,5 +237,6 @@ module Ocran
       IO.copy_stream(src, @of)
       @data_size += size
     end
+    private :write_file
   end
 end
