@@ -1,48 +1,196 @@
+require "tempfile"
+
 module Ocran
   class InnoSetupBuilder
+
+    module WindowsCommandEscaping
+      def escape_double_quotes(s)
+        s.to_s.gsub('"', '""')
+      end
+      private :escape_double_quotes
+
+      def quote_and_escape(s)
+        "\"#{escape_double_quotes(s)}\""
+      end
+      private :quote_and_escape
+    end
+
+    class AppLauncherBatchBuilder
+      include WindowsCommandEscaping
+
+      # BATCH_FILE_DIR is a parameter expansion used in Windows batch files,
+      # representing the full path to the directory where the batch file resides.
+      # It allows for the use of pseudo-relative paths by referencing the
+      # batch file's own location without changing the working directory.
+      BATCH_FILE_DIR = "%~dp0"
+
+      def initialize(path, title, executable, script, *args, chdir_before: nil, environments: {})
+        @path = path
+        File.open(@path, "w") do |f|
+          f.puts "@echo off"
+          environments.each { |name, val| f.puts build_set_command(name, val) }
+          f.puts build_start_command(title, executable, script, *args, chdir_before: chdir_before)
+          f
+        end
+      end
+
+      def to_path
+        @path.respond_to?(:to_path) ? @path.to_path : @path.to_s
+      end
+
+      def replace_inst_dir_placeholder(s)
+        s.gsub(/#{Regexp.escape(TEMPDIR_ROOT.to_s)}[\/\\]/, BATCH_FILE_DIR)
+      end
+      private :replace_inst_dir_placeholder
+
+      def build_set_command(name, value)
+        "set \"#{name}=#{replace_inst_dir_placeholder(value)}\""
+      end
+      private :build_set_command
+
+      def build_start_command(title, executable, script, *args, chdir_before: nil)
+        cmd = ["start"]
+
+        # Title for Command Prompt window title bar
+        cmd << quote_and_escape(title)
+
+        # Use /d to set the startup directory for the process,
+        # which will be BATCH_FILE_DIR/SRCDIR. This path is where
+        # the script is located, establishing the working directory
+        # at process start.
+        if chdir_before
+          cmd << "/d #{quote_and_escape("#{BATCH_FILE_DIR}#{SRCDIR}")}"
+        end
+
+        cmd << quote_and_escape("#{BATCH_FILE_DIR}#{executable}")
+        cmd << quote_and_escape("#{BATCH_FILE_DIR}#{script}")
+        cmd += args.map { |arg| quote_and_escape(replace_inst_dir_placeholder(arg)) }
+
+        # Forward batch file arguments to the command with `%*`
+        cmd << "%*"
+
+        cmd.join(" ")
+      end
+      private :build_start_command
+    end
+
+    class InnoSetupScriptBuilder
+      include WindowsCommandEscaping
+
+      def initialize(path, files: nil, dirs: [])
+        @path = path
+        File.open(@path, "a") do |f|
+          if dirs && !dirs.empty?
+            f.puts
+            f.puts "[Dirs]"
+            dirs.each { |obj| f.puts build_dirs_section_item(**obj) }
+          end
+          if files && !files.empty?
+            f.puts
+            f.puts "[Files]"
+            files.each { |obj| f.puts build_files_section_item(**obj) }
+          end
+          f
+        end
+      end
+
+      def to_path
+        @path.respond_to?(:to_path) ? @path.to_path : @path.to_s
+      end
+
+      def build_dirs_section_item(name:)
+        "Name: #{quote_and_escape(name)};"
+      end
+      private :build_dirs_section_item
+
+      def build_files_section_item(source:, dest_dir:, dest_name: nil)
+        s = ["Source: #{quote_and_escape(source)};"]
+        s << "DestDir: #{quote_and_escape(dest_dir)};"
+        if dest_name
+          s << "DestName: #{quote_and_escape(dest_name)};"
+        end
+        s.join(" ")
+      end
+      private :build_files_section_item
+    end
+
+    include WindowsCommandEscaping
+
     attr_reader :files
 
-    def initialize(path, chdir_before: nil, icon_path: nil, inno_setup_script: nil, &b)
-      @executable = path.sub_ext(".bat")
+    def initialize(path, inno_setup_script, chdir_before: nil, icon_path: nil, &b)
+      @path = path
       @chdir_before = chdir_before
       @inno_setup_script = inno_setup_script
       @dirs = {}
       @files = {}
       @envs = {}
 
+      yield(self)
+
       if icon_path
         create_file(icon_path, icon_path.basename)
       end
 
-      yield(self)
+      @launcher = Tempfile.open(["", ".bat"], Dir.pwd) do |f|
+        AppLauncherBatchBuilder.new(f,
+                                    @path.basename.sub_ext(""),
+                                    *@script_info,
+                                    environments: @envs,
+                                    chdir_before: @chdir_before)
+      end
+      Ocran.verbose_msg "### Application launcher batch file ###"
+      Ocran.verbose_msg File.read(@launcher)
 
-      Ocran.verbose_msg "### INNOSETUP SCRIPT ###"
-      iss = build_inno_setup_script
-      Ocran.verbose_msg File.read(iss.path)
+      create_file(@launcher.to_path,
+                  File.basename(@launcher.to_path),
+                  dest_name: @path.basename.sub_ext(".bat"))
 
-      Ocran.msg "Running InnoSetup compiler ISCC"
-      compile(iss.path)
+      @iss = Tempfile.open(["", ".iss"], Dir.pwd) do |f|
+        IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
+        InnoSetupScriptBuilder.new(f, files: @files.values, dirs: @dirs.values)
+      end
+      Ocran.verbose_msg "### INNO SETUP SCRIPT ###"
+      Ocran.verbose_msg File.read(@iss)
+
+      Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
+      compile
     end
 
-    def mkdir(path)
-      return if path.to_s == "."
+    def compile
+      iscc_cmd = ["ISCC"]
+      iscc_cmd << "/Q" unless Ocran.verbose
+      iscc_cmd << @iss.to_path
+      unless system(*iscc_cmd)
+        case $?.exitstatus
+        when 0 then raise "ISCC reported success, but system reported error?"
+        when 1 then raise "ISCC reports invalid command line parameters"
+        when 2 then raise "ISCC reports that compilation failed"
+        else raise "ISCC failed to run. Is the InnoSetup directory in your PATH?"
+        end
+      end
+    end
 
-      key = path.to_s.downcase
+    def mkdir(dir)
+      return if dir.to_s == "."
+
+      key = dir.to_s.downcase
       return if @dirs[key]
 
-      @dirs[key] = path
-      Ocran.verbose_msg "m #{path}"
+      @dirs[key] = { name: File.join("{app}", dir) }
+      Ocran.verbose_msg "m #{dir}"
     end
 
-    def create_file(src, tgt)
-      unless src.exist?
+    def create_file(src, tgt, dest_name: nil)
+      unless File.exist?(src)
         raise "The file does not exist (#{src})"
       end
 
       key = tgt.to_s.downcase
       return if @files[key]
 
-      @files[key] = [tgt, src]
+      dest_dir = File.join("{app}", File.dirname(tgt))
+      @files[key] = { source: src, dest_dir: dest_dir, dest_name: dest_name }
       Ocran.verbose_msg "a #{tgt}"
     end
 
@@ -53,8 +201,7 @@ module Ocran
         raise "Script is already set"
       end
 
-      @script_info = [image, script, *argv]
-
+      @script_info = [image, script, *argv].map(&:to_s)
       extra_argc = argv.map { |arg| quote_and_escape(arg) }.join(" ")
       Ocran.verbose_msg "p #{image} #{script} #{show_path extra_argc}"
     end
@@ -68,94 +215,5 @@ module Ocran
       x.to_s.gsub(TEMPDIR_ROOT.to_s, "{app}")
     end
     private :show_path
-
-    def escape_double_quotes(s)
-      s.to_s.gsub('"', '""')
-    end
-    private :escape_double_quotes
-
-    def quote_and_escape(s)
-      "\"#{escape_double_quotes(s)}\""
-    end
-    private :quote_and_escape
-
-    INST_DIR = "%~dp0"
-
-    def replace_inst_dir_placeholder(s)
-      s.gsub(/#{Regexp.escape(TEMPDIR_ROOT.to_s)}[\/\\]/, INST_DIR)
-    end
-    private :replace_inst_dir_placeholder
-
-    def build_launch_batch
-      require "tempfile"
-      Tempfile.open(["", ".iss"], Dir.pwd) do |f|
-        f.puts "@echo off"
-        @envs.each { |name, val| f.puts "set \"#{name}=#{replace_inst_dir_placeholder(val)}\"" }
-
-        image, script, *argv = @script_info.map(&:to_s)
-        args = ["start"]
-        args << quote_and_escape(@executable.sub_ext(""))
-        args << "/d #{quote_and_escape("#{INST_DIR}#{SRCDIR}")}" if @chdir_before
-        args << quote_and_escape("#{INST_DIR}#{image}")
-        args << quote_and_escape("#{INST_DIR}#{script}")
-        args += argv.map { |arg| quote_and_escape(replace_inst_dir_placeholder(arg)) }
-        args << "%*" # Forward batch file arguments to the command with `%*`
-        f.puts args.join(" ")
-        f
-      end
-    end
-    private :build_launch_batch
-
-    def build_dirs_section_item(name:)
-      "Name: #{quote_and_escape(name)};"
-    end
-    private :build_dirs_section_item
-
-    def build_files_section_item(source:, dest_dir:, dest_name: nil)
-      s = ["Source: #{quote_and_escape(source)};"]
-      s << "DestDir: #{quote_and_escape(dest_dir)};"
-      s << "DestName: #{quote_and_escape(dest_name)};" if dest_name
-      s.join(" ")
-    end
-    private :build_files_section_item
-
-    def build_inno_setup_script
-      @launcher = build_launch_batch
-      Ocran.verbose_msg File.read(@launcher.path)
-
-      require "tempfile"
-      Tempfile.open(["", ".iss"], Dir.pwd) do |f|
-        f.puts File.read(@inno_setup_script)
-        f.puts
-        f.puts "[Dirs]"
-        @dirs.each_value do |dir|
-          f.puts build_dirs_section_item(name: "{app}\\#{dir}")
-        end
-        f.puts
-        f.puts "[Files]"
-        f.puts build_files_section_item(source: @launcher.path, dest_dir: "{app}", dest_name: @executable)
-        @files.each_value do |tgt, src|
-          dest_dir = Ocran::Pathname(tgt).dirname.to_native
-          f.puts build_files_section_item(source: src, dest_dir: "{app}\\#{dest_dir}")
-        end
-        @iss = f
-      end
-    end
-    private :build_inno_setup_script
-
-    def compile(iss_path)
-      iscc_cmd = ["ISCC"]
-      iscc_cmd << "/Q" unless Ocran.verbose
-      iscc_cmd << iss_path
-      unless system(*iscc_cmd)
-        case $?.exitstatus
-        when 0 then raise "ISCC reported success, but system reported error?"
-        when 1 then raise "ISCC reports invalid command line parameters"
-        when 2 then raise "ISCC reports that compilation failed"
-        else raise "ISCC failed to run. Is the InnoSetup directory in your PATH?"
-        end
-      end
-    end
-    private :compile
   end
 end

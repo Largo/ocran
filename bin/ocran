@@ -999,9 +999,9 @@ EOF
     else
       require_relative "../lib/ocran/inno_setup_builder"
       InnoSetupBuilder.new(executable,
+                           Ocran.inno_script,
                            chdir_before: Ocran.chdir_first,
                            icon_path: Ocran.icon_filename,
-                           inno_setup_script: Ocran.inno_script,
                            &direction)
       Ocran.msg "Finished building installer file"
     end
