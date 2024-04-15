@@ -362,3 +362,24 @@ BOOL IsPathFreeOfDotElements(const char *str)
 
     return TRUE;
 }
+
+// Moves the application to a safe directory.
+BOOL ChangeDirectoryToSafeDirectory(void)
+{
+    char *working_dir = GetTempDirectoryPath();
+    BOOL changed = working_dir && SetCurrentDirectory(working_dir);
+    LocalFree(working_dir);
+
+    if (changed) return TRUE;
+
+    DEBUG("Failed to change to temporary directory. Trying executable's directory");
+    working_dir = GetImageDirectoryPath();
+    changed = working_dir && SetCurrentDirectory(working_dir);
+    LocalFree(working_dir);
+
+    if (!changed) {
+        DEBUG("Failed to change to executable's directory");
+    }
+
+    return changed;
+}

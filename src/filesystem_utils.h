@@ -97,3 +97,15 @@ char *GetTempDirectoryPath(void);
  * @return TRUE if the path does not contain relative path elements, otherwise FALSE.
  */
 BOOL IsPathFreeOfDotElements(const char *str);
+
+/**
+ * ChangeDirectoryToSafeDirectory - Change the current working directory to a predefined safe directory.
+ *
+ * This function is used to switch the current working directory to a safe location, typically
+ * used to prevent any operations that could interfere with user data or system operations.
+ * This is particularly useful during cleanup operations or when the application needs to
+ * ensure it operates in a controlled environment.
+ *
+ * @return BOOL Returns TRUE if the directory change was successful, otherwise FALSE.
+ */
+BOOL ChangeDirectoryToSafeDirectory(void);
