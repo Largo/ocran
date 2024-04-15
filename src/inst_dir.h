@@ -84,3 +84,14 @@ void MarkInstDirForDeletion(void);
  * @return A new string with placeholders replaced by the installation directory path, NULL on failure.
  */
 char *ReplaceInstDirPlaceholder(const char *str);
+
+/**
+ * ChangeDirectoryToScriptDirectory - Change the current working directory to the script's directory.
+ *
+ * This function attempts to change the process's current working directory to the directory
+ * where the script is located. This is typically used to ensure that relative paths
+ * in script operations resolve correctly.
+ *
+ * @return BOOL Returns TRUE if the directory change was successful, otherwise FALSE.
+ */
+BOOL ChangeDirectoryToScriptDirectory(void);

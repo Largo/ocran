@@ -52,26 +52,6 @@ BOOL DecompressLzma(void *unpack_data, size_t unpack_size, void *src, size_t src
 }
 #endif
 
-BOOL ChangeDirectoryToScriptDirectory(void)
-{
-    char *script_dir = ExpandInstDirPath("src");
-    if (script_dir == NULL) {
-        FATAL("Failed to build path for CWD");
-        return FALSE;
-    }
-
-    DEBUG("Changing CWD to unpacked directory %s", script_dir);
-
-    BOOL changed = SetCurrentDirectory(script_dir);
-    LocalFree(script_dir);
-
-    if (!changed) {
-        LAST_ERROR("Failed to change CWD");
-    }
-
-    return changed;
-}
-
 BOOL ChangeDirectoryToSafeDirectory(void)
 {
     char *working_dir = GetTempDirectoryPath();

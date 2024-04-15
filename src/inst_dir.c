@@ -187,3 +187,23 @@ char *ReplaceInstDirPlaceholder(const char *str)
 
     return out;
 }
+
+// Changes the working directory to the directory where the script is located.
+BOOL ChangeDirectoryToScriptDirectory(void)
+{
+    char *script_dir = ExpandInstDirPath("src");
+    if (script_dir == NULL) {
+        FATAL("Failed to build path for CWD");
+        return FALSE;
+    }
+
+    DEBUG("Changing CWD to unpacked directory %s", script_dir);
+
+    BOOL changed = SetCurrentDirectory(script_dir);
+    if (!changed) {
+        LAST_ERROR("Failed to change CWD");
+    }
+    LocalFree(script_dir);
+
+    return changed;
+}
