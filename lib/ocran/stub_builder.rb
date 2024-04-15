@@ -126,8 +126,7 @@ module Ocran
       src = Ocran.Pathname(src)
       write_opcode(OP_CREATE_FILE)
       write_string(tgt.to_native)
-      write_size(src.size)
-      IO.copy_stream(src, @of)
+      write_file(src)
     end
 
     # Specifies the final application script to be launched, which can be called
