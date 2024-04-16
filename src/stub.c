@@ -134,12 +134,21 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     }
 
     /* Release resources used for image reading */
+    BOOL release_failed = FALSE;
     if (!UnmapViewOfFile(lpv)) {
-        exit_code = LAST_ERROR("Failed to unmap view of executable");
-    } else if (!CloseHandle(hMem)) {
-        exit_code = LAST_ERROR("Failed to close file mapping");
-    } else if (!CloseHandle(hImage)) {
-        exit_code = LAST_ERROR("Failed to close executable");
+        LAST_ERROR("Failed to unmap view of executable");
+        release_failed = TRUE;
+    }
+    if (!CloseHandle(hMem)) {
+        LAST_ERROR("Failed to close file mapping");
+        release_failed = TRUE;
+    }
+    if (!CloseHandle(hImage)) {
+        LAST_ERROR("Failed to close executable");
+        release_failed = TRUE;
+    }
+    if (release_failed) {
+        exit_code = EXIT_CODE_FAILURE;
     } else {
         /* Launching the script, provided there are no errors in file extraction from the image */
         const char *app_name;
