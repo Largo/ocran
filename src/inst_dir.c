@@ -4,60 +4,60 @@
 #include "inst_dir.h"
 
 // Static variable to hold the installation directory path.
-static char* InstDir = NULL;
+static const char *InstDir = NULL;
 
-// Initializes the installation directory with a unique name in the specified target directory.
-BOOL InitializeInstDirectory(const char *target_dir)
+// Creates an installation directory with a unique name in the specified target directory.
+const char *CreateInstDirectory(const char *target_dir)
 {
     if (InstDir != NULL) {
         FATAL("Installation directory has already been set");
-        return FALSE;
+        return NULL;
     }
 
-    char *inst_dir = CreateUniqueDirectory(target_dir, "ocran");
+    const char *inst_dir = CreateUniqueDirectory(target_dir, "ocran");
     if (inst_dir == NULL) {
         FATAL("Failed to create a unique installation directory within the specified target directory");
-        return FALSE;
+        return NULL;
     }
 
     InstDir = inst_dir;
-    return TRUE;
+    return inst_dir;
 }
 
-// Initializes a debug installation directory adjacent to the executable.
-BOOL InitializeDebugExtractInstDir(void)
+// Creates a debug installation directory next to the executable.
+const char *CreateDebugExtractInstDir(void)
 {
     char *image_dir = GetImageDirectoryPath();
     if (image_dir == NULL) {
         FATAL("Failed to obtain the directory path of the executable file");
-        return FALSE;
+        return NULL;
     }
 
-    BOOL result = InitializeInstDirectory(image_dir);
+    const char *inst_dir = CreateInstDirectory(image_dir);
     LocalFree(image_dir);
-    if (!result) {
+    if (inst_dir == NULL) {
         FATAL("Failed to create installation directory in the executable's directory");
     }
 
-    return result;
+    return inst_dir;
 }
 
-// Initializes a temporary installation directory in the system's temp directory.
-BOOL InitializeTemporaryInstDir(void)
+// Creates a temporary installation directory in the system's temp directory.
+const char *CreateTemporaryInstDir(void)
 {
     char *temp_dir = GetTempDirectoryPath();
     if (temp_dir == NULL) {
         FATAL("Failed to obtain the temporary directory path");
-        return FALSE;
+        return NULL;
     }
 
-    BOOL result = InitializeInstDirectory(temp_dir);
+    const char *inst_dir = CreateInstDirectory(temp_dir);
     LocalFree(temp_dir);
-    if (!result) {
+    if (inst_dir == NULL) {
         FATAL("Failed to create installation directory in the temporary directory");
     }
 
-    return result;
+    return inst_dir;
 }
 
 // Frees the allocated memory for the installation directory path.

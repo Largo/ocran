@@ -113,22 +113,14 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         DEBUG("Ocran stub running in debug mode");
     }
 
-    BOOL created;
-
+    const char *inst_dir;
     if (IS_EXTRACT_TO_EXE_DIR_ENABLED(flags)) {
-        created = InitializeDebugExtractInstDir();
+        inst_dir = CreateDebugExtractInstDir();
     } else {
-        created = InitializeTemporaryInstDir();
+        inst_dir = CreateTemporaryInstDir();
     }
-
-    if (!created) {
-        return FATAL("Failed to create installation directory");
-    }
-
-    const char *inst_dir = GetInstDir();
-
     if (inst_dir == NULL) {
-        return FATAL("Failed to get installation directory");
+        return FATAL("Failed to create installation directory");
     }
 
     DEBUG("Created installation directory: %s", inst_dir);
