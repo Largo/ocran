@@ -82,7 +82,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     /* Create a file mapping */
     DWORD image_size = GetFileSize(hImage, NULL);
-    HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, image_size, NULL);
+    HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, 0, NULL);
     if (hMem == INVALID_HANDLE_VALUE) {
         CloseHandle(hImage);
         return LAST_ERROR("Failed to create file mapping");
