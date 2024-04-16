@@ -80,8 +80,20 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         return LAST_ERROR("Failed to open executable file");
     }
 
+    /* Get the file size */
+    LARGE_INTEGER fileSize;
+    if (!GetFileSizeEx(hImage, &fileSize)) {
+        CloseHandle(hImage);
+        return LAST_ERROR("Failed to get executable file size");
+    }
+    // Check if the file size exceeds the maximum size that can be processed in a 32-bit environment
+    if (fileSize.QuadPart > SIZE_MAX) {
+        CloseHandle(hImage);
+        return FATAL("File size exceeds processable limit");
+    }
+    size_t image_size = (size_t)fileSize.QuadPart;  // Used to determine the pointer range that can be addressed
+
     /* Create a file mapping */
-    DWORD image_size = GetFileSize(hImage, NULL);
     HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, 0, NULL);
     if (hMem == INVALID_HANDLE_VALUE) {
         CloseHandle(hImage);
