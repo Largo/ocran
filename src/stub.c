@@ -84,12 +84,15 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     DWORD image_size = GetFileSize(hImage, NULL);
     HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, image_size, NULL);
     if (hMem == INVALID_HANDLE_VALUE) {
+        CloseHandle(hImage);
         return LAST_ERROR("Failed to create file mapping");
     }
 
     /* Map the image into memory */
     LPVOID lpv = MapViewOfFile(hMem, FILE_MAP_READ, 0, 0, 0);
     if (lpv == NULL) {
+        CloseHandle(hMem);
+        CloseHandle(hImage);
         return LAST_ERROR("Failed to map view of executable into memory");
     }
 
