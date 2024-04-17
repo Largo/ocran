@@ -135,9 +135,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         return FATAL("Bad signature in executable");
     }
 
-    const void *tail = sig - sizeof(DWORD);
-    DWORD OpcodeOffset = *(DWORD*)(tail);
-    void *head = lpv + OpcodeOffset;
+    const void *tail = (const char *)sig - sizeof(DWORD);
+    size_t offset = *(const DWORD*)(tail);
+    void *head = (char *)lpv + offset;
 
     /* Read header of packed data */
     OperationModes flags = (OperationModes)*(BYTE *)head; head++;
