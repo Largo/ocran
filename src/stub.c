@@ -16,6 +16,24 @@
 
 const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
+const void *FindSignature(const void *buffer, size_t size)
+{
+    if (size < sizeof(Signature)) {
+        FATAL("Buffer too small to contain signature");
+        return NULL;
+    }
+
+    // Currently, the signature is being searched for at the end of the file.
+    const void *sig = (const char *)buffer + size - sizeof(Signature);
+
+    if (memcmp(sig, Signature, sizeof(Signature)) != 0) {
+        FATAL("Signature not found in executable");
+        return NULL;
+    }
+
+    return sig;
+}
+
 BOOL ProcessImage(LPVOID pSeg, DWORD data_len, BOOL compressed);
 
 #if WITH_LZMA
@@ -109,13 +127,15 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     }
 
     /* Process the image by checking the signature and locating the first opcode */
-    void *sig = lpv + image_size - sizeof(Signature);
-
-    if (memcmp(sig, Signature, sizeof(Signature)) != 0) {
+    const void *sig = FindSignature(lpv, image_size);
+    if (sig == NULL) {
+        UnmapViewOfFile(lpv);
+        CloseHandle(hMem);
+        CloseHandle(hImage);
         return FATAL("Bad signature in executable");
     }
 
-    void *tail = sig - sizeof(DWORD);
+    const void *tail = sig - sizeof(DWORD);
     DWORD OpcodeOffset = *(DWORD*)(tail);
     void *head = lpv + OpcodeOffset;
 
