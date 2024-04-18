@@ -6,6 +6,10 @@
 #include "script_info.h"
 #include "unpack.h"
 
+#if WITH_LZMA
+#include <LzmaDec.h>
+#endif
+
 size_t GetLength(void **p) {
     unsigned char *b = *p;
     *p = b + 2;
@@ -188,4 +192,91 @@ unsigned char ProcessOpcodes(void **p)
     } while (OpcodeHandlers[op](p));
 
     return op;
+}
+
+#if WITH_LZMA
+#define LZMA_UNPACKSIZE_SIZE 8
+#define LZMA_HEADER_SIZE (LZMA_PROPS_SIZE + LZMA_UNPACKSIZE_SIZE)
+
+void *SzAlloc(const ISzAlloc *p, size_t size) { p = p; return LocalAlloc(LMEM_FIXED, size); }
+void SzFree(const ISzAlloc *p, void *address) { p = p; LocalFree(address); }
+ISzAlloc alloc = { SzAlloc, SzFree };
+
+BOOL DecompressLzma(void *unpack_data, size_t unpack_size, const void *src, size_t src_size)
+{
+    SizeT lzmaDecompressedSize = unpack_size;
+    SizeT inSizePure = src_size - LZMA_HEADER_SIZE;
+    ELzmaStatus status;
+
+    SRes res = LzmaDecode((Byte *)unpack_data, &lzmaDecompressedSize, (Byte *)src + LZMA_HEADER_SIZE, &inSizePure,
+                          (Byte *)src, LZMA_PROPS_SIZE, LZMA_FINISH_ANY, &status, &alloc);
+
+    return (BOOL)(res == SZ_OK);
+}
+#endif
+
+BOOL ProcessCompressedData(const void *data, size_t data_len)
+{
+#if WITH_LZMA
+    DEBUG("LzmaDecode(%ld)", data_len);
+
+    ULONGLONG unpack_size = 0;
+    for (int i = 0; i < LZMA_UNPACKSIZE_SIZE; i++) {
+        unpack_size += ((BYTE *)data)[LZMA_PROPS_SIZE + i] << (i * 8);
+    }
+
+    // Check if the unpack size exceeds the maximum size that can be processed in a 32-bit environment
+    if (unpack_size > SIZE_MAX) {
+        FATAL("Decompression size exceeds maximum limit");
+        return FALSE;
+    }
+
+    void *unpack_data = LocalAlloc(LMEM_FIXED, unpack_size);
+    if (unpack_data == NULL) {
+        LAST_ERROR("Memory allocation failed during decompression");
+        return FALSE;
+    }
+
+    if (!DecompressLzma(unpack_data, unpack_size, data, data_len)) {
+        FATAL("LZMA decompression failed");
+        LocalFree(unpack_data);
+        return FALSE;
+    }
+
+    void *p = unpack_data;
+    BYTE last_opcode = ProcessOpcodes(&p);
+    LocalFree(unpack_data);
+
+    if (last_opcode != OP_END) {
+        FATAL("Invalid opcode '%u'", last_opcode);
+        return FALSE;
+    }
+    return TRUE;
+#else
+    FATAL("Does not support LZMA");
+    return FALSE;
+#endif
+}
+
+BOOL ProcessUncompressedData(const void *data, size_t data_len)
+{
+    void *p = (void *)data;
+    BYTE last_opcode = ProcessOpcodes(&p);
+
+    if (last_opcode != OP_END) {
+        FATAL("Invalid opcode '%u'", last_opcode);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+BOOL ProcessImage(const void *data, size_t data_len, BOOL compressed)
+{
+    if (compressed) {
+        DEBUG("Processing compressed data segment with length %zu bytes", data_len);
+        return ProcessCompressedData(data, data_len);
+    } else {
+        DEBUG("Processing uncompressed data segment with length %zu bytes", data_len);
+        return ProcessUncompressedData(data, data_len);
+    }
 }

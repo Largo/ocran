@@ -5,4 +5,4 @@
 #define OP_SET_SCRIPT (BYTE)4
 #define OP_MAX (BYTE)5
 
-unsigned char ProcessOpcodes(void **p);
+BOOL ProcessImage(const void *data, size_t data_len, BOOL compressed);
