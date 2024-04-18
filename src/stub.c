@@ -140,7 +140,10 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     void *head = (char *)lpv + offset;
 
     /* Read header of packed data */
-    OperationModes flags = (OperationModes)*(BYTE *)head; head++;
+    // Read the operation mode flag from the packed data header
+    OperationModes flags = (OperationModes)*(BYTE *)head;
+    // Move to the next byte in the data stream
+    head = (BYTE *)head + 1;
 
     DebugModeEnabled = IS_DEBUG_MODE_ENABLED(flags);
 
