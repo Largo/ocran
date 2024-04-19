@@ -46,6 +46,19 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
+    /*
+       Set up the console control handler to ignore all control signals.
+       This is crucial because it allows the parent process to continue running
+       without interruption during initial file operations and other setup tasks.
+       Control signals are managed independently by the child process (Ruby),
+       which has its own signal handling mechanisms. This design ensures that
+       the parent process can perform critical cleanup and other tasks without
+       being prematurely terminated by such signals.
+    */
+    if (!SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE)) {
+        return LAST_ERROR("Failed to set control handler");
+    }
+
     DWORD exit_code = 0;
 
     /* Find name of image */
@@ -53,8 +66,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     if (image_path == NULL) {
         return LAST_ERROR("Failed to get executable name");
     }
-
-   SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE);
 
     /* Open the image (executable) */
     HANDLE hImage = CreateFile(image_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
