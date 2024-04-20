@@ -109,3 +109,45 @@ BOOL IsPathFreeOfDotElements(const char *str);
  * @return BOOL Returns TRUE if the directory change was successful, otherwise FALSE.
  */
 BOOL ChangeDirectoryToSafeDirectory(void);
+
+typedef const void *MappedFile;
+
+/**
+ * OpenAndMapFile - Opens a file and maps it into memory as read-only.
+ *
+ * This function opens the specified file in read-only mode and maps its entire
+ * content into memory with read-only access. It returns a handle that encapsulates
+ * the file handle, the mapping handle, and the base address of the mapped content.
+ * The content mapped into memory is guaranteed to be read-only, ensuring data integrity.
+ *
+ * @param file_path The path of the file to be opened and mapped.
+ * @param file_size A pointer to a variable where the size of the file will be
+ *                  stored. If the pointer is NULL, the file size is not returned.
+ * @param mapped_base A pointer to a pointer variable that will receive the base
+ *                    address of the mapped file. The address pointed to by this
+ *                    pointer is read-only. If the pointer is NULL, the base
+ *                    address is not returned.
+ * @return A MappedFile handle that must be freed with FreeMappedFile when no
+ *         longer needed. Returns NULL if the operation fails.
+ *
+ * On failure, the function logs an error with the LAST_ERROR macro and cleans
+ * up any opened resources before returning NULL.
+ */
+MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, const void **mapped_base);
+
+/**
+ * FreeMappedFile - Frees a MappedFile handle and its associated resources.
+ *
+ * This function unmaps the mapped view of the file, closes the mapping and
+ * file handles, and frees the memory used by the MappedFileHandle structure.
+ * It is intended to be used to clean up resources allocated by OpenAndMapFile.
+ *
+ * @param handle The MappedFile handle to free. This handle should have been
+ *               obtained from OpenAndMapFile.
+ * @return TRUE if all resources were successfully released; otherwise, FALSE.
+ *
+ * If the function fails to release any resources, it logs an error with the
+ * LAST_ERROR macro for each failure. However, it attempts to free all resources
+ * regardless of individual errors.
+ */
+BOOL FreeMappedFile(MappedFile handle);

@@ -67,52 +67,31 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         return LAST_ERROR("Failed to get executable name");
     }
 
-    /* Open the image (executable) */
-    HANDLE hImage = CreateFile(image_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-    if (hImage == INVALID_HANDLE_VALUE) {
-        return LAST_ERROR("Failed to open executable file");
+    /* Open and map the image (executable) into memory */
+    unsigned long long file_size = 0;
+    const void *base = NULL;
+    MappedFile mapped_file = OpenAndMapFile(image_path, &file_size, &base);
+    if (mapped_file == NULL) {
+        return FATAL("Failed to open or map the executable file");
     }
 
-    /* Get the file size */
-    LARGE_INTEGER fileSize;
-    if (!GetFileSizeEx(hImage, &fileSize)) {
-        CloseHandle(hImage);
-        return LAST_ERROR("Failed to get executable file size");
-    }
     // Check if the file size exceeds the maximum size that can be processed in a 32-bit environment
-    if (fileSize.QuadPart > SIZE_MAX) {
-        CloseHandle(hImage);
+    if (file_size > SIZE_MAX) {
+        FreeMappedFile(mapped_file);
         return FATAL("File size exceeds processable limit");
     }
-    size_t image_size = (size_t)fileSize.QuadPart;  // Used to determine the pointer range that can be addressed
-
-    /* Create a file mapping */
-    HANDLE hMem = CreateFileMapping(hImage, NULL, PAGE_READONLY, 0, 0, NULL);
-    if (hMem == INVALID_HANDLE_VALUE) {
-        CloseHandle(hImage);
-        return LAST_ERROR("Failed to create file mapping");
-    }
-
-    /* Map the image into memory */
-    LPVOID lpv = MapViewOfFile(hMem, FILE_MAP_READ, 0, 0, 0);
-    if (lpv == NULL) {
-        CloseHandle(hMem);
-        CloseHandle(hImage);
-        return LAST_ERROR("Failed to map view of executable into memory");
-    }
+    size_t image_size = (size_t)file_size;  // Used to determine the pointer range that can be addressed
 
     /* Process the image by checking the signature and locating the first opcode */
-    const void *sig = FindSignature(lpv, image_size);
+    const void *sig = FindSignature(base, image_size);
     if (sig == NULL) {
-        UnmapViewOfFile(lpv);
-        CloseHandle(hMem);
-        CloseHandle(hImage);
+        FreeMappedFile(mapped_file);
         return FATAL("Bad signature in executable");
     }
 
     const void *tail = (const char *)sig - sizeof(DWORD);
     size_t offset = *(const DWORD*)(tail);
-    void *head = (char *)lpv + offset;
+    const void *head = (const char *)base + offset;
 
     /* Read header of packed data */
     // Read the operation mode flag from the packed data header
@@ -133,6 +112,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         inst_dir = CreateTemporaryInstDir();
     }
     if (inst_dir == NULL) {
+        FreeMappedFile(mapped_file);
         return FATAL("Failed to create installation directory");
     }
 
@@ -144,20 +124,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     }
 
     /* Release resources used for image reading */
-    BOOL release_failed = FALSE;
-    if (!UnmapViewOfFile(lpv)) {
-        LAST_ERROR("Failed to unmap view of executable");
-        release_failed = TRUE;
-    }
-    if (!CloseHandle(hMem)) {
-        LAST_ERROR("Failed to close file mapping");
-        release_failed = TRUE;
-    }
-    if (!CloseHandle(hImage)) {
-        LAST_ERROR("Failed to close executable");
-        release_failed = TRUE;
-    }
-    if (release_failed) {
+    if (!FreeMappedFile(mapped_file)) {
         exit_code = EXIT_CODE_FAILURE;
     } else {
         /* Launching the script, provided there are no errors in file extraction from the image */

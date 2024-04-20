@@ -383,3 +383,95 @@ BOOL ChangeDirectoryToSafeDirectory(void)
 
     return changed;
 }
+
+typedef struct MappedFileHandle {
+    HANDLE hFile;
+    HANDLE hMapping;
+    LPVOID lpBaseAddress;
+} MappedFileHandle;
+
+// Opens a file and maps it into the memory.
+MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, const void **mapped_base)
+{
+    HANDLE hFile = CreateFile(file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        LAST_ERROR("Failed to open file");
+        return NULL;
+    }
+
+    LARGE_INTEGER fileSize;
+    if (!GetFileSizeEx(hFile, &fileSize)) {
+        LAST_ERROR("Failed to get file size");
+        CloseHandle(hFile);
+        return NULL;
+    }
+
+    if (file_size) {
+        *file_size = (unsigned long long)fileSize.QuadPart;
+    }
+
+    HANDLE hMapping = CreateFileMapping(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (hMapping == INVALID_HANDLE_VALUE) {
+        LAST_ERROR("Failed to create file mapping");
+        CloseHandle(hFile);
+        return NULL;
+    }
+
+    LPVOID lpBaseAddress = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+    if (lpBaseAddress == NULL) {
+        LAST_ERROR("Failed to map view of file into memory");
+        CloseHandle(hMapping);
+        CloseHandle(hFile);
+        return NULL;
+    }
+
+    MappedFileHandle *handle = (MappedFileHandle *)LocalAlloc(LPTR, sizeof(MappedFileHandle));
+    if (handle) {
+        handle->hFile = hFile;
+        handle->hMapping = hMapping;
+        handle->lpBaseAddress = lpBaseAddress;
+        if (mapped_base) {
+            *mapped_base = lpBaseAddress;
+        }
+        return (MappedFile)handle;
+    } else {
+        LAST_ERROR("Failed to allocate memory for handle");
+        UnmapViewOfFile(lpBaseAddress);
+        CloseHandle(hMapping);
+        CloseHandle(hFile);
+        return NULL;
+    }
+}
+
+// Frees a MappedFile handle and its associated resources.
+BOOL FreeMappedFile(MappedFile handle) {
+    MappedFileHandle *h = (MappedFileHandle *)handle;
+    BOOL success = TRUE;
+
+    if (h != NULL) {
+        if (h->lpBaseAddress != NULL) {
+            if (!UnmapViewOfFile(h->lpBaseAddress)) {
+                LAST_ERROR("Failed to unmap view of file");
+                success = FALSE;
+            }
+        }
+
+        if (h->hMapping != INVALID_HANDLE_VALUE) {
+            if (!CloseHandle(h->hMapping)) {
+                LAST_ERROR("Failed to close file mapping");
+                success = FALSE;
+            }
+        }
+
+        if (h->hFile != INVALID_HANDLE_VALUE) {
+            if (!CloseHandle(h->hFile)) {
+                LAST_ERROR("Failed to close file");
+                success = FALSE;
+            }
+        }
+
+        LocalFree(h);
+    }
+
+    return success;
+}
