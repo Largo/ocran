@@ -105,9 +105,9 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     // Move to the next byte in the data stream
     head = (BYTE *)head + 1;
 
-    DebugModeEnabled = IS_DEBUG_MODE_ENABLED(flags);
-
-    if (DebugModeEnabled) {
+    /* Initialize Debug Mode if Enabled */
+    if (IS_DEBUG_MODE_ENABLED(flags)) {
+        InitializeDebugMode();
         DEBUG("Ocran stub running in debug mode");
     }
 
