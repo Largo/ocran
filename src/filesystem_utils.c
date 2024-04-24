@@ -57,7 +57,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
     size_t dir_len = strlen(dir);
     char *path = (char *)LocalAlloc(LPTR, dir_len + 1);
     if (path == NULL) {
-        FATAL("LocalAlloc failed");
+        LAST_ERROR("LocalAlloc failed");
         return FALSE;
     }
     strcpy(path, dir);
@@ -121,7 +121,7 @@ BOOL CreateParentDirectories(const char *file)
 
     char *dir = (char *)LocalAlloc(LPTR, i + 1);
     if (dir == NULL) {
-        FATAL("LocalAlloc failed");
+        LAST_ERROR("LocalAlloc failed");
         return FALSE;
     }
 

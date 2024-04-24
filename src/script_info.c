@@ -67,7 +67,7 @@ static BOOL ParseArguments(const char *args, size_t args_size, size_t *out_argc,
 
     const char **local_argv = (const char **)LocalAlloc(LPTR, (local_argc + 1) * sizeof(char *));
     if (local_argv == NULL) {
-        FATAL("Failed to memory allocate for argv");
+        LAST_ERROR("Failed to memory allocate for argv");
         return FALSE;
     }
 
