@@ -268,29 +268,29 @@ char *GetImagePath(void)
 
     DWORD copied = GetModuleFileNameW(NULL, image_path_w, buffer_size);
     if (copied == 0 || GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
-        LocalFree(image_path_w);
         LAST_ERROR("Failed to get image path");
+        LocalFree(image_path_w);
         return NULL;
     }
 
     int utf8_size = WideCharToMultiByte(CP_UTF8, 0, image_path_w, -1, NULL, 0, NULL, NULL);
     if (utf8_size == 0) {
-        LocalFree(image_path_w);
         LAST_ERROR("Failed to calculate buffer size for UTF-8 conversion");
+        LocalFree(image_path_w);
         return NULL;
     }
 
     char *image_path_utf8 = (char *)LocalAlloc(LPTR, utf8_size);
     if (image_path_utf8 == NULL) {
-        LocalFree(image_path_w);
         LAST_ERROR("Failed to allocate buffer for UTF-8 image path");
+        LocalFree(image_path_w);
         return NULL;
     }
 
     if (WideCharToMultiByte(CP_UTF8, 0, image_path_w, -1, image_path_utf8, utf8_size, NULL, NULL) == 0) {
+        LAST_ERROR("Failed to convert image path to UTF-8");
         LocalFree(image_path_w);
         LocalFree(image_path_utf8);
-        LAST_ERROR("Failed to convert image path to UTF-8");
         return NULL;
     }
 
