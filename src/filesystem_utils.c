@@ -229,21 +229,23 @@ char *CreateUniqueDirectory(const char *base_path, const char *prefix)
         }
 
         char *full_path = JoinPath(base_path, temp_name);
-        free(temp_name);
+        LocalFree(temp_name);
         if (full_path == NULL) {
-            LAST_ERROR("Failed to allocate memory for full_path");
+            FATAL("Failed to construct a unique directory path");
             return NULL;
         }
 
         if (CreateDirectory(full_path, NULL)) {
             return full_path;
-        }
-        free(full_path);
-        if (GetLastError() != ERROR_ALREADY_EXISTS) {
-            LAST_ERROR("Failed to create unique directory");
+        } else if (GetLastError() != ERROR_ALREADY_EXISTS) {
+            LAST_ERROR("Failed to create a unique directory");
+            LocalFree(full_path);
             return NULL;
+        } else {
+            LocalFree(full_path);
         }
-        Sleep(10);
+
+        Sleep(10); // To avoid sequential generation and prevent name duplication.
     }
 
     FATAL("Failed to create a unique directory after %u retries", retry_limit);
