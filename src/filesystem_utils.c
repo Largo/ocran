@@ -6,12 +6,12 @@
 char *JoinPath(const char *p1, const char *p2)
 {
     if (p1 == NULL || *p1 == '\0') {
-        DEBUG("p1 is null or empty");
+        APP_ERROR("p1 is null or empty");
         return NULL;
     }
 
     if (p2 == NULL || *p2 == '\0') {
-        DEBUG("p2 is null or empty");
+        APP_ERROR("p2 is null or empty");
         return NULL;
     }
 
@@ -40,7 +40,7 @@ char *JoinPath(const char *p1, const char *p2)
 BOOL CreateDirectoriesRecursively(const char *dir)
 {
     if (dir == NULL || *dir == '\0') {
-        DEBUG("dir is null or empty");
+        APP_ERROR("dir is null or empty");
         return FALSE;
     }
 
@@ -49,7 +49,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
         if (dir_attr & FILE_ATTRIBUTE_DIRECTORY) {
             return TRUE;
         } else {
-            FATAL("Directory name conflicts with a file(%s)", dir);
+            APP_ERROR("Directory name conflicts with a file(%s)", dir);
             return FALSE;
         }
     }
@@ -72,7 +72,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
                 if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
                     break;
                 } else {
-                    FATAL("Directory name conflicts with a file(%s)", path);
+                    APP_ERROR("Directory name conflicts with a file(%s)", path);
                     LocalFree(path);
                     return FALSE;
                 }
@@ -111,7 +111,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
 BOOL CreateParentDirectories(const char *file)
 {
     if (file == NULL || *file == '\0') {
-        FATAL("file is null or empty");
+        APP_ERROR("file is null or empty");
         return FALSE;
     }
 
@@ -137,13 +137,13 @@ BOOL CreateParentDirectories(const char *file)
 BOOL DeleteRecursively(const char *path)
 {
     if (path == NULL || *path == '\0') {
-        FATAL("path is null or empty");
+        APP_ERROR("path is null or empty");
         return FALSE;
     }
 
     char *findPath = JoinPath(path, "*");
     if (findPath == NULL) {
-        FATAL("Failed to build find path for deletion");
+        APP_ERROR("Failed to build find path for deletion");
         return FALSE;
     }
 
@@ -157,7 +157,7 @@ BOOL DeleteRecursively(const char *path)
 
             char *subPath = JoinPath(path, findData.cFileName);
             if (subPath == NULL) {
-                FATAL("Failed to build delete file path");
+                APP_ERROR("Failed to build delete file path");
                 break;
             }
 
@@ -216,7 +216,7 @@ char *GenerateUniqueName(const char *prefix)
 char *CreateUniqueDirectory(const char *base_path, const char *prefix)
 {
     if (base_path == NULL) {
-        FATAL("base path is null");
+        APP_ERROR("base path is null");
         return NULL;
     }
 
@@ -224,14 +224,14 @@ char *CreateUniqueDirectory(const char *base_path, const char *prefix)
     for (unsigned int retry = 0; retry < retry_limit; retry++) {
         char *temp_name = GenerateUniqueName(prefix);
         if (temp_name == NULL) {
-            FATAL("Failed to generate a unique name");
+            APP_ERROR("Failed to generate a unique name");
             return NULL;
         }
 
         char *full_path = JoinPath(base_path, temp_name);
         LocalFree(temp_name);
         if (full_path == NULL) {
-            FATAL("Failed to construct a unique directory path");
+            APP_ERROR("Failed to construct a unique directory path");
             return NULL;
         }
 
@@ -248,7 +248,7 @@ char *CreateUniqueDirectory(const char *base_path, const char *prefix)
         Sleep(10); // To avoid sequential generation and prevent name duplication.
     }
 
-    FATAL("Failed to create a unique directory after %u retries", retry_limit);
+    APP_ERROR("Failed to create a unique directory after %u retries", retry_limit);
     return NULL;
 }
 
@@ -317,7 +317,7 @@ char *GetImageDirectoryPath(void) {
     }
 
     if (i == 0) {
-        FATAL("Executable path does not contain a directory");
+        APP_ERROR("Executable path does not contain a directory");
         LocalFree(image_path);
         return NULL;
     }
@@ -380,7 +380,7 @@ BOOL ChangeDirectoryToSafeDirectory(void)
     LocalFree(working_dir);
 
     if (!changed) {
-        DEBUG("Failed to change to executable's directory");
+        APP_ERROR("Failed to change to executable's directory");
     }
 
     return changed;

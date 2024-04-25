@@ -66,18 +66,18 @@ BOOL OpCreateDirectory(void **p)
     const char *dir_name = GetString(p);
 
     if (dir_name == NULL || *dir_name == '\0') {
-        DEBUG("dir_name is NULL or empty");
+        APP_ERROR("dir_name is NULL or empty");
         return FALSE;
     }
 
     if (!IsPathFreeOfDotElements(dir_name)) {
-        FATAL("Directory name contains prohibited relative path elements like '.' or '..'");
+        APP_ERROR("Directory name contains prohibited relative path elements like '.' or '..'");
         return FALSE;
     }
 
     char *dir = ExpandInstDirPath(dir_name);
     if (dir == NULL) {
-        FATAL("Failed to expand dir_name to installation directory");
+        APP_ERROR("Failed to expand dir_name to installation directory");
         return FALSE;
     }
 
@@ -98,25 +98,25 @@ BOOL OpCreateFile(void **p)
     *p = (char *)(*p) + file_size;
 
     if (file_name == NULL || *file_name == '\0') {
-        FATAL("file_name is null or empty");
+        APP_ERROR("file_name is null or empty");
         return FALSE;
     }
 
     if (!IsPathFreeOfDotElements(file_name)) {
-        FATAL("File name contains prohibited relative path elements like '.' or '..'");
+        APP_ERROR("File name contains prohibited relative path elements like '.' or '..'");
         return FALSE;
     }
 
     char *path = ExpandInstDirPath(file_name);
     if (path == NULL) {
-        FATAL("Failed to expand path to installation directory");
+        APP_ERROR("Failed to expand path to installation directory");
         return FALSE;
     }
 
     DEBUG("Create file: %s", path);
 
     if (!CreateParentDirectories(path)) {
-        FATAL("Failed to create parent directory");
+        APP_ERROR("Failed to create parent directory");
         LocalFree(path);
         return FALSE;
     }
@@ -131,7 +131,7 @@ BOOL OpCreateFile(void **p)
             if (BytesWritten == (DWORD)file_size) {
                 result = TRUE;
             } else {
-                FATAL("Write size failure");
+                APP_ERROR("Write size failure");
             }
         } else {
             LAST_ERROR("Write failure");
@@ -153,7 +153,7 @@ BOOL OpSetEnv(void **p)
 
     char *replaced_value = ReplaceInstDirPlaceholder(value);
     if (replaced_value == NULL) {
-        FATAL("Failed to replace the value placeholder");
+        APP_ERROR("Failed to replace the value placeholder");
         return FALSE;
     }
 
@@ -227,7 +227,7 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
 
     // Check if the unpack size exceeds the maximum size that can be processed in a 32-bit environment
     if (unpack_size > SIZE_MAX) {
-        FATAL("Decompression size exceeds maximum limit");
+        APP_ERROR("Decompression size exceeds maximum limit");
         return FALSE;
     }
 
@@ -238,7 +238,7 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
     }
 
     if (!DecompressLzma(unpack_data, unpack_size, data, data_len)) {
-        FATAL("LZMA decompression failed");
+        APP_ERROR("LZMA decompression failed");
         LocalFree(unpack_data);
         return FALSE;
     }
@@ -248,12 +248,12 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
     LocalFree(unpack_data);
 
     if (last_opcode != OP_END) {
-        FATAL("Invalid opcode '%u'", last_opcode);
+        APP_ERROR("Invalid opcode '%u'", last_opcode);
         return FALSE;
     }
     return TRUE;
 #else
-    FATAL("Does not support LZMA");
+    APP_ERROR("Does not support LZMA");
     return FALSE;
 #endif
 }
@@ -264,7 +264,7 @@ BOOL ProcessUncompressedData(const void *data, size_t data_len)
     BYTE last_opcode = ProcessOpcodes(&p);
 
     if (last_opcode != OP_END) {
-        FATAL("Invalid opcode '%u'", last_opcode);
+        APP_ERROR("Invalid opcode '%u'", last_opcode);
         return FALSE;
     }
     return TRUE;

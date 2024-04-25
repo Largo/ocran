@@ -10,13 +10,13 @@ static const char *InstDir = NULL;
 const char *CreateInstDirectory(const char *target_dir)
 {
     if (InstDir != NULL) {
-        FATAL("Installation directory has already been set");
+        APP_ERROR("Installation directory has already been set");
         return NULL;
     }
 
     const char *inst_dir = CreateUniqueDirectory(target_dir, "ocran");
     if (inst_dir == NULL) {
-        FATAL("Failed to create a unique installation directory within the specified target directory");
+        APP_ERROR("Failed to create a unique installation directory within the specified target directory");
         return NULL;
     }
 
@@ -29,14 +29,14 @@ const char *CreateDebugExtractInstDir(void)
 {
     char *image_dir = GetImageDirectoryPath();
     if (image_dir == NULL) {
-        FATAL("Failed to obtain the directory path of the executable file");
+        APP_ERROR("Failed to obtain the directory path of the executable file");
         return NULL;
     }
 
     const char *inst_dir = CreateInstDirectory(image_dir);
     LocalFree(image_dir);
     if (inst_dir == NULL) {
-        FATAL("Failed to create installation directory in the executable's directory");
+        APP_ERROR("Failed to create installation directory in the executable's directory");
     }
 
     return inst_dir;
@@ -47,14 +47,14 @@ const char *CreateTemporaryInstDir(void)
 {
     char *temp_dir = GetTempDirectoryPath();
     if (temp_dir == NULL) {
-        FATAL("Failed to obtain the temporary directory path");
+        APP_ERROR("Failed to obtain the temporary directory path");
         return NULL;
     }
 
     const char *inst_dir = CreateInstDirectory(temp_dir);
     LocalFree(temp_dir);
     if (inst_dir == NULL) {
-        FATAL("Failed to create installation directory in the temporary directory");
+        APP_ERROR("Failed to create installation directory in the temporary directory");
     }
 
     return inst_dir;
@@ -71,7 +71,7 @@ void FreeInstDir(void)
 const char *GetInstDir()
 {
     if (InstDir == NULL || *InstDir == '\0') {
-        FATAL("Installation directory is not set or is empty");
+        APP_ERROR("Installation directory is not set or is empty");
         return NULL;
     }
 
@@ -82,12 +82,12 @@ const char *GetInstDir()
 char *ExpandInstDirPath(const char *rel_path)
 {
     if (InstDir == NULL || *InstDir == '\0') {
-        FATAL("InstDir is null or empty");
+        APP_ERROR("InstDir is null or empty");
         return NULL;
     }
 
     if (rel_path == NULL || *rel_path == '\0') {
-        DEBUG("rel_path is null or empty");
+        APP_ERROR("rel_path is null or empty");
         return NULL;
     }
 
@@ -98,7 +98,7 @@ char *ExpandInstDirPath(const char *rel_path)
 BOOL CheckInstDirPathExists(const char *rel_path)
 {
     if (InstDir == NULL || *InstDir == '\0') {
-        FATAL("InstDir is null or empty");
+        APP_ERROR("InstDir is null or empty");
         return FALSE;
     }
 
@@ -113,7 +113,7 @@ BOOL CheckInstDirPathExists(const char *rel_path)
 BOOL DeleteInstDirRecursively(void)
 {
     if (InstDir == NULL || *InstDir == '\0') {
-        FATAL("InstDir is null or empty");
+        APP_ERROR("InstDir is null or empty");
         return FALSE;
     }
 
@@ -124,7 +124,7 @@ BOOL DeleteInstDirRecursively(void)
 void MarkInstDirForDeletion(void)
 {
     if (InstDir == NULL || *InstDir == '\0') {
-        FATAL("InstDir is null or empty");
+        APP_ERROR("InstDir is null or empty");
         return;
     }
 
@@ -146,7 +146,7 @@ void MarkInstDirForDeletion(void)
         return;
     }
 
-    FATAL("Deletion marker path is %s", marker);
+    APP_ERROR("Deletion marker path is %s", marker);
     CloseHandle(h);
     LocalFree(marker);
 }
@@ -155,7 +155,7 @@ void MarkInstDirForDeletion(void)
 char *ReplaceInstDirPlaceholder(const char *str)
 {
     if (InstDir == NULL || *InstDir == '\0') {
-        FATAL("InstDir is null or empty");
+        APP_ERROR("InstDir is null or empty");
         return FALSE;
     }
 
@@ -193,7 +193,7 @@ BOOL ChangeDirectoryToScriptDirectory(void)
 {
     char *script_dir = ExpandInstDirPath("src");
     if (script_dir == NULL) {
-        FATAL("Failed to build path for CWD");
+        APP_ERROR("Failed to build path for CWD");
         return FALSE;
     }
 

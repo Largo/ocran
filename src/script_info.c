@@ -87,7 +87,7 @@ static char *BuildCommandLine(size_t argc, const char *argv[])
 {
     char *command_line = EscapeAndQuoteCmdArg(argv[0]);
     if (command_line == NULL) {
-        FATAL("Failed to initialize command line with first arg");
+        APP_ERROR("Failed to initialize command line with first arg");
         return NULL;
     }
 
@@ -96,13 +96,13 @@ static char *BuildCommandLine(size_t argc, const char *argv[])
         if (i == 1) {
             str = ExpandInstDirPath(argv[1]);
             if (str == NULL) {
-                FATAL("Failed to expand script name to installation directory at arg index 1");
+                APP_ERROR("Failed to expand script name to installation directory at arg index 1");
                 goto cleanup;
             }
         } else {
             str = ReplaceInstDirPlaceholder(argv[i]);
             if (str == NULL) {
-                FATAL("Failed to replace arg placeholder at arg index %d", i);
+                APP_ERROR("Failed to replace arg placeholder at arg index %d", i);
                 goto cleanup;
             }
         }
@@ -110,7 +110,7 @@ static char *BuildCommandLine(size_t argc, const char *argv[])
         char *sanitized = EscapeAndQuoteCmdArg(str);
         LocalFree(str);
         if (sanitized == NULL) {
-            FATAL("Failed to sanitize arg at arg index %d", i);
+            APP_ERROR("Failed to sanitize arg at arg index %d", i);
             goto cleanup;
         }
         char *base = command_line;
@@ -118,7 +118,7 @@ static char *BuildCommandLine(size_t argc, const char *argv[])
         LocalFree(base);
         LocalFree(sanitized);
         if (command_line == NULL) {
-            FATAL("Failed to build command line after adding arg at arg index %d", i);
+            APP_ERROR("Failed to build command line after adding arg at arg index %d", i);
             goto cleanup;
         }
     }
@@ -150,31 +150,31 @@ BOOL GetScriptInfo(const char **app_name, char **cmd_line)
 BOOL InitializeScriptInfo(const char *args, size_t args_size)
 {
     if (HAS_SCRIPT_INFO) {
-        FATAL("Script info is already set");
+        APP_ERROR("Script info is already set");
         return FALSE;
     }
 
     size_t argc;
     const char **argv = NULL;
     if (!ParseArguments(args, args_size, &argc, &argv)) {
-        FATAL("Failed to parse arguments");
+        APP_ERROR("Failed to parse arguments");
         return FALSE;
     }
 
     if (!IsPathFreeOfDotElements(argv[0])) {
-        FATAL("Application name contains prohibited relative path elements like '.' or '..'");
+        APP_ERROR("Application name contains prohibited relative path elements like '.' or '..'");
         return FALSE;
     }
 
     if (!IsPathFreeOfDotElements(argv[1])) {
-        FATAL("Script name contains prohibited relative path elements like '.' or '..'");
+        APP_ERROR("Script name contains prohibited relative path elements like '.' or '..'");
         return FALSE;
     }
 
     // Set Script_ApplicationName
     char *application_name = ExpandInstDirPath(argv[0]);
     if (application_name == NULL) {
-        FATAL("Failed to expand application name to installation directory");
+        APP_ERROR("Failed to expand application name to installation directory");
         LocalFree(argv);
         return FALSE;
     }
@@ -182,7 +182,7 @@ BOOL InitializeScriptInfo(const char *args, size_t args_size)
     // Set Script_CommandLine
     char *command_line = BuildCommandLine(argc, argv);
     if (command_line == NULL) {
-        FATAL("Failed to build command line");
+        APP_ERROR("Failed to build command line");
         LocalFree(argv);
         return FALSE;
     }
@@ -235,13 +235,13 @@ BOOL CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_c
 BOOL RunScript(const char *extra_args, DWORD *exit_code)
 {
     if (!HAS_SCRIPT_INFO) {
-        FATAL("Script info is not initialized");
+        APP_ERROR("Script info is not initialized");
         return FALSE;
     }
 
     char *cmd_line = CONCAT_STR3(Script_CommandLine, " ", extra_args);
     if (cmd_line == NULL) {
-        FATAL("Failed to build command line for script execution");
+        APP_ERROR("Failed to build command line for script execution");
         return FALSE;
     }
 

@@ -59,6 +59,21 @@ DWORD PrintLastErrorMessage(char *format, ...)
     return err;
 }
 
+// Prints an application level error message to stderr if in debug mode.
+DWORD PrintAppErrorMessage(char *format, ...)
+{
+    if (!DebugModeEnabled) return EXIT_CODE_FAILURE;
+
+    fprintf_s(stderr, "ERROR: ");
+    va_list args;
+    va_start(args, format);
+    vfprintf_s(stderr, format, args);
+    va_end(args);
+    fprintf_s(stderr, "\n");
+
+    return EXIT_CODE_FAILURE;
+}
+
 // Prints a debug message to stderr if in debug mode.
 void PrintDebugMessage(char *format, ...)
 {
