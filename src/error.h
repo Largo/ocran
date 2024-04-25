@@ -1,3 +1,5 @@
+// Exit code definitions
+#define EXIT_CODE_SUCCESS ((DWORD)0)
 #define EXIT_CODE_FAILURE ((DWORD)-1)
 
 /**
