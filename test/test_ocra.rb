@@ -800,7 +800,13 @@ class TestOcran < Minitest::Test
     with_fixture 'helloworld' do
       assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--debug"]))
       pristine_env "helloworld-debug.exe" do
-        assert system("helloworld-debug.exe")
+        require 'open3'
+        Open3.popen3("helloworld-debug.exe") do |_stdin, _stdout, stderr, wait_thr|
+          # The Ocran stub outputs in debug mode to the standard output.
+          assert_equal "DEBUG: Ocran stub running in debug mode\n", stderr.gets
+          stderr.read # Ignore the output content after the first line
+          assert wait_thr.value # exit status
+        end
       end
     end
   end
