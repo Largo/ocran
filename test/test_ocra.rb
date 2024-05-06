@@ -1,11 +1,11 @@
-class Pathname
-  alias original_relative_path_from relative_path_from
-  def relative_path_from(other)
-    puts "#{caller[0]} 123"
-    original_relative_path_from(other)
-  end
-end
-
+# class Pathname
+#   alias original_relative_path_from relative_path_from
+#   def relative_path_from(other)
+#     puts "#{caller[0]} 123"
+#     original_relative_path_from(other)
+#   end
+# end
+#
 require "minitest/autorun"
 
 require "tmpdir"
@@ -787,7 +787,7 @@ class TestOcran < Minitest::Test
 
   # Should be able to build an installer using Inno Setup.
   def test_innosetup
-    skip unless system("where ISCC")
+    skip unless system("where ISCC >NUL 2>&1")
     with_fixture 'innosetup' do
       assert system("ruby", ocran, "innosetup.rb", "--quiet",
                     "--innosetup", "innosetup.iss", "--chdir-first", "--no-lzma")
