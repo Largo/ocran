@@ -747,7 +747,10 @@ EOF
 
     # Find gemspecs to include
     if defined?(Gem)
-      @gemspecs = Gem.loaded_specs.map { |name, info| Pathname(info.loaded_from) }
+      # Since Bundler is integrated into RubyGems from Ruby 3.2 onwards,
+      # Bundler's loaded_from points to the root directory of the bundler gem.
+      # Here, we are only collecting gemspecs files.
+      @gemspecs = Gem.loaded_specs.map { |name, info| Pathname(info.loaded_from) }.reject(&:directory?)
     else
       @gemspecs = []
     end
