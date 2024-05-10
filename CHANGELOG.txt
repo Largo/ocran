@@ -1,4 +1,5 @@
 === 1.3.16
+- Support for Ruby 3.0 and above. Drop ruby 2.6 and 2.7 support.
 - At startup, OCRAN no longer automatically removes directories that were previously deployed but couldn't be deleted. This change has been made to enhance security by preventing processes other than the startup process from manipulating temporary files created by them.
 - The ability for the stub to launch any script during the unpacking of application files has been removed. This feature was not in use.
 - The exit code from the Ruby application is now returned when the stub is terminated.
