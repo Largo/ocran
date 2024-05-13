@@ -43,9 +43,15 @@ class TestOcran < Minitest::Test
   # copied and the PATH environment is set to the minimal. Yields to
   # the block, then cleans up.
   def pristine_env(*files)
-    with_tmpdir files do
-      with_env "PATH" => ENV["SystemRoot"] + ";" + ENV["SystemRoot"] + "\\SYSTEM32" do
-        yield
+    # Use Bundler.with_original_env to temporarily revert any environment modifications made by Bundler,
+    # especially clearing the RUBYOPT environment variable set by `bundle exec`. This ensures that
+    # the testing environment is clean and unaffected by Bundler's settings, providing a pristine
+    # environment to accurately test the built executables.
+    Bundler.with_original_env do
+      with_tmpdir files do
+        with_env "PATH" => ENV["SystemRoot"] + ";" + ENV["SystemRoot"] + "\\SYSTEM32" do
+          yield
+        end
       end
     end
   end
