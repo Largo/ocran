@@ -604,8 +604,8 @@ EOF
           if feature.subpath?(geminstallpath)
             gemlocalpath = feature.relative_path_from(geminstallpath)
             fullgemname = gemlocalpath.to_s.split("/").first
-            gemspecpath = gempath / "specifications" / "#{fullgemname}.gemspec"
-            if spec = Gem::Specification.load(gemspecpath)
+            gemspecpath = Pathname(gempath) / "specifications" / "#{fullgemname}.gemspec"
+            if spec = Gem::Specification.load(gemspecpath.to_s)
               gems[spec.name] ||= spec
               features_from_gems << feature
             else
