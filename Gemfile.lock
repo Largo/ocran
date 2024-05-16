@@ -1,10 +1,10 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    hoe (4.0.3)
+    hoe (4.2.0)
       rake (>= 0.8, < 15.0)
-    minitest (5.18.0)
-    rake (13.0.6)
+    minitest (5.23.0)
+    rake (13.2.1)
 
 PLATFORMS
   x64-mingw-ucrt
@@ -12,8 +12,8 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
-  hoe (~> 4.0)
-  minitest (~> 5.18)
+  hoe (~> 4.2)
+  minitest (~> 5.23)
 
 BUNDLED WITH
    2.5.10
