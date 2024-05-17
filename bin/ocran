@@ -979,7 +979,16 @@ EOF
       end
 
       # Set environment variable
-      sb.setenv("RUBYOPT", Ocran.rubyopt || ENV["RUBYOPT"] || "")
+      rubyopt = Ocran.rubyopt || ENV["RUBYOPT"] || ""
+
+      # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
+      # This is a temporary measure to ensure compatibility with self-extracting executables
+      # built in a bundle exec environment, particularly for Ruby 3.2 and later where
+      # absolute paths are included in RUBYOPT.
+      # In the future, we plan to implement a more appropriate solution.
+      rubyopt = rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
+
+      sb.setenv("RUBYOPT", rubyopt)
       sb.setenv("RUBYLIB", load_path.map { |path| path.to_native }.uniq.join(";"))
       sb.setenv("GEM_PATH", (TEMPDIR_ROOT / GEMHOMEDIR).to_native)
 
