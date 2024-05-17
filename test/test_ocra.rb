@@ -581,7 +581,9 @@ class TestOcran < Minitest::Test
         pristine_env "environment.exe" do
           assert system("environment.exe")
           env = Marshal.load(File.open("environment", "rb") { |f| f.read })
-          assert_equal "-rtime", env['RUBYOPT']
+          # Verify that the specified RUBYOPT is included in the execution environment.
+          # NOTE: In Ruby 3.2 and later, Bundler may add additional options to RUBYOPT.
+          assert_includes env['RUBYOPT'], "-rtime"
         end
       end
     end
