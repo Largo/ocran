@@ -572,14 +572,8 @@ EOF
         gems[spec.name] ||= spec
       end
 
-      # This code is implemented for compatibility with older Bundler versions (< v1.16.0.pre.1).
-      unless gems.any? { |name, spec| name == "bundler" }
-        # Bundler itself wasn't added for some reason, let's put it in directly
-        Ocran.verbose_msg "From Gemfile, forcing inclusion of bundler gem itself"
-        bundler_spec = Gem.loaded_specs["bundler"]
-        bundler_spec or Ocran.fatal_error "Unable to locate bundler gem"
-        gems["bundler"] ||= bundler_spec
-      end
+      # Since Ruby 3.0 and later, the minimum version of Bundler is 2.0.0,
+      # which ensures that Bundler itself will always be included.
     end
 
     if defined?(Gem)
