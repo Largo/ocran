@@ -454,6 +454,10 @@ EOF
     }.flatten!
   end
 
+  def self.main_script
+    Ocran.files.first
+  end
+
   def Ocran.init(argv)
     save_environment
     parseargs(argv)
@@ -866,11 +870,11 @@ EOF
     if Ocran.output_override
       executable = Ocran.output_override
     else
-      executable = Ocran.files.first.basename.sub_ext(".exe")
+      executable = Ocran.main_script.basename.sub_ext(".exe")
       executable = executable.append_to_filename("-debug") if Ocran.debug
     end
 
-    windowed = (Ocran.files.first.ext?(".rbw") || Ocran.force_windows) && !Ocran.force_console
+    windowed = (Ocran.main_script.ext?(".rbw") || Ocran.force_windows) && !Ocran.force_console
 
     Ocran.msg "Building #{executable}"
     target_script = nil
@@ -1017,8 +1021,8 @@ if File.basename(__FILE__) == File.basename($0)
   Ocran.init(ARGV)
   ARGV.replace(Ocran.arg)
 
-  if not Ocran.files.first.exist?
-    Ocran.fatal_error "#{Ocran.files[0]} was not found!"
+  unless Ocran.main_script.exist?
+    Ocran.fatal_error "#{Ocran.main_script} was not found!"
   end
 
   at_exit do
@@ -1030,7 +1034,7 @@ if File.basename(__FILE__) == File.basename($0)
 
   if Ocran.run_script
     Ocran.msg "Loading script to check dependencies"
-    $0 = Ocran.files.first.to_s
-    load Ocran.files.first
+    $0 = Ocran.main_script.to_s
+    load Ocran.main_script
   end
 end
