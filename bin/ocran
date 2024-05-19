@@ -710,6 +710,13 @@ EOF
     return gem_files, features_from_gems
   end
 
+  # For RubyInstaller environments supporting Ruby 2.4 and above,
+  # this method checks for the existence of a required manifest file
+  def self.ruby_builtin_manifest
+    manifest_path = Host.exec_prefix / "bin/ruby_builtin_dlls/ruby_builtin_dlls.manifest"
+    manifest_path.exist? ? manifest_path : nil
+  end
+
   def Ocran.build_exe
     all_load_paths = $LOAD_PATH.map { |loadpath| Pathname(loadpath).expand_path }
     @added_load_paths = ($LOAD_PATH - @load_path_before).map { |loadpath| Pathname(loadpath).expand_path }
@@ -856,15 +863,6 @@ EOF
     # Detect additional DLLs
     dlls = Ocran.autodll ? Ocran.detect_dlls : []
 
-    # Detect external manifests
-    # For RubyInstaller environments supporting Ruby 2.4 and above,
-    # a manifest file is required.
-    if (manifest = Host.exec_prefix / "bin/ruby_builtin_dlls/ruby_builtin_dlls.manifest").exist?
-      manifests = [manifest]
-    else
-      manifests = []
-    end
-
     if Ocran.output_override
       executable = Ocran.output_override
     else
@@ -926,7 +924,7 @@ EOF
       end
 
       # Add external manifest files
-      manifests.each do |manifest|
+      [Ocran.ruby_builtin_manifest].compact.each do |manifest|
         Ocran.msg "Adding external manifest #{manifest}"
         target = manifest.relative_path_from(Host.exec_prefix)
         sb.create_file(manifest, target)
