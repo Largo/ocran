@@ -772,8 +772,7 @@ EOF
           encpath = path / "enc"
           if encpath.exist?
             encfiles = encpath.find_all_files(/\.so$/)
-            size = encfiles.sum(0, &:size)
-            Ocran.msg "Including #{encfiles.size} encoding support files (#{size} bytes, use --no-enc to exclude)"
+            Ocran.msg "Including #{encfiles.size} encoding support files (#{encfiles.sum(0, &:size)} bytes, use --no-enc to exclude)"
             features.push(*encfiles)
           end
         end
@@ -802,8 +801,7 @@ EOF
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| fullpath.subpath?(pth) }
           # Features found in any other Gem path (e.g. ~/.gems) is put
           # in a special 'gemhome' folder.
-          targetpath = GEMHOMEDIR / fullpath.relative_path_from(Pathname(gemhome))
-          libs << [fullpath, targetpath]
+          libs << [fullpath, GEMHOMEDIR / fullpath.relative_path_from(Pathname(gemhome))]
         elsif fullpath.subpath?(src_prefix) || path == working_directory
           # Any feature found inside the src_prefix automatically gets
           # added as a source file (to go in 'src').
@@ -841,8 +839,7 @@ EOF
       if gemfile.subpath?(Host.exec_prefix)
         libs << [gemfile, gemfile.relative_path_from(Host.exec_prefix)]
       elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemfile.subpath?(pth) }
-        targetpath = GEMHOMEDIR / gemfile.relative_path_from(Pathname(gemhome))
-        libs << [gemfile, targetpath]
+        libs << [gemfile, GEMHOMEDIR / gemfile.relative_path_from(Pathname(gemhome))]
       else
         Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
       end
@@ -905,11 +902,7 @@ EOF
       end
 
       # Add the ruby executable and DLL
-      if windowed
-        rubyexe = Host.rubyw_exe
-      else
-        rubyexe = Host.ruby_exe
-      end
+      rubyexe = windowed ? Host.rubyw_exe : Host.ruby_exe
       Ocran.msg "Adding ruby executable #{rubyexe}"
       sb.create_file(Host.bindir / rubyexe, BINDIR / rubyexe)
       if Host.libruby_so
@@ -920,18 +913,16 @@ EOF
       dlls.each do |dll|
         Ocran.msg "Adding detected DLL #{dll}"
         if dll.subpath?(Host.exec_prefix)
-          target = dll.relative_path_from(Host.exec_prefix)
+          sb.create_file(dll, dll.relative_path_from(Host.exec_prefix))
         else
-          target = BINDIR / File.basename(dll)
+          sb.create_file(dll, BINDIR / File.basename(dll))
         end
-        sb.create_file(dll, target)
       end
 
       # Add external manifest files
       [Ocran.ruby_builtin_manifest].compact.each do |manifest|
         Ocran.msg "Adding external manifest #{manifest}"
-        target = manifest.relative_path_from(Host.exec_prefix)
-        sb.create_file(manifest, target)
+        sb.create_file(manifest, manifest.relative_path_from(Host.exec_prefix))
       end
 
       # Add extra DLLs specified on the command line
@@ -941,14 +932,11 @@ EOF
       end
 
       # Add gemspec files
-      @gemspecs = sort_uniq(@gemspecs)
-      @gemspecs.each do |gemspec|
+      sort_uniq(@gemspecs).each do |gemspec|
         if gemspec.subpath?(Host.exec_prefix)
-          path = gemspec.relative_path_from(Host.exec_prefix)
-          sb.create_file(gemspec, path)
+          sb.create_file(gemspec, gemspec.relative_path_from(Host.exec_prefix))
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemspec.subpath?(pth) }
-          path = GEMHOMEDIR / gemspec.relative_path_from(Pathname(gemhome))
-          sb.create_file(gemspec, path)
+          sb.create_file(gemspec, GEMHOMEDIR / gemspec.relative_path_from(Pathname(gemhome)))
         else
           Ocran.fatal_error "Gem spec #{gemspec} does not exist in the Ruby installation. Don't know where to put it."
         end
