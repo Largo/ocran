@@ -660,6 +660,11 @@ EOF
         Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
 
         gem_root = Pathname(spec.gem_dir)
+        unless gem_root.directory?
+          Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
+          next
+        end
+
         gem_extension = (gem_root / ".." / ".." / "extensions").expand_path
         if gem_extension.exist?
           build_complete = gem_extension.find_all_files(/gem.build_complete/).select { |p| p.parent.to_s == spec.full_name }
@@ -668,11 +673,6 @@ EOF
         end
         gem_root_files = nil
         files = []
-
-        unless gem_root.directory?
-          Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
-          next
-        end
 
         # Find the selected files
         include.each do |set|
