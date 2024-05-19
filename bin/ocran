@@ -464,29 +464,24 @@ EOF
   # (and hence classes), and checks their constants for autoloaded
   # ones, then attempts to load them.
   def Ocran.attempt_load_autoload
-    modules_checked = {}
-    IGNORE_MODULES.each { |m| modules_checked[m] = true }
+    checked_modules = IGNORE_MODULES.inject({}) { |h, mod| h[mod] = true; h }
     loop do
-      modules_to_check = []
-      ObjectSpace.each_object(Module) do |mod|
-        modules_to_check << mod unless modules_checked.include?(mod)
-      end
-      break if modules_to_check.empty?
-      modules_to_check.each do |mod|
-        modules_checked[mod] = true
+      modules_count = ObjectSpace.each_object(Module).count do |mod|
+        next if checked_modules.include?(mod)
         mod.constants.each do |const|
-          if mod.autoload?(const)
-            Ocran.msg "Attempting to trigger autoload of #{mod}::#{const}"
-            begin
-              mod.const_get(const)
-            rescue NameError
-              Ocran.warn "#{mod}::#{const} was defined autoloadable, but caused NameError"
-            rescue LoadError
-              Ocran.warn "#{mod}::#{const} was not loadable"
-            end
+          next unless mod.autoload?(const)
+          Ocran.msg "Attempting to trigger autoload of #{mod}::#{const}"
+          begin
+            mod.const_get(const)
+          rescue NameError
+            Ocran.warn "#{mod}::#{const} was defined autoloadable, but caused NameError"
+          rescue LoadError
+            Ocran.warn "#{mod}::#{const} was not loadable"
           end
         end
+        checked_modules[mod] = true
       end
+      break if modules_count == 0
     end
   end
 
