@@ -457,6 +457,16 @@ EOF
     Ocran.files.first
   end
 
+  def self.output_executable
+    if Ocran.output_override
+      Ocran.output_override
+    else
+      executable = Ocran.main_script.basename.sub_ext(".exe")
+      executable = executable.append_to_filename("-debug") if Ocran.debug
+      executable
+    end
+  end
+
   def Ocran.init(argv)
     save_environment
     parseargs(argv)
@@ -863,12 +873,7 @@ EOF
     # Detect additional DLLs
     dlls = Ocran.autodll ? Ocran.detect_dlls : []
 
-    if Ocran.output_override
-      executable = Ocran.output_override
-    else
-      executable = Ocran.main_script.basename.sub_ext(".exe")
-      executable = executable.append_to_filename("-debug") if Ocran.debug
-    end
+    executable = Ocran.output_executable
 
     windowed = (Ocran.main_script.ext?(".rbw") || Ocran.force_windows) && !Ocran.force_console
 
