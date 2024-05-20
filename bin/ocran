@@ -737,10 +737,9 @@ EOF
 
     restore_environment
 
-    # If the script was run, then detect the features it used
-    if Ocran.run_script
-      # Attempt to autoload libraries before doing anything else.
-      attempt_load_autoload if Ocran.load_autoload
+    # If the script was run and autoload is enabled, attempt to autoload libraries.
+    if Ocran.run_script && Ocran.load_autoload
+      attempt_load_autoload
     end
 
     # Store the currently loaded files (before we require rbconfig for
