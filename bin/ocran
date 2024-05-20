@@ -762,17 +762,10 @@ EOF
     end
 
     require "rbconfig"
-    instsitelibdir = Host.sitelibdir.relative_path_from(Host.exec_prefix)
-
-    load_path = []
-    src_load_path = []
 
     # Find gems files and remove them from features
     gem_files, features_from_gems = find_gem_files(features)
     features -= features_from_gems
-
-    # Find the source root and adjust paths
-    src_prefix, src_files = find_src_root(Ocran.files)
 
     # Include encoding support files
     if Ocran.enc
@@ -790,9 +783,14 @@ EOF
       Ocran.msg "Not including encoding support files"
     end
 
+    # Find the source root and adjust paths
+    src_prefix, src_files = find_src_root(Ocran.files)
+
     # Find features and decide where to put them in the temporary
     # directory layout.
     libs = []
+    src_load_path = []
+    instsitelibdir = Host.sitelibdir.relative_path_from(Host.exec_prefix)
     features.each do |feature|
       path = find_load_path(all_load_paths, feature)
       if path.nil? || path.expand_path == Pathname.pwd
@@ -840,7 +838,7 @@ EOF
 
     # Add the load path that are required with the correct path after
     # src_prefix was adjusted.
-    load_path += src_load_path.map { |loadpath| TEMPDIR_ROOT / SRCDIR / loadpath.relative_path_from(src_prefix) }
+    load_path = src_load_path.map { |loadpath| TEMPDIR_ROOT / SRCDIR / loadpath.relative_path_from(src_prefix) }
 
     # Decide where to put gem files, either the system gem folder, or
     # GEMHOME.
