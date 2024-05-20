@@ -25,7 +25,6 @@ module Ocran
       end
     end
 
-    attr_reader :path
     if File::ALT_SEPARATOR.nil?
       File::ALT_SEPARATOR = "\\"
     end
