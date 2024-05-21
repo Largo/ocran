@@ -110,8 +110,11 @@ module Ocran
       File.extname(@path)
     end
 
-    def ext?(expected_ext)
-      Pathname.pathequal(extname, expected_ext)
+    # Checks if the file's extension matches the expected extension.
+    # The comparison is case-insensitive.
+    # Example usage: ocran_pathname.extname?(".exe")
+    def extname?(expected_ext)
+      extname.casecmp(expected_ext) == 0
     end
 
     def entries
@@ -884,7 +887,7 @@ EOF
 
     executable = Ocran.output_executable
 
-    windowed = (Ocran.main_script.ext?(".rbw") || Ocran.force_windows) && !Ocran.force_console
+    windowed = (Ocran.main_script.extname?(".rbw") || Ocran.force_windows) && !Ocran.force_console
 
     Ocran.msg "Building #{executable}"
     target_script = nil
@@ -1013,7 +1016,7 @@ EOF
     loaded = LibraryDetector.loaded_dlls
     exec_prefix = Host.exec_prefix
     loaded.map { |s| Pathname.new(s) }.select do |path|
-      path.subpath?(exec_prefix) && path.basename.ext?(".dll") && path.basename != Host.libruby_so
+      path.subpath?(exec_prefix) && path.extname?(".dll") && path.basename != Host.libruby_so
     end
   end
 end # module Ocran
