@@ -214,12 +214,6 @@ module Ocran
     end
   end
 
-  # Sorts and returns an array without duplicates. Works with complex
-  # objects (such as Pathname), in contrast to Array#uniq.
-  def self.sort_uniq(a)
-    a.sort.inject([]) { |r, e| r.last == e ? r : r << e }
-  end
-
   IGNORE_MODULE_NAMES = /\/(enumerator.so|rational.so|complex.so|fiber.so|thread.rb|ruby2_keywords.rb)$/
 
   GEM_SCRIPT_RE = /\.rbw?$/
@@ -730,7 +724,7 @@ EOF
 
         gem_files += actual_files
       end
-      gem_files = sort_uniq(gem_files)
+      gem_files.uniq!
     else
       gem_files = []
     end
@@ -948,7 +942,7 @@ EOF
       end
 
       # Add gemspec files
-      sort_uniq(@gemspecs).each do |gemspec|
+      @gemspecs.uniq.each do |gemspec|
         if gemspec.subpath?(Host.exec_prefix)
           sb.create_file(gemspec, gemspec.relative_path_from(Host.exec_prefix))
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemspec.subpath?(pth) }
