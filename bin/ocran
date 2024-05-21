@@ -975,7 +975,7 @@ EOF
       rubyopt = rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
 
       sb.setenv("RUBYOPT", rubyopt)
-      sb.setenv("RUBYLIB", load_path.map { |path| path.to_posix }.uniq.join(";"))
+      sb.setenv("RUBYLIB", load_path.uniq.join(";"))
       sb.setenv("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
 
       # Add the opcode to launch the script
