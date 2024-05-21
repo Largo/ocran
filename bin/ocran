@@ -25,10 +25,7 @@ module Ocran
       end
     end
 
-    if File::ALT_SEPARATOR.nil?
-      File::ALT_SEPARATOR = "\\"
-    end
-    SEPARATOR_PAT = /[#{Regexp.quote File::ALT_SEPARATOR}#{Regexp.quote File::SEPARATOR}]/ # }
+    SEPARATOR_PAT = /[#{Regexp.quote File::ALT_SEPARATOR.to_s}#{Regexp.quote File::SEPARATOR}]/
     ABSOLUTE_PAT = /\A([A-Z]:)?#{SEPARATOR_PAT}/i
 
     def initialize(path)
