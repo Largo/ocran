@@ -44,6 +44,20 @@ module Ocran
       @path.tr File::ALT_SEPARATOR, File::SEPARATOR
     end
 
+    # Checks if two Ocran::Pathname objects are equal, considering the file system's
+    # case sensitivity and path separators. Returns false if the other object is not
+    # an Ocran::Pathname.
+    def ==(other)
+      return false unless other.is_a?(Ocran::Pathname)
+
+      a = to_posix
+      b = other.to_posix
+      Pathname.pathequal(a, b)
+    end
+
+    alias === ==
+    alias eql? ==
+
     # Compute the relative path from the 'src' path (directory) to 'tgt'
     # (directory or file). Return the absolute path to 'tgt' if it can't
     # be reached from 'src'.
@@ -124,9 +138,6 @@ module Ocran
       end.flatten
     end
 
-    def ==(other); to_posix.downcase == other.to_posix.downcase; end
-    alias === ==
-    alias eql? ==
     def =~(o); @path =~ o; end
     def <=>(other); @path.casecmp(other.to_s); end
     def exist?; File.exist?(@path); end
