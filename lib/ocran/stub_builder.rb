@@ -108,7 +108,7 @@ module Ocran
       path = Ocran.Pathname(path)
 
       write_opcode(OP_CREATE_DIRECTORY)
-      write_string(path.to_native)
+      write_string(convert_to_native(path))
     end
 
     def create_file(src, tgt)
@@ -125,7 +125,7 @@ module Ocran
       Ocran.verbose_msg "a #{tgt}"
       src = Ocran.Pathname(src)
       write_opcode(OP_CREATE_FILE)
-      write_string(tgt.to_native)
+      write_string(convert_to_native(tgt))
       write_file(src)
     end
 
@@ -145,7 +145,7 @@ module Ocran
 
       Ocran.verbose_msg "p #{image} #{script} #{show_path extra_argc}"
       write_opcode(OP_SET_SCRIPT)
-      write_string_array(image.to_native, script.to_native, *argv)
+      write_string_array(convert_to_native(image), script.to_native, *argv)
     end
 
     def setenv(name, value)
@@ -237,5 +237,10 @@ module Ocran
       @data_size += size
     end
     private :write_file
+
+    def convert_to_native(path)
+      path.to_s.tr(File::SEPARATOR, "\\")
+    end
+    private :convert_to_native
   end
 end
