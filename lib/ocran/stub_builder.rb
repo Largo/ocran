@@ -151,8 +151,8 @@ module Ocran
     def setenv(name, value)
       Ocran.verbose_msg "e #{name} #{show_path value}"
       write_opcode(OP_SETENV)
-      write_string(name)
-      write_string(value)
+      write_string(name.to_s)
+      write_string(value.to_s)
     end
 
     def close

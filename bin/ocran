@@ -35,10 +35,6 @@ module Ocran
       @path = path.encode("UTF-8")
     end
 
-    def to_native
-      @path.tr File::SEPARATOR, File::ALT_SEPARATOR
-    end
-
     def to_posix
       @path.tr File::ALT_SEPARATOR, File::SEPARATOR
     end
@@ -966,8 +962,8 @@ EOF
       rubyopt = rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
 
       sb.setenv("RUBYOPT", rubyopt)
-      sb.setenv("RUBYLIB", load_path.map { |path| path.to_native }.uniq.join(";"))
-      sb.setenv("GEM_PATH", (TEMPDIR_ROOT / GEMHOMEDIR).to_native)
+      sb.setenv("RUBYLIB", load_path.map { |path| path.to_posix }.uniq.join(";"))
+      sb.setenv("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / rubyexe
