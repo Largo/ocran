@@ -141,7 +141,7 @@ module Ocran
       end.flatten
     end
 
-    def <=>(other); @path.casecmp(other.to_s); end
+    def <=>(other); raise; end
     def exist?; File.exist?(@path); end
     def file?; File.file?(@path); end
     def directory?; File.directory?(@path); end
