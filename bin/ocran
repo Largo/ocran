@@ -423,19 +423,13 @@ EOF
         puts usage
         exit 0
       else
-        if !File.exist?(arg) || (File.directory?(arg) && Dir.empty?(arg))
-          Ocran.fatal_error "#{arg} not found!"
+        path = arg.dup
+
+        if !File.exist?(path) || Dir.empty?(path)
+          Ocran.fatal_error "#{path} not found!"
         end
 
-        # Convert the path to an absolute path here because the working
-        # directory may change when the script is executed.
-        path = File.expand_path(arg.tr("\\", "/"))
-        if File.directory?(path)
-          # If a directory is passed, we want all files under that directory
-          Pathname.glob("#{path}/**/*") { |pth| @options[:files] << pth }
-        else
-          @options[:files] << Pathname.new(path)
-        end
+        @options[:files] << path
       end
     end
 
@@ -455,6 +449,15 @@ EOF
       puts usage
       exit 1
     end
+
+    @options[:files].map! { |path|
+      path = path.encode("UTF-8").tr("\\", "/")
+      if File.directory?(path)
+        # If a directory is passed, we want all files under that directory
+        path = "#{path}/**/*"
+      end
+      Pathname.glob(path).map!(&:expand_path)
+    }.flatten!
   end
 
   def self.main_script
