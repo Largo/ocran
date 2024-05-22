@@ -126,13 +126,13 @@ module Ocran
     def find_all_files(re = //)
       entries.map do |pn|
         if pn.directory?
-          if pn.basename =~ /^\.\.?$/
+          if pn.basename.to_posix =~ /^\.\.?$/
             []
           else
             pn.find_all_files(re)
           end
         elsif pn.file?
-          if pn.basename =~ re
+          if pn.basename.to_posix =~ re
             pn
           else
             []
@@ -141,7 +141,6 @@ module Ocran
       end.flatten
     end
 
-    def =~(o); @path =~ o; end
     def <=>(other); @path.casecmp(other.to_s); end
     def exist?; File.exist?(@path); end
     def file?; File.file?(@path); end
@@ -539,7 +538,7 @@ EOF
           if relpath.absolute?
             Ocran.fatal_error "No common directory contains all specified files"
           end
-          if relpath.to_s =~ /^\.\.\//
+          if relpath.to_posix =~ /^\.\.\//
             srcroot = srcroot.dirname
           else
             break
@@ -701,14 +700,14 @@ EOF
             files << features_from_gems.select { |feature| feature.subpath?(gem_root) }
           when :files
             gem_root_files ||= gem_root.find_all_files
-            files << gem_root_files.select { |path| path.relative_path_from(gem_root) !~ GEM_NON_FILE_RE }
+            files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix !~ GEM_NON_FILE_RE }
             files << build_complete if build_complete
           when :extras
             gem_root_files ||= gem_root.find_all_files
-            files << gem_root_files.select { |path| path.relative_path_from(gem_root) =~ GEM_EXTRA_RE }
+            files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix =~ GEM_EXTRA_RE }
           when :scripts
             gem_root_files ||= gem_root.find_all_files
-            files << gem_root_files.select { |path| path.relative_path_from(gem_root) =~ GEM_SCRIPT_RE }
+            files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix =~ GEM_SCRIPT_RE }
           end
         end
 
@@ -904,7 +903,7 @@ EOF
           sb.mkdir(target)
         elsif file.exist?
           sb.create_file(file, target)
-        elsif file =~ IGNORE_MODULE_NAMES
+        elsif file.to_posix =~ IGNORE_MODULE_NAMES
           next
         else
           Ocran.fatal_error "The file does not exist (#{file})"
