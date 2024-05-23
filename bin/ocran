@@ -423,13 +423,11 @@ EOF
         puts usage
         exit 0
       else
-        path = arg.dup
-
-        if !File.exist?(path) || Dir.empty?(path)
-          Ocran.fatal_error "#{path} not found!"
+        if !File.exist?(arg) || Dir.empty?(arg)
+          Ocran.fatal_error "#{arg} not found!"
         end
 
-        @options[:files] << path
+        @options[:files] << arg
       end
     end
 
