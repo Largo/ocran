@@ -162,9 +162,9 @@ module Ocran
       Pathname.new(File.basename(File.dirname(@path)))
     end
 
-    alias to_path to_posix
+    def to_path; @path; end
 
-    alias to_s to_posix
+    def to_s; @path; end
   end
 
   # Type conversion for the Pathname class. Works with Pathname and String only.
