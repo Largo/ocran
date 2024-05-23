@@ -449,7 +449,6 @@ EOF
     end
 
     @options[:files].map! { |path|
-      path = path.tr("\\", "/")
       if File.directory?(path)
         # If a directory is passed, we want all files under that directory
         path = "#{path}/**/*"
