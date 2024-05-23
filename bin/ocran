@@ -8,7 +8,7 @@ module Ocran
   # separators.
   class Pathname
     def Pathname.pwd
-      Pathname.new(Dir.pwd.encode("UTF-8"))
+      Pathname.new(Dir.pwd)
     end
 
     # Compares two paths for equality based on the case sensitivity of the
@@ -37,7 +37,7 @@ module Ocran
     ABSOLUTE_PAT = /\A([A-Z]:)?#{SEPARATOR_PAT}/i
 
     def initialize(path)
-      @path = path.encode("UTF-8")
+      @path = path
     end
 
     def to_posix
@@ -118,7 +118,7 @@ module Ocran
     end
 
     def entries
-      Dir.entries(@path, encoding: "UTF-8").map { |e| self / e }
+      Dir.entries(@path).map { |e| self / e }
     end
 
     # Recursively find all files which match a specified regular
