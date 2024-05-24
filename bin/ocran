@@ -94,8 +94,20 @@ module Ocran
       end
     end
 
-    def append_to_filename(s)
-      sub(/(\.[^.]*?|)$/) { |m| s.to_s + m }
+    # Appends the given suffix to the filename, preserving the file extension.
+    # If the filename has an extension, the suffix is inserted before the extension.
+    # If the filename does not have an extension, the suffix is appended to the end.
+    # This method handles both directory and file paths correctly.
+    #
+    # Examples:
+    #   pathname = Pathname("path.to/foo.tar.gz")
+    #   pathname.append_to_filename("_bar") # => #<Pathname:path.to/foo_bar.tar.gz>
+    #
+    #   pathname = Pathname("path.to/foo")
+    #   pathname.append_to_filename("_bar") # => #<Pathname:path.to/foo_bar>
+    #
+    def append_to_filename(suffix)
+      sub(/(.*?#{SEPARATOR_PAT})?(\.?[^.]+)?(\..*)?\z/, "\\1\\2#{suffix}\\3")
     end
 
     def sub(*a, &b)
