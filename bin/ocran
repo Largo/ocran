@@ -11,18 +11,6 @@ module Ocran
       Pathname.new(Dir.pwd)
     end
 
-    # Compares two paths for equality based on the case sensitivity of the
-    # Ruby execution environment's file system.
-    # If the file system is case-insensitive, it performs a case-insensitive
-    # comparison. Otherwise, it performs a case-sensitive comparison.
-    def Pathname.pathequal(a, b)
-      if File::FNM_SYSCASE.nonzero?
-        a.casecmp(b) == 0
-      else
-        a == b
-      end
-    end
-
     def Pathname.glob(pattern, flags = 0)
       if block_given?
         Dir.glob(pattern, flags) { |s| yield Pathname.new(s) }
@@ -40,6 +28,19 @@ module Ocran
       @path = path
     end
 
+    # Compares two paths for equality based on the case sensitivity of the
+    # Ruby execution environment's file system.
+    # If the file system is case-insensitive, it performs a case-insensitive
+    # comparison. Otherwise, it performs a case-sensitive comparison.
+    def pathequal(a, b)
+      if File::FNM_SYSCASE.nonzero?
+        a.casecmp(b) == 0
+      else
+        a == b
+      end
+    end
+    private :pathequal
+
     def to_posix
       @path.tr File::ALT_SEPARATOR, File::SEPARATOR
     end
@@ -52,7 +53,7 @@ module Ocran
 
       a = to_posix
       b = other.to_posix
-      Pathname.pathequal(a, b)
+      pathequal(a, b)
     end
 
     alias === ==
@@ -64,7 +65,7 @@ module Ocran
     def relative_path_from(other)
       a = @path.split(SEPARATOR_PAT)
       b = other.to_s.split(SEPARATOR_PAT)
-      while a.first && b.first && Pathname.pathequal(a.first, b.first)
+      while a.first && b.first && pathequal(a.first, b.first)
         a.shift
         b.shift
       end
