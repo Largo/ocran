@@ -192,39 +192,6 @@ module Ocran
     end
   end
 
-  # Variables describing the host's build environment.
-  module Host
-    class << self
-      def exec_prefix
-        @exec_prefix ||= Ocran.Pathname(RbConfig::CONFIG["exec_prefix"])
-      end
-
-      def sitelibdir
-        @sitelibdir ||= Ocran.Pathname(RbConfig::CONFIG["sitelibdir"])
-      end
-
-      def bindir
-        @bindir ||= Ocran.Pathname(RbConfig::CONFIG["bindir"])
-      end
-
-      def libruby_so
-        @libruby_so ||= Ocran.Pathname(RbConfig::CONFIG["LIBRUBY_SO"])
-      end
-
-      def exeext
-        RbConfig::CONFIG["EXEEXT"] || ".exe"
-      end
-
-      def rubyw_exe
-        @rubyw_exe ||= (RbConfig::CONFIG["rubyw_install_name"] || "rubyw") + exeext
-      end
-
-      def ruby_exe
-        @ruby_exe ||= (RbConfig::CONFIG["ruby_install_name"] || "ruby") + exeext
-      end
-    end
-  end
-
   IGNORE_MODULE_NAMES = /\/(enumerator.so|rational.so|complex.so|fiber.so|thread.rb|ruby2_keywords.rb)$/
 
   GEM_SCRIPT_RE = /\.rbw?$/
@@ -537,7 +504,7 @@ EOF
   def Ocran.find_src_root(files)
     src_files = files.map { |file| file.expand_path }
     src_prefix = src_files.inject(src_files.first.dirname) do |srcroot, path|
-      if path.subpath?(Host.exec_prefix)
+      if path.subpath?(exec_prefix)
         srcroot
       else
         loop do
@@ -741,7 +708,7 @@ EOF
   # For RubyInstaller environments supporting Ruby 2.4 and above,
   # this method checks for the existence of a required manifest file
   def self.ruby_builtin_manifest
-    manifest_path = Host.exec_prefix / "bin/ruby_builtin_dlls/ruby_builtin_dlls.manifest"
+    manifest_path = exec_prefix / "bin/ruby_builtin_dlls/ruby_builtin_dlls.manifest"
     manifest_path.exist? ? manifest_path : nil
   end
 
@@ -775,7 +742,8 @@ EOF
       @gemspecs = []
     end
 
-    require "rbconfig"
+    require_relative "../lib/ocran/host_config_helper"
+    Ocran.extend HostConfigHelper
 
     # Find gems files and remove them from features
     gem_files, features_from_gems = find_gem_files(features)
@@ -784,7 +752,7 @@ EOF
     # Include encoding support files
     if Ocran.enc
       all_load_paths.each do |path|
-        if path.subpath?(Host.exec_prefix)
+        if path.subpath?(exec_prefix)
           encpath = path / "enc"
           if encpath.exist?
             encfiles = encpath.find_all_files(/\.so$/)
@@ -804,7 +772,7 @@ EOF
     # directory layout.
     libs = []
     src_load_path = []
-    instsitelibdir = Host.sitelibdir.relative_path_from(Host.exec_prefix)
+    instsitelibdir = sitelibdir.relative_path_from(exec_prefix)
     features.each do |feature|
       path = find_load_path(all_load_paths, feature)
       if path.nil? || path.expand_path == Pathname.pwd
@@ -815,10 +783,10 @@ EOF
         end
         fullpath = feature.expand_path(path)
 
-        if fullpath.subpath?(Host.exec_prefix)
+        if fullpath.subpath?(exec_prefix)
           # Features found in the Ruby installation are put in the
           # temporary Ruby installation.
-          libs << [fullpath, fullpath.relative_path_from(Host.exec_prefix)]
+          libs << [fullpath, fullpath.relative_path_from(exec_prefix)]
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| fullpath.subpath?(pth) }
           # Features found in any other Gem path (e.g. ~/.gems) is put
           # in a special 'gemhome' folder.
@@ -857,8 +825,8 @@ EOF
     # Decide where to put gem files, either the system gem folder, or
     # GEMHOME.
     gem_files.each do |gemfile|
-      if gemfile.subpath?(Host.exec_prefix)
-        libs << [gemfile, gemfile.relative_path_from(Host.exec_prefix)]
+      if gemfile.subpath?(exec_prefix)
+        libs << [gemfile, gemfile.relative_path_from(exec_prefix)]
       elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemfile.subpath?(pth) }
         libs << [gemfile, GEMHOMEDIR / gemfile.relative_path_from(Pathname(gemhome))]
       else
@@ -896,8 +864,8 @@ EOF
       Ocran.msg "Adding user-supplied source files"
       Ocran.files.each do |file|
         file = src_prefix / file
-        if file.subpath?(Host.exec_prefix)
-          target = file.relative_path_from(Host.exec_prefix)
+        if file.subpath?(exec_prefix)
+          target = file.relative_path_from(exec_prefix)
         elsif file.subpath?(src_prefix)
           target = SRCDIR / file.relative_path_from(src_prefix)
         else
@@ -918,18 +886,18 @@ EOF
       end
 
       # Add the ruby executable and DLL
-      rubyexe = windowed ? Host.rubyw_exe : Host.ruby_exe
+      rubyexe = windowed ? rubyw_exe : ruby_exe
       Ocran.msg "Adding ruby executable #{rubyexe}"
-      sb.create_file(Host.bindir / rubyexe, BINDIR / rubyexe)
-      if Host.libruby_so
-        sb.create_file(Host.bindir / Host.libruby_so, BINDIR / Host.libruby_so)
+      sb.create_file(bindir / rubyexe, BINDIR / rubyexe)
+      if libruby_so
+        sb.create_file(bindir / libruby_so, BINDIR / libruby_so)
       end
 
       # Add detected DLLs
       dlls.each do |dll|
         Ocran.msg "Adding detected DLL #{dll}"
-        if dll.subpath?(Host.exec_prefix)
-          sb.create_file(dll, dll.relative_path_from(Host.exec_prefix))
+        if dll.subpath?(exec_prefix)
+          sb.create_file(dll, dll.relative_path_from(exec_prefix))
         else
           sb.create_file(dll, BINDIR / File.basename(dll))
         end
@@ -938,19 +906,19 @@ EOF
       # Add external manifest files
       [Ocran.ruby_builtin_manifest].compact.each do |manifest|
         Ocran.msg "Adding external manifest #{manifest}"
-        sb.create_file(manifest, manifest.relative_path_from(Host.exec_prefix))
+        sb.create_file(manifest, manifest.relative_path_from(exec_prefix))
       end
 
       # Add extra DLLs specified on the command line
       Ocran.extra_dlls.each do |dll|
         Ocran.msg "Adding supplied DLL #{dll}"
-        sb.create_file(Host.bindir / dll, BINDIR / dll)
+        sb.create_file(bindir / dll, BINDIR / dll)
       end
 
       # Add gemspec files
       @gemspecs.uniq.each do |gemspec|
-        if gemspec.subpath?(Host.exec_prefix)
-          sb.create_file(gemspec, gemspec.relative_path_from(Host.exec_prefix))
+        if gemspec.subpath?(exec_prefix)
+          sb.create_file(gemspec, gemspec.relative_path_from(exec_prefix))
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemspec.subpath?(pth) }
           sb.create_file(gemspec, GEMHOMEDIR / gemspec.relative_path_from(Pathname(gemhome)))
         else
@@ -1014,9 +982,8 @@ EOF
   def self.detect_dlls
     require_relative "../lib/ocran/library_detector"
     loaded = LibraryDetector.loaded_dlls
-    exec_prefix = Host.exec_prefix
     loaded.map { |s| Pathname.new(s) }.select do |path|
-      path.subpath?(exec_prefix) && path.extname?(".dll") && path.basename != Host.libruby_so
+      path.subpath?(exec_prefix) && path.extname?(".dll") && path.basename != libruby_so
     end
   end
 end # module Ocran
