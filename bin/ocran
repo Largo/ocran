@@ -130,28 +130,12 @@ module Ocran
       extname.casecmp(expected_ext) == 0
     end
 
-    def entries
-      Dir.entries(@path).map { |e| self / e }
-    end
-
     # Recursively find all files which match a specified regular
     # expression.
     def find_all_files(re = //)
-      entries.map do |pn|
-        if pn.directory?
-          if pn.basename.to_posix =~ /^\.\.?$/
-            []
-          else
-            pn.find_all_files(re)
-          end
-        elsif pn.file?
-          if pn.basename.to_posix =~ re
-            pn
-          else
-            []
-          end
-        end
-      end.flatten
+      require "find"
+      find = Find.find(@path, ignore_error: true).map{ |path| Pathname.new(path) }
+      find.select { |pn| pn.file? && pn.basename.to_s =~ re }
     end
 
     def exist?; File.exist?(@path); end
