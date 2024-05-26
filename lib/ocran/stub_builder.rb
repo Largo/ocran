@@ -52,13 +52,13 @@ module Ocran
       @paths = {}
       @files = {}
 
-      begin
-        image = Ocran.Pathname(gui_mode ? STUBW_PATH : STUB_PATH).binread
-      rescue
+      stub_path = Pathname.new(gui_mode ? STUBW_PATH : STUB_PATH)
+
+      unless stub_path.exist?
         Ocran.fatal_error "Stub image not available"
-      else
-        File.binwrite(path, image)
       end
+
+      File.binwrite(path, stub_path.binread)
 
       begin
         if icon_path
