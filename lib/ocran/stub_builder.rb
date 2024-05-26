@@ -105,7 +105,6 @@ module Ocran
 
       @paths[key] = path
       Ocran.verbose_msg "m #{path}"
-      path = Ocran.Pathname(path)
 
       write_opcode(OP_CREATE_DIRECTORY)
       write_string(convert_to_native(path))
@@ -120,10 +119,8 @@ module Ocran
       return if @files[key]
 
       @files[key] = [tgt, src]
-      tgt = Ocran.Pathname(tgt)
 
       Ocran.verbose_msg "a #{tgt}"
-      src = Ocran.Pathname(src)
       write_opcode(OP_CREATE_FILE)
       write_string(convert_to_native(tgt))
       write_file(src)
