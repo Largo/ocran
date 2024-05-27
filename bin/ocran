@@ -42,7 +42,11 @@ module Ocran
     private :pathequal
 
     def to_posix
-      @path.tr File::ALT_SEPARATOR, File::SEPARATOR
+      if File::ALT_SEPARATOR
+        to_s.tr(File::ALT_SEPARATOR, File::SEPARATOR)
+      else
+        to_s
+      end
     end
 
     # Checks if two Ocran::Pathname objects are equal, considering the file system's
