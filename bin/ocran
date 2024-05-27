@@ -648,7 +648,7 @@ EOF
 
         gem_extension = (gem_root / ".." / ".." / "extensions").expand_path
         if gem_extension.exist?
-          build_complete = gem_extension.find_all_files(/gem.build_complete/).select { |p| p.parent == Pathname(spec.full_name) }
+          build_complete = gem_extension.find_all_files(/gem.build_complete/).select { |p| p.dirname.basename.to_s == spec.full_name }
         else
           build_complete = nil
         end
