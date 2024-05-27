@@ -136,12 +136,13 @@ module Ocran
       extname.casecmp(expected_ext) == 0
     end
 
-    # Recursively find all files which match a specified regular
-    # expression.
-    def find_all_files(re = //)
+    def find(ignore_error: true)
       require "find"
-      find = Find.find(@path, ignore_error: true).map{ |path| Pathname.new(path) }
-      find.select { |pn| pn.file? && pn.basename.to_s =~ re }
+      if block_given?
+        Find.find(@path, ignore_error: ignore_error) { |path| yield Pathname.new(path) }
+      else
+        Find.find(@path, ignore_error: ignore_error).map{ |path| Pathname.new(path) }.to_enum
+      end
     end
 
     def exist?; File.exist?(@path); end
@@ -648,7 +649,7 @@ EOF
 
         gem_extension = (gem_root / ".." / ".." / "extensions").expand_path
         if gem_extension.exist?
-          build_complete = gem_extension.find_all_files(/gem.build_complete/).select { |p| p.dirname.basename.to_s == spec.full_name }
+          build_complete = gem_extension.find.select { |pn| pn.file? && pn.basename.to_s == "gem.build_complete" && pn.dirname.basename.to_s == spec.full_name }
         else
           build_complete = nil
         end
@@ -663,14 +664,14 @@ EOF
           when :loaded
             files << features_from_gems.select { |feature| feature.subpath?(gem_root) }
           when :files
-            gem_root_files ||= gem_root.find_all_files
+            gem_root_files ||= gem_root.find.select(&:file?)
             files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix !~ GEM_NON_FILE_RE }
             files << build_complete if build_complete
           when :extras
-            gem_root_files ||= gem_root.find_all_files
+            gem_root_files ||= gem_root.find.select(&:file?)
             files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix =~ GEM_EXTRA_RE }
           when :scripts
-            gem_root_files ||= gem_root.find_all_files
+            gem_root_files ||= gem_root.find.select(&:file?)
             files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix =~ GEM_SCRIPT_RE }
           end
         end
@@ -745,7 +746,7 @@ EOF
         if path.subpath?(exec_prefix)
           encpath = path / "enc"
           if encpath.exist?
-            encfiles = encpath.find_all_files(/\.so$/)
+            encfiles = encpath.find.select { |pn| pn.file? && pn.extname?(".so") }
             Ocran.msg "Including #{encfiles.size} encoding support files (#{encfiles.sum(0, &:size)} bytes, use --no-enc to exclude)"
             features.push(*encfiles)
           end
