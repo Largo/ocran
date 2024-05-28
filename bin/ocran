@@ -833,7 +833,7 @@ EOF
         subdir = $1
         Pathname.glob("#{lp}/**/*").each do |fpath|
           next if fpath.directory?
-          tgt = "lib/#{subdir}/#{fpath.relative_path_from(path).to_posix}"
+          tgt = "lib/#{subdir}/#{fpath.relative_path_from(path)}"
           libs << [fpath, tgt]
         end
       end
