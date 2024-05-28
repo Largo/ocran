@@ -78,15 +78,13 @@ module Ocran
       Pathname.new(File.join(*a))
     end
 
-    # Checks if the current path is a subpath of the specified base_directory.
-    # Both paths must be either absolute paths or relative paths; otherwise, this
-    # method returns false.
-    def subpath?(base_directory)
-      relative_path = relative_path_from(base_directory)
-      s = relative_path.to_s
-      s != '.' && s !~ /\A\.\.#{Pathname::SEPARATOR_PAT}/
-    rescue ArgumentError
-      false
+    # Determines if 'src' is contained in 'tgt' (i.e. it is a subpath of
+    # 'tgt'). Both must be absolute paths and not contain '..'
+    def subpath?(other)
+      other = Pathname === other ? other : Pathname.new(other)
+      src_normalized = to_posix.downcase
+      tgt_normalized = other.to_posix.downcase
+      src_normalized =~ /^#{Regexp.escape tgt_normalized}#{SEPARATOR_PAT}/i
     end
 
     # Join two pathnames together. Returns the right-hand side if it
