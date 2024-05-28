@@ -181,7 +181,7 @@ module Ocran
     end
   end
 
-  IGNORE_MODULE_NAMES = /\/(enumerator.so|rational.so|complex.so|fiber.so|thread.rb|ruby2_keywords.rb)$/
+  IGNORE_MODULE_NAMES = /\A(enumerator.so|rational.so|complex.so|fiber.so|thread.rb|ruby2_keywords.rb)\z/
 
   GEM_SCRIPT_RE = /\.rbw?$/
   GEM_EXTRA_RE = %r{(
@@ -867,7 +867,7 @@ EOF
           sb.mkdir(target)
         elsif file.exist?
           sb.create_file(file, target)
-        elsif file.to_posix =~ IGNORE_MODULE_NAMES
+        elsif file.basename.to_s =~ IGNORE_MODULE_NAMES
           next
         else
           Ocran.fatal_error "The file does not exist (#{file})"
