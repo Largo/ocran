@@ -49,19 +49,20 @@ module Ocran
       end
     end
 
-    # Checks if two Ocran::Pathname objects are equal, considering the file system's
+    # Checks if two Pathname objects are equal, considering the file system's
     # case sensitivity and path separators. Returns false if the other object is not
-    # an Ocran::Pathname.
-    def ==(other)
-      return false unless other.is_a?(Ocran::Pathname)
+    # an Pathname.
+    # This method enables the use of the `uniq` method on arrays of Pathname objects.
+    def eql?(other)
+      return false unless other.is_a?(Pathname)
 
       a = to_posix
       b = other.to_posix
       pathequal(a, b)
     end
 
-    alias === ==
-    alias eql? ==
+    alias == eql?
+    alias === eql?
 
     # The drive_letter? method retrieves the drive letter from the current path
     # in a Windows environment. This method returns the drive letter as a string
