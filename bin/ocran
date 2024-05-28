@@ -80,11 +80,11 @@ module Ocran
 
     # Determines if 'src' is contained in 'tgt' (i.e. it is a subpath of
     # 'tgt'). Both must be absolute paths and not contain '..'
-    def subpath?(other)
-      other = Pathname === other ? other : Pathname.new(other)
-      src_normalized = to_posix.downcase
-      tgt_normalized = other.to_posix.downcase
-      src_normalized =~ /^#{Regexp.escape tgt_normalized}#{SEPARATOR_PAT}/i
+    def subpath?(base_directory)
+      base_directory = Pathname.new(base_directory) unless base_directory.is_a?(Pathname)
+      src_normalized = to_posix
+      tgt_normalized = base_directory.to_posix
+      src_normalized =~ /^#{Regexp.escape tgt_normalized}#{Pathname::SEPARATOR_PAT}/i
     end
 
     # Join two pathnames together. Returns the right-hand side if it
