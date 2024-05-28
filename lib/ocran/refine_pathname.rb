@@ -43,34 +43,15 @@ module Ocran
       alias == eql?
       alias === eql?
 
-      # Compute the relative path from the 'src' path (directory) to 'tgt'
-      # (directory or file). Return the absolute path to 'tgt' if it can't
-      # be reached from 'src'.
-      def relative_path_from(other)
-        a = to_s.split(Pathname::SEPARATOR_PAT)
-        b = other.to_s.split(Pathname::SEPARATOR_PAT)
-        while a.first && b.first && pathequal(a.first, b.first)
-          a.shift
-          b.shift
-        end
-        return other if b.first && Pathname.new(b.first).absolute?
-        b.size.times { a.unshift ".." }
-        Pathname.new(File.join(*a))
-      end
-
       # Checks if the current path is a subpath of the specified base_directory.
       # Both paths must be either absolute paths or relative paths; otherwise, this
       # method returns false.
       def subpath?(base_directory)
-        base_directory = Pathname.new(base_directory) unless base_directory.is_a?(Pathname)
-        src_normalized = to_posix
-        tgt_normalized = base_directory.to_posix
-        src_normalized =~ /^#{Regexp.escape tgt_normalized}#{Pathname::SEPARATOR_PAT}/i
-      #   relative_path = relative_path_from(base_directory)
-      #   s = relative_path.to_s
-      #   s != '.' && s !~ /\A\.\.#{Pathname::SEPARATOR_PAT}/
-      # rescue ArgumentError
-      #   false
+        relative_path = relative_path_from(base_directory)
+        s = relative_path.to_s
+        s != '.' && s !~ /\A\.\.#{Pathname::SEPARATOR_PAT}/
+      rescue ArgumentError
+        false
       end
 
       # Appends the given suffix to the filename, preserving the file extension.
