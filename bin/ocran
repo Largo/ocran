@@ -63,17 +63,35 @@ module Ocran
     alias === ==
     alias eql? ==
 
+    # The drive_letter? method retrieves the drive letter from the current path
+    # in a Windows environment. This method returns the drive letter as a string
+    # only if File::ALT_SEPARATOR is present and the path is absolute.
+    # It returns nil if the path is not absolute, the environment is not Windows,
+    # or there is no drive letter present.
+    def drive_letter?
+      if File::ALT_SEPARATOR && absolute?
+        to_s[0, 2]
+      else
+        nil
+      end
+    end
+
     # Compute the relative path from the 'src' path (directory) to 'tgt'
     # (directory or file). Return the absolute path to 'tgt' if it can't
     # be reached from 'src'.
     def relative_path_from(other)
-      a = @path.split(SEPARATOR_PAT)
-      b = other.to_s.split(SEPARATOR_PAT)
+      other = Pathname.new(other) unless other.is_a?(Pathname)
+      return other if drive_letter?&.casecmp(other.drive_letter?) != 0
+
+      if absolute? != other.absolute?
+        raise ArgumentError, "both paths must be either absolute or relative"
+      end
+      a = to_s.split(Pathname::SEPARATOR_PAT)
+      b = other.to_s.split(Pathname::SEPARATOR_PAT)
       while a.first && b.first && pathequal(a.first, b.first)
         a.shift
         b.shift
       end
-      return other if b.first && Pathname.new(b.first).absolute?
       b.size.times { a.unshift ".." }
       Pathname.new(File.join(*a))
     end
