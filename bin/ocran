@@ -82,7 +82,6 @@ module Ocran
     # be reached from 'src'.
     def relative_path_from(other)
       other = Pathname.new(other) unless other.is_a?(Pathname)
-      return other if drive_letter?&.casecmp(other.drive_letter?) != 0
 
       if absolute? != other.absolute?
         raise ArgumentError, "both paths must be either absolute or relative"
