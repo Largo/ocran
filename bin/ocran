@@ -1,33 +1,12 @@
 #!/usr/bin/env ruby
 # -*- ruby -*-
 # encoding: UTF-8
+require "pathname"
 
 module Ocran
-  # Path handling class. Ruby's Pathname class is not used because it
-  # is case sensitive and doesn't handle paths with mixed path
-  # separators.
-  class Pathname
-    def Pathname.pwd
-      Pathname.new(Dir.pwd)
-    end
-
-    def Pathname.glob(pattern, flags = 0)
-      if block_given?
-        Dir.glob(pattern, flags) { |s| yield Pathname.new(s) }
-      else
-        ary = Dir.glob(pattern, flags)
-        ary.map! { |s| Pathname.new(s) }
-        ary
-      end
-    end
-
-    SEPARATOR_PAT = /[#{Regexp.quote File::ALT_SEPARATOR.to_s}#{Regexp.quote File::SEPARATOR}]/
-    ABSOLUTE_PAT = /\A([A-Z]:)?#{SEPARATOR_PAT}/i
-
-    def initialize(path)
-      @path = path
-    end
-
+  # The Pathname class in Ruby is modified to handle mixed path separators and
+  # to be case-insensitive.
+  module RefinePathname
     # Compares two paths for equality based on the case sensitivity of the
     # Ruby execution environment's file system.
     # If the file system is case-insensitive, it performs a case-insensitive
@@ -64,38 +43,6 @@ module Ocran
     alias == eql?
     alias === eql?
 
-    # The drive_letter? method retrieves the drive letter from the current path
-    # in a Windows environment. This method returns the drive letter as a string
-    # only if File::ALT_SEPARATOR is present and the path is absolute.
-    # It returns nil if the path is not absolute, the environment is not Windows,
-    # or there is no drive letter present.
-    def drive_letter?
-      if File::ALT_SEPARATOR && absolute?
-        to_s[0, 2]
-      else
-        nil
-      end
-    end
-
-    # Compute the relative path from the 'src' path (directory) to 'tgt'
-    # (directory or file). Return the absolute path to 'tgt' if it can't
-    # be reached from 'src'.
-    def relative_path_from(other)
-      other = Pathname.new(other) unless other.is_a?(Pathname)
-
-      if absolute? != other.absolute?
-        raise ArgumentError, "both paths must be either absolute or relative"
-      end
-      a = to_s.split(Pathname::SEPARATOR_PAT)
-      b = other.to_s.split(Pathname::SEPARATOR_PAT)
-      while a.first && b.first && pathequal(a.first, b.first)
-        a.shift
-        b.shift
-      end
-      b.size.times { a.unshift ".." }
-      Pathname.new(File.join(*a))
-    end
-
     # Determines if 'src' is contained in 'tgt' (i.e. it is a subpath of
     # 'tgt'). Both must be absolute paths and not contain '..'
     def subpath?(base_directory)
@@ -103,18 +50,6 @@ module Ocran
       src_normalized = to_posix
       tgt_normalized = base_directory.to_posix
       src_normalized =~ /^#{Regexp.escape tgt_normalized}#{Pathname::SEPARATOR_PAT}/i
-    end
-
-    # Join two pathnames together. Returns the right-hand side if it
-    # is an absolute path. Otherwise, returns the full path of the
-    # left + right.
-    def /(other)
-      other = Pathname === other ? other : Pathname.new(other)
-      if other.absolute?
-        other
-      else
-        Pathname.new(File.join(@path, other.to_s))
-      end
     end
 
     # Appends the given suffix to the filename, preserving the file extension.
@@ -130,19 +65,7 @@ module Ocran
     #   pathname.append_to_filename("_bar") # => #<Pathname:path.to/foo_bar>
     #
     def append_to_filename(suffix)
-      sub(/(.*?#{SEPARATOR_PAT})?(\.?[^.]+)?(\..*)?\z/, "\\1\\2#{suffix}\\3")
-    end
-
-    def sub(*a, &b)
-      Pathname.new(@path.sub(*a, &b))
-    end
-
-    def sub_ext(new_ext)
-      sub(/(\.[^.]*?)?$/, new_ext)
-    end
-
-    def extname
-      File.extname(@path)
+      sub(/(.*?#{Pathname::SEPARATOR_PAT})?(\.?[^.]+)?(\..*)?\z/, "\\1\\2#{suffix}\\3")
     end
 
     # Checks if the file's extension matches the expected extension.
@@ -150,52 +73,6 @@ module Ocran
     # Example usage: ocran_pathname.extname?(".exe")
     def extname?(expected_ext)
       extname.casecmp(expected_ext) == 0
-    end
-
-    def find(ignore_error: true)
-      require "find"
-      if block_given?
-        Find.find(@path, ignore_error: ignore_error) { |path| yield Pathname.new(path) }
-      else
-        Find.find(@path, ignore_error: ignore_error).map{ |path| Pathname.new(path) }.to_enum
-      end
-    end
-
-    def exist?; File.exist?(@path); end
-    def file?; File.file?(@path); end
-    def directory?; File.directory?(@path); end
-    def absolute?; @path =~ ABSOLUTE_PAT; end
-    def dirname; Pathname.new(File.dirname(@path)); end
-    def basename; Pathname.new(File.basename(@path)); end
-
-    def expand_path(dir = ".")
-      Pathname.new(File.expand_path(@path, dir))
-    end
-
-    def size; File.size(@path); end
-
-    def binread(*args)
-      File.binread(@path, *args)
-    end
-
-    def parent
-      Pathname.new(File.basename(File.dirname(@path)))
-    end
-
-    def to_path; @path; end
-
-    def to_s; @path; end
-  end
-
-  # Type conversion for the Pathname class. Works with Pathname and String only.
-  def self.Pathname(obj)
-    case obj
-    when Pathname
-      obj
-    when String
-      Pathname.new(obj)
-    else
-      raise ArgumentError, obj
     end
   end
 
@@ -720,6 +597,11 @@ EOF
   end
 
   def Ocran.build_exe
+    # The `RefinePathname` module is prepended to the `Pathname` class. This is done
+    # after the user script has finished executing and only the Ocran code is running,
+    # to avoid affecting the script environment.
+    ::Pathname.prepend(RefinePathname)
+
     all_load_paths = $LOAD_PATH.map { |loadpath| Pathname(loadpath).expand_path }
     @added_load_paths = ($LOAD_PATH - @load_path_before).map { |loadpath| Pathname(loadpath).expand_path }
     working_directory = Pathname.pwd
