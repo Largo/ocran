@@ -43,13 +43,14 @@ module Ocran
     alias == eql?
     alias === eql?
 
-    # Determines if 'src' is contained in 'tgt' (i.e. it is a subpath of
-    # 'tgt'). Both must be absolute paths and not contain '..'
+    # Checks if the current path is a sub path of the specified base_directory.
+    # Both paths must be either absolute paths or relative paths; otherwise, this
+    # method returns false.
     def subpath?(base_directory)
-      base_directory = Pathname.new(base_directory) unless base_directory.is_a?(Pathname)
-      src_normalized = to_posix
-      tgt_normalized = base_directory.to_posix
-      src_normalized =~ /^#{Regexp.escape tgt_normalized}#{Pathname::SEPARATOR_PAT}/i
+      s = relative_path_from(base_directory).each_filename.first
+      s != '.' && s != ".."
+    rescue ArgumentError
+      false
     end
 
     # Appends the given suffix to the filename, preserving the file extension.
