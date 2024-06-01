@@ -392,18 +392,13 @@ EOF
       if path.subpath?(exec_prefix)
         srcroot
       else
-        loop do
-          relpath = path.relative_path_from(srcroot)
-          if relpath.absolute?
-            Ocran.fatal_error "No common directory contains all specified files"
-          end
-          if relpath.to_posix =~ /^\.\.\//
-            srcroot = srcroot.dirname
-          else
-            break
-          end
+        srcroot.ascend.find do |current_srcroot|
+          relpath = path.relative_path_from(current_srcroot)
+        rescue ArgumentError
+          Ocran.fatal_error "No common directory contains all specified files"
+        else
+          relpath.each_filename.first != ".."
         end
-        srcroot
       end
     end
     src_files = src_files.map do |file|
