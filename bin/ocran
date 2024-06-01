@@ -537,26 +537,29 @@ EOF
         else
           build_complete = nil
         end
-        gem_root_files = nil
-        files = []
 
         # Find the selected files
-        include.each do |set|
+        gem_root_files = unless (include & [:files, :extras, :scripts]).empty?
+                           gem_root.find.select(&:file?)
+                         end
+        files = include.map do |set|
           case set
           when :spec
-            files << spec.files.map { |file| Pathname(file) }
+            spec.files.map { |file| Pathname(file) }
           when :loaded
-            files << features_from_gems.select { |feature| feature.subpath?(gem_root) }
+            features_from_gems.select { |feature| feature.subpath?(gem_root) }
           when :files
-            gem_root_files ||= gem_root.find.select(&:file?)
-            files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix !~ GEM_NON_FILE_RE }
-            files << build_complete if build_complete
+            selected_files = gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix !~ GEM_NON_FILE_RE }
+            if build_complete
+              selected_files << build_complete
+            end
+            selected_files
           when :extras
-            gem_root_files ||= gem_root.find.select(&:file?)
-            files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix =~ GEM_EXTRA_RE }
+            gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix =~ GEM_EXTRA_RE }
           when :scripts
-            gem_root_files ||= gem_root.find.select(&:file?)
-            files << gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix =~ GEM_SCRIPT_RE }
+            gem_root_files.select { |path| path.extname =~ GEM_SCRIPT_RE }
+          else
+            raise "Invalid file set: #{set}. Please specify a valid file set (:spec, :loaded, :files, :extras, :scripts)."
           end
         end
 
