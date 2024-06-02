@@ -504,8 +504,7 @@ EOF
         Gem.path.each do |gempath|
           geminstallpath = Pathname(gempath) / "gems"
           if feature.subpath?(geminstallpath)
-            gemlocalpath = feature.relative_path_from(geminstallpath)
-            fullgemname = gemlocalpath.to_s.split(Pathname::SEPARATOR_PAT).first
+            fullgemname = feature.relative_path_from(geminstallpath).each_filename.first
             gemspecpath = Pathname(gempath) / "specifications" / "#{fullgemname}.gemspec"
             if spec = Gem::Specification.load(gemspecpath.to_s)
               gems[spec.name] ||= spec
