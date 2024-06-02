@@ -492,7 +492,7 @@ EOF
       # all Ruby versions)
       features.each do |feature|
         # Detect load path unless absolute
-        if not feature.absolute?
+        if feature.relative?
           feature = find_load_path($LOAD_PATH.map { |path| Pathname(path) }, feature)
           next if feature.nil? # Could be enumerator.so
         end
