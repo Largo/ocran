@@ -328,13 +328,14 @@ EOF
   end
 
   def self.output_executable
-    if Ocran.output_override
-      Ocran.output_override
-    else
-      executable = Ocran.main_script.basename.sub_ext(".exe")
-      executable = executable.append_to_filename("-debug") if Ocran.debug
-      executable
-    end
+    @output_executable ||= if Ocran.output_override
+                             Ocran.output_override
+                           else
+                             executable = Ocran.main_script
+                             # If debug mode is enabled, append "-debug" to the filename
+                             executable = executable.append_to_filename("-debug") if Ocran.debug
+                             executable.basename.sub_ext(".exe")
+                           end
   end
 
   def self.windowed?
@@ -747,9 +748,7 @@ EOF
     # Detect additional DLLs
     dlls = Ocran.autodll ? Ocran.detect_dlls : []
 
-    executable = Ocran.output_executable
-
-    Ocran.msg "Building #{executable}"
+    Ocran.msg "Building #{Ocran.output_executable}"
     target_script = nil
     direction = proc do |sb|
       # Add explicitly mentioned files
@@ -850,7 +849,7 @@ EOF
 
     unless Ocran.inno_script
       require_relative "../lib/ocran/stub_builder"
-      StubBuilder.new(executable,
+      StubBuilder.new(Ocran.output_executable,
                       chdir_before: Ocran.chdir_first,
                       debug_extract: Ocran.debug_extract,
                       debug_mode: Ocran.debug,
@@ -858,10 +857,10 @@ EOF
                       gui_mode: Ocran.windowed?,
                       icon_path: Ocran.icon_filename,
                       &direction)
-      Ocran.msg "Finished building #{executable} (#{File.size(executable)} bytes)"
+      Ocran.msg "Finished building #{Ocran.output_executable} (#{Ocran.output_executable.size} bytes)"
     else
       require_relative "../lib/ocran/inno_setup_builder"
-      InnoSetupBuilder.new(executable,
+      InnoSetupBuilder.new(Ocran.output_executable,
                            Ocran.inno_script,
                            chdir_before: Ocran.chdir_first,
                            icon_path: Ocran.icon_filename,
