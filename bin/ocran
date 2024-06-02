@@ -341,6 +341,10 @@ EOF
     (Ocran.main_script.extname?(".rbw") || Ocran.force_windows) && !Ocran.force_console
   end
 
+  def self.ruby_executable
+    @ruby_executable ||= Ocran.windowed? ? rubyw_exe : ruby_exe
+  end
+
   def Ocran.init(argv)
     save_environment
     parseargs(argv)
@@ -774,9 +778,8 @@ EOF
       end
 
       # Add the ruby executable and DLL
-      rubyexe = Ocran.windowed? ? rubyw_exe : ruby_exe
-      Ocran.msg "Adding ruby executable #{rubyexe}"
-      sb.create_file(bindir / rubyexe, BINDIR / rubyexe)
+      Ocran.msg "Adding ruby executable #{Ocran.ruby_executable}"
+      sb.create_file(bindir / Ocran.ruby_executable, BINDIR / Ocran.ruby_executable)
       if libruby_so
         sb.create_file(bindir / libruby_so, BINDIR / libruby_so)
       end
@@ -841,7 +844,7 @@ EOF
       sb.setenv("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
 
       # Add the opcode to launch the script
-      installed_ruby_exe = BINDIR / rubyexe
+      installed_ruby_exe = BINDIR / Ocran.ruby_executable
       sb.set_script(installed_ruby_exe, target_script, *Ocran.arg)
     end
 
