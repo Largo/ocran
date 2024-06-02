@@ -501,8 +501,7 @@ EOF
           features_from_gems << feature
           next
         end
-        gempaths = Gem.path
-        gempaths.each do |gempath|
+        Gem.path.each do |gempath|
           geminstallpath = Pathname(gempath) / "gems"
           if feature.subpath?(geminstallpath)
             gemlocalpath = feature.relative_path_from(geminstallpath)
