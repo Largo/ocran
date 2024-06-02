@@ -745,9 +745,6 @@ EOF
       end
     end
 
-    # Detect additional DLLs
-    dlls = Ocran.autodll ? Ocran.detect_dlls : []
-
     Ocran.msg "Building #{Ocran.output_executable}"
     target_script = nil
     direction = proc do |sb|
@@ -784,12 +781,14 @@ EOF
       end
 
       # Add detected DLLs
-      dlls.each do |dll|
-        Ocran.msg "Adding detected DLL #{dll}"
-        if dll.subpath?(exec_prefix)
-          sb.create_file(dll, dll.relative_path_from(exec_prefix))
-        else
-          sb.create_file(dll, BINDIR / File.basename(dll))
+      if Ocran.autodll
+        Ocran.detect_dlls.each do |dll|
+          Ocran.msg "Adding detected DLL #{dll}"
+          if dll.subpath?(exec_prefix)
+            sb.create_file(dll, dll.relative_path_from(exec_prefix))
+          else
+            sb.create_file(dll, BINDIR / File.basename(dll))
+          end
         end
       end
 
