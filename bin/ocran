@@ -337,6 +337,10 @@ EOF
     end
   end
 
+  def self.windowed?
+    (Ocran.main_script.extname?(".rbw") || Ocran.force_windows) && !Ocran.force_console
+  end
+
   def Ocran.init(argv)
     save_environment
     parseargs(argv)
@@ -741,8 +745,6 @@ EOF
 
     executable = Ocran.output_executable
 
-    windowed = (Ocran.main_script.extname?(".rbw") || Ocran.force_windows) && !Ocran.force_console
-
     Ocran.msg "Building #{executable}"
     target_script = nil
     direction = proc do |sb|
@@ -772,7 +774,7 @@ EOF
       end
 
       # Add the ruby executable and DLL
-      rubyexe = windowed ? rubyw_exe : ruby_exe
+      rubyexe = Ocran.windowed? ? rubyw_exe : ruby_exe
       Ocran.msg "Adding ruby executable #{rubyexe}"
       sb.create_file(bindir / rubyexe, BINDIR / rubyexe)
       if libruby_so
@@ -850,7 +852,7 @@ EOF
                       debug_extract: Ocran.debug_extract,
                       debug_mode: Ocran.debug,
                       enable_compression: Ocran.lzma_mode,
-                      gui_mode: windowed,
+                      gui_mode: Ocran.windowed?,
                       icon_path: Ocran.icon_filename,
                       &direction)
       Ocran.msg "Finished building #{executable} (#{File.size(executable)} bytes)"
