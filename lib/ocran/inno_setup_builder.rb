@@ -197,6 +197,11 @@ module Ocran
     alias copy copy_file
     alias cp copy_file
 
+    def touch(tgt)
+      src = Pathname.new(File.expand_path("touch_placeholder", __dir__))
+      copy_file(src, tgt)
+    end
+
     # Specifies the final application script to be launched, which can be called
     # from any position in the data stream. It cannot be specified more than once.
     def set_script(image, script, *argv)
