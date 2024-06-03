@@ -672,7 +672,7 @@ EOF
 
     Ocran.msg "Building #{Ocran.output_executable}"
     target_script = nil
-    direction = proc do |sb|
+    direction = proc do |builder|
       # Add explicitly mentioned files
       Ocran.msg "Adding user-supplied source files"
       Ocran.files.each do |file|
@@ -688,9 +688,9 @@ EOF
         target_script ||= target
 
         if file.directory?
-          sb.mkdir(target)
+          builder.mkdir(target)
         elsif file.exist?
-          sb.create_file(file, target)
+          builder.create_file(file, target)
         elsif file.basename.to_s =~ IGNORE_MODULE_NAMES
           next
         else
@@ -700,9 +700,9 @@ EOF
 
       # Add the ruby executable and DLL
       Ocran.msg "Adding ruby executable #{Ocran.ruby_executable}"
-      sb.create_file(bindir / Ocran.ruby_executable, BINDIR / Ocran.ruby_executable)
+      builder.create_file(bindir / Ocran.ruby_executable, BINDIR / Ocran.ruby_executable)
       if libruby_so
-        sb.create_file(bindir / libruby_so, BINDIR / libruby_so)
+        builder.create_file(bindir / libruby_so, BINDIR / libruby_so)
       end
 
       # Add detected DLLs
@@ -710,9 +710,9 @@ EOF
         Ocran.detect_dlls.each do |dll|
           Ocran.msg "Adding detected DLL #{dll}"
           if dll.subpath?(exec_prefix)
-            sb.create_file(dll, dll.relative_path_from(exec_prefix))
+            builder.create_file(dll, dll.relative_path_from(exec_prefix))
           else
-            sb.create_file(dll, BINDIR / File.basename(dll))
+            builder.create_file(dll, BINDIR / File.basename(dll))
           end
         end
       end
@@ -720,21 +720,21 @@ EOF
       # Add external manifest files
       [Ocran.ruby_builtin_manifest].compact.each do |manifest|
         Ocran.msg "Adding external manifest #{manifest}"
-        sb.create_file(manifest, manifest.relative_path_from(exec_prefix))
+        builder.create_file(manifest, manifest.relative_path_from(exec_prefix))
       end
 
       # Add extra DLLs specified on the command line
       Ocran.extra_dlls.each do |dll|
         Ocran.msg "Adding supplied DLL #{dll}"
-        sb.create_file(bindir / dll, BINDIR / dll)
+        builder.create_file(bindir / dll, BINDIR / dll)
       end
 
       # Add gemspec files
       @gemspecs.uniq.each do |gemspec|
         if gemspec.subpath?(exec_prefix)
-          sb.create_file(gemspec, gemspec.relative_path_from(exec_prefix))
+          builder.create_file(gemspec, gemspec.relative_path_from(exec_prefix))
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemspec.subpath?(pth) }
-          sb.create_file(gemspec, GEMHOMEDIR / gemspec.relative_path_from(Pathname(gemhome)))
+          builder.create_file(gemspec, GEMHOMEDIR / gemspec.relative_path_from(Pathname(gemhome)))
         else
           Ocran.fatal_error "Gem spec #{gemspec} does not exist in the Ruby installation. Don't know where to put it."
         end
@@ -743,13 +743,13 @@ EOF
       # Add loaded libraries (features, gems)
       Ocran.msg "Adding library files"
       libs.each do |path, target|
-        sb.create_file(path, target)
+        builder.create_file(path, target)
       end
 
       # Workaround: RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
       # Add an empty file to /msys64/usr/bin/msys-2.0.dll if the dll was not required otherwise
-      unless sb.files.values.any? { |entry, _src| entry.to_s.include?("msys-2.0.dll") }
-        sb.create_file(Pathname(File.dirname(__FILE__)) / "../share/ocran/empty-msys-2.0.dll", 'msys64/usr/bin/msys-2.0.dll')
+      unless builder.files.values.any? { |entry, _src| entry.to_s.include?("msys-2.0.dll") }
+        builder.create_file(Pathname(File.dirname(__FILE__)) / "../share/ocran/empty-msys-2.0.dll", 'msys64/usr/bin/msys-2.0.dll')
       end
 
       # Set environment variable
@@ -762,13 +762,13 @@ EOF
       # In the future, we plan to implement a more appropriate solution.
       rubyopt = rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
 
-      sb.setenv("RUBYOPT", rubyopt)
-      sb.setenv("RUBYLIB", load_path.uniq.join(";"))
-      sb.setenv("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
+      builder.setenv("RUBYOPT", rubyopt)
+      builder.setenv("RUBYLIB", load_path.uniq.join(";"))
+      builder.setenv("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / Ocran.ruby_executable
-      sb.set_script(installed_ruby_exe, target_script, *Ocran.arg)
+      builder.set_script(installed_ruby_exe, target_script, *Ocran.arg)
     end
 
     unless Ocran.inno_script
