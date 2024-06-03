@@ -110,7 +110,7 @@ module Ocran
       write_string(convert_to_native(path))
     end
 
-    def create_file(src, tgt)
+    def copy_file(src, tgt)
       unless src.exist?
         raise "The file does not exist (#{src})"
       end
@@ -125,6 +125,9 @@ module Ocran
       write_string(convert_to_native(tgt))
       write_file(src)
     end
+
+    alias copy copy_file
+    alias cp copy_file
 
     # Specifies the final application script to be launched, which can be called
     # from any position in the data stream. It cannot be specified more than once.

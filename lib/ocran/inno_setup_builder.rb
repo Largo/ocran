@@ -129,7 +129,7 @@ module Ocran
       yield(self)
 
       if icon_path
-        create_file(icon_path, icon_path.basename)
+        copy_file(icon_path, icon_path.basename)
       end
 
       @launcher = Tempfile.open(["", ".bat"], Dir.pwd) do |f|
@@ -142,9 +142,9 @@ module Ocran
       Ocran.verbose_msg "### Application launcher batch file ###"
       Ocran.verbose_msg File.read(@launcher)
 
-      create_file(@launcher.to_path,
-                  File.basename(@launcher.to_path),
-                  dest_name: @path.basename.sub_ext(".bat"))
+      copy_file(@launcher.to_path,
+                File.basename(@launcher.to_path),
+                dest_name: @path.basename.sub_ext(".bat"))
 
       @iss = Tempfile.open(["", ".iss"], Dir.pwd) do |f|
         IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
@@ -181,7 +181,7 @@ module Ocran
       Ocran.verbose_msg "m #{dir}"
     end
 
-    def create_file(src, tgt, dest_name: nil)
+    def copy_file(src, tgt, dest_name: nil)
       unless File.exist?(src)
         raise "The file does not exist (#{src})"
       end
@@ -193,6 +193,9 @@ module Ocran
       @files[key] = { source: src, dest_dir: dest_dir, dest_name: dest_name }
       Ocran.verbose_msg "a #{tgt}"
     end
+
+    alias copy copy_file
+    alias cp copy_file
 
     # Specifies the final application script to be launched, which can be called
     # from any position in the data stream. It cannot be specified more than once.
