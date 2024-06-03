@@ -270,6 +270,10 @@ EOF
     @ruby_executable ||= Ocran.windowed? ? rubyw_exe : ruby_exe
   end
 
+  def self.rubyopt
+    @rubyopt ||= @options[:rubyopt] || ENV["RUBYOPT"] || ""
+  end
+
   def Ocran.init(argv)
     save_environment
     parseargs(argv)
@@ -753,16 +757,13 @@ EOF
       end
 
       # Set environment variable
-      rubyopt = Ocran.rubyopt || ENV["RUBYOPT"] || ""
 
       # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
       # This is a temporary measure to ensure compatibility with self-extracting executables
       # built in a bundle exec environment, particularly for Ruby 3.2 and later where
       # absolute paths are included in RUBYOPT.
       # In the future, we plan to implement a more appropriate solution.
-      rubyopt = rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
-
-      builder.setenv("RUBYOPT", rubyopt)
+      builder.setenv("RUBYOPT", Ocran.rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), ""))
       builder.setenv("RUBYLIB", load_path.uniq.join(";"))
       builder.setenv("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
 
