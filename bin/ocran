@@ -22,6 +22,13 @@ module Ocran
 
   GEM_NON_FILE_RE = /(#{GEM_EXTRA_RE}|#{GEM_SCRIPT_RE})/
 
+  # Match the load path against standard library, site_ruby, and vendor_ruby paths
+  # This regular expression matches:
+  # - /ruby/3.0.0/
+  # - /ruby/site_ruby/3.0.0/
+  # - /ruby/vendor_ruby/3.0.0/
+  RUBY_LIBRARY_PATH_REGEX = %r{/(ruby/(?:site_ruby/|vendor_ruby/)?\d+\.\d+\.\d+)/?$}i
+
   # Alias for the temporary directory where files are extracted.
   TEMPDIR_ROOT = Pathname.new("|")
   # Directory for source files in temporary directory.
@@ -662,13 +669,14 @@ EOF
       Ocran.msg "Will include all ruby core libraries"
       @load_path_before.each do |lp|
         path = Pathname.new(lp)
-        next unless path.to_posix =~
-                    /\/(ruby\/(?:site_ruby\/|vendor_ruby\/)?[0-9.]+)\/?$/i
-        subdir = $1
-        Pathname.glob("#{lp}/**/*").each do |fpath|
-          next if fpath.directory?
-          tgt = "lib/#{subdir}/#{fpath.relative_path_from(path)}"
-          libs << [fpath, tgt]
+        # Match the load path against standard library, site_ruby, and vendor_ruby paths
+        path.to_posix.match(RUBY_LIBRARY_PATH_REGEX) do |m|
+          subdir = m[1]
+          path.find.each do |src|
+            next if src.directory?
+            dest = Pathname("lib").join(subdir, src.relative_path_from(path))
+            libs << [src, dest]
+          end
         end
       end
     end
