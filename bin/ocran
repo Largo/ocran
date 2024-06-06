@@ -334,8 +334,7 @@ EOF
   # Find the root of all files specified on the command line and use
   # it as the "src" of the output.
   def Ocran.find_src_root(files)
-    src_files = files.map { |file| file.expand_path }
-    src_prefix = src_files.inject(src_files.first.dirname) do |srcroot, path|
+    src_prefix = files.inject(files.first.dirname) do |srcroot, path|
       if path.subpath?(exec_prefix)
         srcroot
       else
@@ -348,7 +347,7 @@ EOF
         end
       end
     end
-    src_files = src_files.map do |file|
+    src_files = files.map do |file|
       if file.subpath?(src_prefix)
         file.relative_path_from(src_prefix)
       else
@@ -645,7 +644,7 @@ EOF
 
     # Recompute the src_prefix. Files may have been added implicitly
     # while scanning through features.
-    src_prefix, src_files = find_src_root(Ocran.files)
+    src_prefix, src_files = find_src_root(Ocran.files.map(&:expand_path))
     Ocran.files.replace(src_files)
 
     # Add the load path that are required with the correct path after
