@@ -331,30 +331,20 @@ EOF
     end
   end
 
-  # Find the root of all files specified on the command line and use
-  # it as the "src" of the output.
-  def Ocran.find_src_root(files)
-    src_prefix = files.inject(files.first.dirname) do |srcroot, path|
-      if path.subpath?(exec_prefix)
-        srcroot
+  # Find the common directory containing all specified files, which are
+  # given as an array of absolute paths, and use it as the "src" of the output.
+  def self.find_src_prefix(files)
+    files.inject(files.first.dirname) do |current_root, file|
+      next current_root if file.subpath?(exec_prefix)
+
+      current_root.ascend.find do |candidate_root|
+        path_from_root = file.relative_path_from(candidate_root)
+      rescue ArgumentError
+        Ocran.fatal_error "No common directory contains all specified files"
       else
-        srcroot.ascend.find do |current_srcroot|
-          relpath = path.relative_path_from(current_srcroot)
-        rescue ArgumentError
-          Ocran.fatal_error "No common directory contains all specified files"
-        else
-          relpath.each_filename.first != ".."
-        end
+        path_from_root.each_filename.first != ".."
       end
     end
-    src_files = files.map do |file|
-      if file.subpath?(src_prefix)
-        file.relative_path_from(src_prefix)
-      else
-        file
-      end
-    end
-    return src_prefix, src_files
   end
 
   def self.gem_inclusion_set(spec_name)
@@ -595,7 +585,7 @@ EOF
     end
 
     # Find the source root and adjust paths
-    src_prefix, src_files = find_src_root(Ocran.files)
+    src_prefix = find_src_prefix(Ocran.files)
 
     # Find features and decide where to put them in the temporary
     # directory layout.
@@ -644,7 +634,9 @@ EOF
 
     # Recompute the src_prefix. Files may have been added implicitly
     # while scanning through features.
-    src_prefix, src_files = find_src_root(Ocran.files.map(&:expand_path))
+    files = Ocran.files.map(&:expand_path)
+    src_prefix = find_src_prefix(files)
+    src_files = files.map { |file| file.relative_path_from(src_prefix) }
     Ocran.files.replace(src_files)
 
     # Add the load path that are required with the correct path after
