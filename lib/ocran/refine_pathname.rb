@@ -67,7 +67,7 @@ module Ocran
     #   pathname.append_to_filename("_bar") # => #<Pathname:path.to/foo_bar>
     #
     def append_to_filename(suffix)
-      sub(/(.*?#{Pathname::SEPARATOR_PAT})?(\.?[^.]+)?(\..*)?\z/, "\\1\\2#{suffix}\\3")
+      dirname + basename.sub(/(\.?[^.]+)?(\..*)?\z/, "\\1#{suffix}\\2")
     end
 
     # Checks if the file's extension matches the expected extension.
