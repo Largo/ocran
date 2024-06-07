@@ -585,7 +585,8 @@ EOF
     end
 
     # Find the source root and adjust paths
-    src_prefix = find_src_prefix(Ocran.files)
+    source_files = Ocran.files.dup
+    src_prefix = find_src_prefix(source_files)
 
     # Find features and decide where to put them in the temporary
     # directory layout.
@@ -595,7 +596,7 @@ EOF
     features.each do |feature|
       path = find_load_path(all_load_paths, feature)
       if path.nil? || path.expand_path == Pathname.pwd
-        Ocran.files << feature unless feature.basename.to_s =~ IGNORE_MODULE_NAMES
+        source_files << feature unless feature.basename.to_s =~ IGNORE_MODULE_NAMES
       else
         if feature.absolute?
           feature = feature.relative_path_from(path.expand_path)
@@ -613,7 +614,7 @@ EOF
         elsif fullpath.subpath?(src_prefix) || path == working_directory
           # Any feature found inside the src_prefix automatically gets
           # added as a source file (to go in 'src').
-          Ocran.files << fullpath
+          source_files << fullpath
           # Add the load path unless it was added by the script while
           # running (or we assume that the script can also set it up
           # correctly when running from the resulting executable).
@@ -622,7 +623,7 @@ EOF
           # Any feature that exist in a load path added by the script
           # itself is added as a file to go into the 'src' (src_prefix
           # will be adjusted below to point to the common parent).
-          Ocran.files << fullpath
+          source_files << fullpath
         else
           # All other feature that can not be resolved go in the the
           # Ruby sitelibdir. This is automatically in the load path
@@ -634,10 +635,9 @@ EOF
 
     # Recompute the src_prefix. Files may have been added implicitly
     # while scanning through features.
-    files = Ocran.files.map(&:expand_path)
+    files = source_files.map(&:expand_path)
     src_prefix = find_src_prefix(files)
     src_files = files.map { |file| file.relative_path_from(src_prefix) }
-    Ocran.files.replace(src_files)
 
     # Add the load path that are required with the correct path after
     # src_prefix was adjusted.
@@ -677,7 +677,7 @@ EOF
     direction = proc do |builder|
       # Add explicitly mentioned files
       Ocran.msg "Adding user-supplied source files"
-      Ocran.files.each do |file|
+      src_files.each do |file|
         file = src_prefix / file
         if file.subpath?(exec_prefix)
           target = file.relative_path_from(exec_prefix)
