@@ -24,11 +24,16 @@ module Ocran
       # batch file's own location without changing the working directory.
       BATCH_FILE_DIR = "%~dp0"
 
+      # BATCH_FILE_PATH is a parameter expansion used in Windows batch files,
+      # representing the full path to the batch file itself, including the file name.
+      BATCH_FILE_PATH = "%~f0"
+
       def initialize(path, title, executable, script, *args, chdir_before: nil, environments: {})
         @path = path
         File.open(@path, "w") do |f|
           f.puts "@echo off"
           environments.each { |name, val| f.puts build_set_command(name, val) }
+          f.puts build_set_command("OCRAN_EXECUTABLE", BATCH_FILE_PATH)
           f.puts build_start_command(title, executable, script, *args, chdir_before: chdir_before)
           f
         end
