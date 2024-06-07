@@ -595,7 +595,7 @@ EOF
     features.each do |feature|
       path = find_load_path(all_load_paths, feature)
       if path.nil? || path.expand_path == Pathname.pwd
-        Ocran.files << feature
+        Ocran.files << feature unless feature.basename.to_s =~ IGNORE_MODULE_NAMES
       else
         if feature.absolute?
           feature = feature.relative_path_from(path.expand_path)
@@ -693,8 +693,6 @@ EOF
           builder.mkdir(target)
         elsif file.exist?
           builder.copy(file, target)
-        elsif file.basename.to_s =~ IGNORE_MODULE_NAMES
-          next
         else
           Ocran.fatal_error "The file does not exist (#{file})"
         end
