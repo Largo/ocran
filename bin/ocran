@@ -679,14 +679,7 @@ EOF
       Ocran.msg "Adding user-supplied source files"
       Ocran.files.each do |file|
         file = src_prefix / file
-        if file.subpath?(exec_prefix)
-          target = file.relative_path_from(exec_prefix)
-        elsif file.subpath?(src_prefix)
-          target = SRCDIR / file.relative_path_from(src_prefix)
-        else
-          target = SRCDIR / file.basename
-        end
-
+        target = SRCDIR / file.relative_path_from(src_prefix)
         target_script ||= target
 
         if file.directory?
