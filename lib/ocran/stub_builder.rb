@@ -107,7 +107,7 @@ module Ocran
       Ocran.verbose_msg "m #{path}"
 
       write_opcode(OP_CREATE_DIRECTORY)
-      write_string(convert_to_native(path))
+      write_path(path)
     end
 
     def copy_file(src, tgt)
@@ -122,7 +122,7 @@ module Ocran
 
       Ocran.verbose_msg "a #{tgt}"
       write_opcode(OP_CREATE_FILE)
-      write_string(convert_to_native(tgt))
+      write_path(tgt)
       write_file(src)
     end
 
@@ -242,6 +242,10 @@ module Ocran
       @data_size += size
     end
     private :write_file
+
+    def write_path(path)
+      write_string(convert_to_native(path))
+    end
 
     def convert_to_native(path)
       path.to_s.tr(File::SEPARATOR, "\\")
