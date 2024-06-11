@@ -17,7 +17,7 @@ module Ocran
       # representing the full path to the batch file itself, including the file name.
       BATCH_FILE_PATH = "%~f0"
 
-      def initialize(title, chdir_before: nil)
+      def initialize(chdir_before: nil, title: nil)
         @title = title
         @chdir_before = chdir_before
         @environments = {}
@@ -136,7 +136,7 @@ module Ocran
         copy_file(icon_path, icon_path.basename)
       end
 
-      @launcher = AppLauncherBatchBuilder.new(title, chdir_before: @chdir_before)
+      @launcher = AppLauncherBatchBuilder.new(chdir_before: @chdir_before, title: title)
 
       yield(self)
 
