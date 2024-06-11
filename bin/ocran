@@ -785,6 +785,7 @@ EOF
                            Ocran.inno_script,
                            chdir_before: Ocran.chdir_first,
                            icon_path: Ocran.icon_filename,
+                           title: Ocran.output_executable.basename.sub_ext(""),
                            &direction)
       Ocran.msg "Finished building installer file"
     end

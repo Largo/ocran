@@ -111,7 +111,7 @@ module Ocran
 
     attr_reader :files
 
-    def initialize(path, inno_setup_script, chdir_before: nil, icon_path: nil, &b)
+    def initialize(path, inno_setup_script, chdir_before: nil, icon_path: nil, title: nil, &b)
       @path = path
       @chdir_before = chdir_before
       @inno_setup_script = inno_setup_script
@@ -125,7 +125,7 @@ module Ocran
         copy_file(icon_path, icon_path.basename)
       end
 
-      @launcher = AppLauncherBatchBuilder.new(@path.basename.sub_ext(""),
+      @launcher = AppLauncherBatchBuilder.new(title,
                                               *@script_info,
                                               environments: @envs,
                                               chdir_before: @chdir_before)
