@@ -1,19 +1,8 @@
 require "tempfile"
+require_relative "windows_command_escaping"
 
 module Ocran
   class InnoSetupBuilder
-
-    module WindowsCommandEscaping
-      def escape_double_quotes(s)
-        s.to_s.gsub('"', '""')
-      end
-      private :escape_double_quotes
-
-      def quote_and_escape(s)
-        "\"#{escape_double_quotes(s)}\""
-      end
-      private :quote_and_escape
-    end
 
     class AppLauncherBatchBuilder
       include WindowsCommandEscaping
