@@ -132,7 +132,7 @@ module Ocran
       Ocran.verbose_msg "### Application launcher batch file ###"
       Ocran.verbose_msg File.read(@launcher)
 
-      copy_file(@launcher.to_path, @path.basename.sub_ext(".bat"))
+      copy_file(@launcher.to_path, "launcher.bat")
 
       @iss = Tempfile.open(["", ".iss"], Dir.pwd) do |f|
         IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
