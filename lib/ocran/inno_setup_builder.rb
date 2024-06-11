@@ -17,22 +17,36 @@ module Ocran
       # representing the full path to the batch file itself, including the file name.
       BATCH_FILE_PATH = "%~f0"
 
-      def initialize(title, executable, script, *args, chdir_before: nil, environments: {})
-        @path = Tempfile.open do |f|
+      def initialize(title, chdir_before: nil)
+        @title = title
+        @chdir_before = chdir_before
+        @environments = {}
+      end
+
+      def build
+        @file = Tempfile.open do |f|
           f.puts "@echo off"
-          environments.each { |name, val| f.puts build_set_command(name, val) }
+          @environments.each { |name, val| f.puts build_set_command(name, val) }
           f.puts build_set_command("OCRAN_EXECUTABLE", BATCH_FILE_PATH)
-          f.puts build_start_command(title, executable, script, *args, chdir_before: chdir_before)
+          f.puts build_start_command(@title, @executable, @script, *@args, chdir_before: @chdir_before)
           f
         end
       end
 
+      def setenv(name, value)
+        @environments[name] = value
+      end
+
+      def set_script(executable, script, *args)
+        @executable, @script, @args = executable, script, args
+      end
+
       def to_path
-        @path.to_path
+        @file.to_path
       end
 
       def replace_inst_dir_placeholder(s)
-        s.gsub(/#{Regexp.escape(TEMPDIR_ROOT.to_s)}[\/\\]/, BATCH_FILE_DIR)
+        s.to_s.gsub(/#{Regexp.escape(TEMPDIR_ROOT.to_s)}[\/\\]/, BATCH_FILE_DIR)
       end
       private :replace_inst_dir_placeholder
 
@@ -117,18 +131,16 @@ module Ocran
       @inno_setup_script = inno_setup_script
       @dirs = {}
       @files = {}
-      @envs = {}
-
-      yield(self)
 
       if icon_path
         copy_file(icon_path, icon_path.basename)
       end
 
-      @launcher = AppLauncherBatchBuilder.new(title,
-                                              *@script_info,
-                                              environments: @envs,
-                                              chdir_before: @chdir_before)
+      @launcher = AppLauncherBatchBuilder.new(title, chdir_before: @chdir_before)
+
+      yield(self)
+
+      @launcher.build
       Ocran.verbose_msg "### Application launcher batch file ###"
       Ocran.verbose_msg File.read(@launcher)
 
@@ -199,14 +211,15 @@ module Ocran
       if @script_info
         raise "Script is already set"
       end
+      @script_info = true
 
-      @script_info = [image, script, *argv].map(&:to_s)
+      @launcher.set_script(image, script, *argv)
       extra_argc = argv.map { |arg| quote_and_escape(arg) }.join(" ")
       Ocran.verbose_msg "p #{image} #{script} #{show_path extra_argc}"
     end
 
     def setenv(name, value)
-      @envs[name.to_s] = value.to_s
+      @launcher.setenv(name, value)
       Ocran.verbose_msg "e #{name} #{show_path value}"
     end
 
