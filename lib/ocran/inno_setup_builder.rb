@@ -136,9 +136,7 @@ module Ocran
       Ocran.verbose_msg "### Application launcher batch file ###"
       Ocran.verbose_msg File.read(@launcher)
 
-      copy_file(@launcher.to_path,
-                File.basename(@launcher.to_path),
-                dest_name: @path.basename.sub_ext(".bat"))
+      copy_file(@launcher.to_path, @path.basename.sub_ext(".bat"))
 
       @iss = Tempfile.open(["", ".iss"], Dir.pwd) do |f|
         IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
@@ -175,7 +173,7 @@ module Ocran
       Ocran.verbose_msg "m #{dir}"
     end
 
-    def copy_file(src, tgt, dest_name: nil)
+    def copy_file(src, tgt)
       unless File.exist?(src)
         raise "The file does not exist (#{src})"
       end
@@ -183,8 +181,11 @@ module Ocran
       key = tgt.to_s.downcase
       return if @files[key]
 
-      dest_dir = File.join("{app}", File.dirname(tgt))
-      @files[key] = { source: src, dest_dir: dest_dir, dest_name: dest_name }
+      @files[key] = {
+        source: src,
+        dest_dir: File.join("{app}", File.dirname(tgt)),
+        dest_name: File.basename(tgt)
+      }
       Ocran.verbose_msg "a #{tgt}"
     end
 
