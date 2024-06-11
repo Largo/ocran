@@ -17,9 +17,8 @@ module Ocran
       # representing the full path to the batch file itself, including the file name.
       BATCH_FILE_PATH = "%~f0"
 
-      def initialize(path, title, executable, script, *args, chdir_before: nil, environments: {})
-        @path = path
-        File.open(@path, "w") do |f|
+      def initialize(title, executable, script, *args, chdir_before: nil, environments: {})
+        @path = Tempfile.open do |f|
           f.puts "@echo off"
           environments.each { |name, val| f.puts build_set_command(name, val) }
           f.puts build_set_command("OCRAN_EXECUTABLE", BATCH_FILE_PATH)
@@ -29,7 +28,7 @@ module Ocran
       end
 
       def to_path
-        @path.respond_to?(:to_path) ? @path.to_path : @path.to_s
+        @path.to_path
       end
 
       def replace_inst_dir_placeholder(s)
@@ -126,13 +125,10 @@ module Ocran
         copy_file(icon_path, icon_path.basename)
       end
 
-      @launcher = Tempfile.open(["", ".bat"], Dir.pwd) do |f|
-        AppLauncherBatchBuilder.new(f,
-                                    @path.basename.sub_ext(""),
-                                    *@script_info,
-                                    environments: @envs,
-                                    chdir_before: @chdir_before)
-      end
+      @launcher = AppLauncherBatchBuilder.new(@path.basename.sub_ext(""),
+                                              *@script_info,
+                                              environments: @envs,
+                                              chdir_before: @chdir_before)
       Ocran.verbose_msg "### Application launcher batch file ###"
       Ocran.verbose_msg File.read(@launcher)
 
