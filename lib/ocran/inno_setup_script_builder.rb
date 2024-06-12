@@ -13,7 +13,10 @@ module Ocran
     end
 
     def build
-      @file = Tempfile.open do |f|
+      # ISSC generates the installer files relative to the directory of the
+      # ISS file. Therefore, it is necessary to create Tempfiles in the
+      # working directory.
+      @file = Tempfile.open("", Dir.pwd) do |f|
         IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
 
         unless @dirs.empty?

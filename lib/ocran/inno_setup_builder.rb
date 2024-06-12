@@ -40,14 +40,10 @@ module Ocran
     end
 
     def compile
-      # To make ISSC output installer files relative to the working directory,
-      # it is necessary to provide the ISS file via standard input.
-      type_cmd = "type #{quote_and_escape(convert_path_to_windows(@iss.to_path))}"
       iscc_cmd = ["ISCC"]
       iscc_cmd << "/Q" unless Ocran.verbose
-      iscc_cmd << "-"
-      cmd = "#{type_cmd} | #{iscc_cmd.join(" ")}"
-      unless system(cmd)
+      iscc_cmd << @iss.to_path
+      unless system(*iscc_cmd)
         case $?.exitstatus
         when 0 then raise "ISCC reported success, but system reported error?"
         when 1 then raise "ISCC reports invalid command line parameters"
