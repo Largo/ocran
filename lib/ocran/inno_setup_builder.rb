@@ -1,50 +1,10 @@
 require "tempfile"
 require_relative "windows_command_escaping"
+require_relative "inno_setup_script_builder"
 require_relative "launcher_batch_builder"
 
 module Ocran
   class InnoSetupBuilder
-
-    class InnoSetupScriptBuilder
-      include WindowsCommandEscaping
-
-      def initialize(path, files: nil, dirs: [])
-        @path = path
-        File.open(@path, "a") do |f|
-          if dirs && !dirs.empty?
-            f.puts
-            f.puts "[Dirs]"
-            dirs.each { |obj| f.puts build_dirs_section_item(**obj) }
-          end
-          if files && !files.empty?
-            f.puts
-            f.puts "[Files]"
-            files.each { |obj| f.puts build_files_section_item(**obj) }
-          end
-          f
-        end
-      end
-
-      def to_path
-        @path.respond_to?(:to_path) ? @path.to_path : @path.to_s
-      end
-
-      def build_dirs_section_item(name:)
-        "Name: #{quote_and_escape(name)};"
-      end
-      private :build_dirs_section_item
-
-      def build_files_section_item(source:, dest_dir:, dest_name: nil)
-        s = ["Source: #{quote_and_escape(source)};"]
-        s << "DestDir: #{quote_and_escape(dest_dir)};"
-        if dest_name
-          s << "DestName: #{quote_and_escape(dest_name)};"
-        end
-        s.join(" ")
-      end
-      private :build_files_section_item
-    end
-
     include WindowsCommandEscaping
 
     attr_reader :files
@@ -70,10 +30,8 @@ module Ocran
 
       copy_file(@launcher.to_path, "launcher.bat")
 
-      @iss = Tempfile.open(["", ".iss"], Dir.pwd) do |f|
-        IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
-        InnoSetupScriptBuilder.new(f, files: @files.values, dirs: @dirs.values)
-      end
+      @iss = InnoSetupScriptBuilder.new(@inno_setup_script, files: @files.values, dirs: @dirs.values)
+      @iss.build
       Ocran.verbose_msg "### INNO SETUP SCRIPT ###"
       Ocran.verbose_msg File.read(@iss)
 
