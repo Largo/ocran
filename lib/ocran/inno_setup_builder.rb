@@ -125,8 +125,8 @@ module Ocran
     alias cp copy_file
 
     def touch(tgt)
-      src = Pathname.new(File.expand_path("touch_placeholder", __dir__))
-      copy_file(src, tgt)
+      @touch_placeholder ||= Tempfile.new.tap { |f| f.close }
+      copy_file(@touch_placeholder.to_path, tgt)
     end
 
     # Specifies the final application script to be launched, which can be called
