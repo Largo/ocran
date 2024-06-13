@@ -111,7 +111,7 @@ module Ocran
     end
 
     def copy_file(src, tgt)
-      unless src.exist?
+      unless File.exist?(src)
         raise "The file does not exist (#{src})"
       end
 
@@ -130,7 +130,7 @@ module Ocran
     alias cp copy_file
 
     def touch(tgt)
-      src = Pathname.new(File.expand_path("touch_placeholder", __dir__))
+      src = File.expand_path("touch_placeholder", __dir__)
       copy_file(src, tgt)
     end
 
@@ -236,7 +236,7 @@ module Ocran
     private :write_string_array
 
     def write_file(src)
-      size = src.size
+      size = File.size(src)
       write_size(size)
       IO.copy_stream(src, @of)
       @data_size += size
