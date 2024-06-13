@@ -6,10 +6,14 @@ module Ocran
   class InnoSetupScriptBuilder
     include WindowsCommandEscaping
 
-    def initialize(inno_setup_script, files: [], dirs: [])
+    attr_reader :files
+
+    def initialize(inno_setup_script)
       @inno_setup_script = inno_setup_script
-      @files = files
-      @dirs = dirs
+      @dirs = {}
+      @files = {}
+      @_dirs = []
+      @_files = []
     end
 
     def build
@@ -19,18 +23,52 @@ module Ocran
       @file = Tempfile.open("", Dir.pwd) do |f|
         IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
 
-        unless @dirs.empty?
+        unless @_dirs.empty?
           f.puts
           f.puts "[Dirs]"
-          @dirs.each { |obj| f.puts build_dirs_section_item(**obj) }
+          @_dirs.each { |obj| f.puts build_dirs_section_item(**obj) }
         end
-        unless @files.empty?
+        unless @_files.empty?
           f.puts
           f.puts "[Files]"
-          @files.each { |obj| f.puts build_files_section_item(**obj) }
+          @_files.each { |obj| f.puts build_files_section_item(**obj) }
         end
         f
       end
+    end
+
+    def mkdir(target)
+      return if target.to_s == "."
+
+      key = target.to_s.downcase
+      return if @dirs[key]
+      @dirs[key] = target
+
+      @_dirs << { name: File.join("{app}", target) }
+    end
+
+    def copy_file(source, target)
+      unless File.exist?(source)
+        raise "The file does not exist (#{source})"
+      end
+
+      key = target.to_s.downcase
+      return if @files[key]
+      @files[key] = [target, source]
+
+      @_files << {
+        source: source,
+        dest_dir: File.join("{app}", File.dirname(target)),
+        dest_name: File.basename(target)
+      }
+    end
+
+    alias copy copy_file
+    alias cp copy_file
+
+    def touch(target)
+      @empty_source ||= Tempfile.new.tap { |f| f.close }
+      copy_file(@empty_source.to_path, target)
     end
 
     def to_path

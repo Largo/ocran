@@ -7,21 +7,19 @@ module Ocran
   class InnoSetupBuilder
     include WindowsCommandEscaping
 
-    attr_reader :files
+    def files
+      @iss.files
+    end
 
     def initialize(path, inno_setup_script, chdir_before: nil, icon_path: nil, title: nil, &b)
       @path = path
       @chdir_before = chdir_before
       @inno_setup_script = inno_setup_script
-      @dirs = {}
-      @files = {}
-      @_dirs = []
-      @_files = []
 
       if icon_path
         copy_file(icon_path, icon_path.basename)
       end
-
+      @iss = InnoSetupScriptBuilder.new(@inno_setup_script)
       @launcher = LauncherBatchBuilder.new(chdir_before: @chdir_before, title: title)
 
       yield(self)
@@ -32,7 +30,6 @@ module Ocran
 
       copy_file(@launcher.to_path, "launcher.bat")
 
-      @iss = InnoSetupScriptBuilder.new(@inno_setup_script, files: @_files, dirs: @_dirs)
       @iss.build
       Ocran.verbose_msg "### INNO SETUP SCRIPT ###"
       Ocran.verbose_msg File.read(@iss)
@@ -55,40 +52,21 @@ module Ocran
       end
     end
 
-    def mkdir(dir)
-      return if dir.to_s == "."
-
-      key = dir.to_s.downcase
-      return if @dirs[key]
-      @dirs[key] = dir
-
-      @_dirs << { name: File.join("{app}", dir) }
-      Ocran.verbose_msg "m #{dir}"
+    def mkdir(target)
+      @iss.mkdir(target)
+      Ocran.verbose_msg "m #{target}"
     end
 
-    def copy_file(src, tgt)
-      unless File.exist?(src)
-        raise "The file does not exist (#{src})"
-      end
-
-      key = tgt.to_s.downcase
-      return if @files[key]
-      @files[key] = [tgt, src]
-
-      @_files << {
-        source: src,
-        dest_dir: File.join("{app}", File.dirname(tgt)),
-        dest_name: File.basename(tgt)
-      }
-      Ocran.verbose_msg "a #{tgt}"
+    def copy_file(source, target)
+      @iss.copy_file(source, target)
+      Ocran.verbose_msg "a #{target}"
     end
 
     alias copy copy_file
     alias cp copy_file
 
-    def touch(tgt)
-      @touch_placeholder ||= Tempfile.new.tap { |f| f.close }
-      copy_file(@touch_placeholder.to_path, tgt)
+    def touch(target)
+      @iss.touch(target)
     end
 
     # Specifies the final application script to be launched, which can be called
