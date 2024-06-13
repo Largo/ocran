@@ -13,14 +13,12 @@ module Ocran
 
     def initialize(path, inno_setup_script, chdir_before: nil, icon_path: nil, title: nil, &b)
       @path = path
-      @chdir_before = chdir_before
-      @inno_setup_script = inno_setup_script
 
       if icon_path
         copy_file(icon_path, icon_path.basename)
       end
-      @iss = InnoSetupScriptBuilder.new(@inno_setup_script)
-      @launcher = LauncherBatchBuilder.new(chdir_before: @chdir_before, title: title)
+      @iss = InnoSetupScriptBuilder.new(inno_setup_script)
+      @launcher = LauncherBatchBuilder.new(chdir_before: chdir_before, title: title)
 
       yield(self)
 
