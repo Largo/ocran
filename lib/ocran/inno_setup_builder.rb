@@ -15,6 +15,8 @@ module Ocran
       @inno_setup_script = inno_setup_script
       @dirs = {}
       @files = {}
+      @_dirs = []
+      @_files = []
 
       if icon_path
         copy_file(icon_path, icon_path.basename)
@@ -30,7 +32,7 @@ module Ocran
 
       copy_file(@launcher.to_path, "launcher.bat")
 
-      @iss = InnoSetupScriptBuilder.new(@inno_setup_script, files: @files.values, dirs: @dirs.values)
+      @iss = InnoSetupScriptBuilder.new(@inno_setup_script, files: @_files, dirs: @_dirs)
       @iss.build
       Ocran.verbose_msg "### INNO SETUP SCRIPT ###"
       Ocran.verbose_msg File.read(@iss)
@@ -58,8 +60,9 @@ module Ocran
 
       key = dir.to_s.downcase
       return if @dirs[key]
+      @dirs[key] = dir
 
-      @dirs[key] = { name: File.join("{app}", dir) }
+      @_dirs << { name: File.join("{app}", dir) }
       Ocran.verbose_msg "m #{dir}"
     end
 
@@ -70,8 +73,9 @@ module Ocran
 
       key = tgt.to_s.downcase
       return if @files[key]
+      @files[key] = [tgt, src]
 
-      @files[key] = {
+      @_files << {
         source: src,
         dest_dir: File.join("{app}", File.dirname(tgt)),
         dest_name: File.basename(tgt)
