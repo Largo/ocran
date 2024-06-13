@@ -11,7 +11,7 @@ module Ocran
       @path = path
 
       if icon_path
-        copy_file(icon_path, icon_path.basename)
+        cp(icon_path, icon_path.basename)
       end
       @iss = InnoSetupScriptBuilder.new(inno_setup_script)
       @launcher = LauncherBatchBuilder.new(chdir_before: chdir_before, title: title)
@@ -22,7 +22,7 @@ module Ocran
       Ocran.verbose_msg "### Application launcher batch file ###"
       Ocran.verbose_msg File.read(@launcher)
 
-      copy_file(@launcher.to_path, "launcher.bat")
+      cp(@launcher.to_path, "launcher.bat")
 
       @iss.build
       Ocran.verbose_msg "### INNO SETUP SCRIPT ###"
@@ -51,13 +51,10 @@ module Ocran
       Ocran.verbose_msg "m #{target}"
     end
 
-    def copy_file(source, target)
-      @iss.copy_file(source, target)
+    def cp(source, target)
+      @iss.cp(source, target)
       Ocran.verbose_msg "a #{target}"
     end
-
-    alias copy copy_file
-    alias cp copy_file
 
     def touch(target)
       @iss.touch(target)

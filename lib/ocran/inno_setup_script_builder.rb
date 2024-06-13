@@ -45,7 +45,7 @@ module Ocran
       @_dirs << { name: File.join("{app}", target) }
     end
 
-    def copy_file(source, target)
+    def cp(source, target)
       unless File.exist?(source)
         raise "The file does not exist (#{source})"
       end
@@ -61,12 +61,9 @@ module Ocran
       }
     end
 
-    alias copy copy_file
-    alias cp copy_file
-
     def touch(target)
       @empty_source ||= Tempfile.new.tap { |f| f.close }
-      copy_file(@empty_source.to_path, target)
+      cp(@empty_source.to_path, target)
     end
 
     def to_path

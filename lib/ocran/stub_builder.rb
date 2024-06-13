@@ -108,7 +108,7 @@ module Ocran
       write_path(path)
     end
 
-    def copy_file(src, tgt)
+    def cp(src, tgt)
       unless File.exist?(src)
         raise "The file does not exist (#{src})"
       end
@@ -124,12 +124,9 @@ module Ocran
       write_file(src)
     end
 
-    alias copy copy_file
-    alias cp copy_file
-
     def touch(tgt)
       src = File.expand_path("touch_placeholder", __dir__)
-      copy_file(src, tgt)
+      cp(src, tgt)
     end
 
     # Specifies the final application script to be launched, which can be called

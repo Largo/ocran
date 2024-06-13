@@ -692,7 +692,7 @@ EOF
         if file.directory?
           builder.mkdir(target)
         elsif file.exist?
-          builder.copy(file, target)
+          builder.cp(file, target)
         else
           Ocran.fatal_error "The file does not exist (#{file})"
         end
@@ -700,9 +700,9 @@ EOF
 
       # Add the ruby executable and DLL
       Ocran.msg "Adding ruby executable #{Ocran.ruby_executable}"
-      builder.copy(bindir / Ocran.ruby_executable, BINDIR / Ocran.ruby_executable)
+      builder.cp(bindir / Ocran.ruby_executable, BINDIR / Ocran.ruby_executable)
       if libruby_so
-        builder.copy(bindir / libruby_so, BINDIR / libruby_so)
+        builder.cp(bindir / libruby_so, BINDIR / libruby_so)
       end
 
       # Add detected DLLs
@@ -710,9 +710,9 @@ EOF
         Ocran.detect_dlls.each do |dll|
           Ocran.msg "Adding detected DLL #{dll}"
           if dll.subpath?(exec_prefix)
-            builder.copy(dll, dll.relative_path_from(exec_prefix))
+            builder.cp(dll, dll.relative_path_from(exec_prefix))
           else
-            builder.copy(dll, BINDIR / File.basename(dll))
+            builder.cp(dll, BINDIR / File.basename(dll))
           end
         end
       end
@@ -720,21 +720,21 @@ EOF
       # Add external manifest files
       [Ocran.ruby_builtin_manifest].compact.each do |manifest|
         Ocran.msg "Adding external manifest #{manifest}"
-        builder.copy(manifest, manifest.relative_path_from(exec_prefix))
+        builder.cp(manifest, manifest.relative_path_from(exec_prefix))
       end
 
       # Add extra DLLs specified on the command line
       Ocran.extra_dlls.each do |dll|
         Ocran.msg "Adding supplied DLL #{dll}"
-        builder.copy(bindir / dll, BINDIR / dll)
+        builder.cp(bindir / dll, BINDIR / dll)
       end
 
       # Add gemspec files
       @gemspecs.uniq.each do |gemspec|
         if gemspec.subpath?(exec_prefix)
-          builder.copy(gemspec, gemspec.relative_path_from(exec_prefix))
+          builder.cp(gemspec, gemspec.relative_path_from(exec_prefix))
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemspec.subpath?(pth) }
-          builder.copy(gemspec, GEMHOMEDIR / gemspec.relative_path_from(Pathname(gemhome)))
+          builder.cp(gemspec, GEMHOMEDIR / gemspec.relative_path_from(Pathname(gemhome)))
         else
           Ocran.fatal_error "Gem spec #{gemspec} does not exist in the Ruby installation. Don't know where to put it."
         end
@@ -743,7 +743,7 @@ EOF
       # Add loaded libraries (features, gems)
       Ocran.msg "Adding library files"
       libs.each do |path, target|
-        builder.copy(path, target)
+        builder.cp(path, target)
       end
 
       # Workaround: RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
