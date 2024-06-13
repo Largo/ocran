@@ -22,8 +22,6 @@ module Ocran
     LZMA_PATH = File.join(base_dir, "lzma.exe")
     EDICON_PATH = File.join(base_dir, "edicon.exe")
 
-    attr_reader :files
-
     # chdir_before:
     # When set to true, the working directory is changed to the application's
     # deployment location at runtime.

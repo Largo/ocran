@@ -6,8 +6,6 @@ module Ocran
   class InnoSetupScriptBuilder
     include WindowsCommandEscaping
 
-    attr_reader :files
-
     def initialize(inno_setup_script)
       @inno_setup_script = inno_setup_script
       @dirs = {}

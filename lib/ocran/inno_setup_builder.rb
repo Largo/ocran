@@ -7,10 +7,6 @@ module Ocran
   class InnoSetupBuilder
     include WindowsCommandEscaping
 
-    def files
-      @iss.files
-    end
-
     def initialize(path, inno_setup_script, chdir_before: nil, icon_path: nil, title: nil, &b)
       @path = path
 
