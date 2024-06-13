@@ -32,11 +32,11 @@ module Ocran
       end
     end
 
-    def setenv(name, value)
+    def export(name, value)
       @environments[name] = value
     end
 
-    def set_script(executable, script, *args)
+    def exec(executable, script, *args)
       @executable, @script, @args = executable, script, args
     end
 

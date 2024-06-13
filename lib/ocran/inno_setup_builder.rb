@@ -62,19 +62,19 @@ module Ocran
 
     # Specifies the final application script to be launched, which can be called
     # from any position in the data stream. It cannot be specified more than once.
-    def set_script(image, script, *argv)
+    def exec(image, script, *argv)
       if @script_info
         raise "Script is already set"
       end
       @script_info = true
 
-      @launcher.set_script(image, script, *argv)
+      @launcher.exec(image, script, *argv)
       extra_argc = argv.map { |arg| quote_and_escape(arg) }.join(" ")
       Ocran.verbose_msg "p #{image} #{script} #{show_path extra_argc}"
     end
 
-    def setenv(name, value)
-      @launcher.setenv(name, value)
+    def export(name, value)
+      @launcher.export(name, value)
       Ocran.verbose_msg "e #{name} #{show_path value}"
     end
 

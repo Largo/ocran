@@ -757,13 +757,13 @@ EOF
       # built in a bundle exec environment, particularly for Ruby 3.2 and later where
       # absolute paths are included in RUBYOPT.
       # In the future, we plan to implement a more appropriate solution.
-      builder.setenv("RUBYOPT", Ocran.rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), ""))
-      builder.setenv("RUBYLIB", load_path.uniq.join(";"))
-      builder.setenv("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
+      builder.export("RUBYOPT", Ocran.rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), ""))
+      builder.export("RUBYLIB", load_path.uniq.join(";"))
+      builder.export("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / Ocran.ruby_executable
-      builder.set_script(installed_ruby_exe, target_script, *Ocran.arg)
+      builder.exec(installed_ruby_exe, target_script, *Ocran.arg)
     end
 
     unless Ocran.inno_script
