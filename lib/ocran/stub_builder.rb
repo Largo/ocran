@@ -102,7 +102,6 @@ module Ocran
       return if @paths[key]
 
       @paths[key] = path
-      Ocran.verbose_msg "m #{path}"
 
       write_opcode(OP_CREATE_DIRECTORY)
       write_path(path)
@@ -118,7 +117,6 @@ module Ocran
 
       @files[key] = [tgt, src]
 
-      Ocran.verbose_msg "a #{tgt}"
       write_opcode(OP_CREATE_FILE)
       write_path(tgt)
       write_file(src)
@@ -141,15 +139,11 @@ module Ocran
       end
       @script_set = true
 
-      extra_argc = argv.map { |arg| "\"#{arg.gsub("\"", "\\\"")}\"" }.join(" ")
-
-      Ocran.verbose_msg "p #{image} #{script} #{show_path extra_argc}"
       write_opcode(OP_SET_SCRIPT)
       write_string_array(convert_to_native(image), convert_to_native(script), *argv)
     end
 
     def export(name, value)
-      Ocran.verbose_msg "e #{name} #{show_path value}"
       write_opcode(OP_SETENV)
       write_string(name.to_s)
       write_string(value.to_s)
@@ -159,11 +153,6 @@ module Ocran
       @of << ([@opcode_offset] + Signature).pack("VC*")
       @of.close
     end
-
-    def show_path(x)
-      x.to_s.gsub(TEMPDIR_ROOT.to_s, "<tempdir>")
-    end
-    private :show_path
 
     def compress
       IO.popen([LZMA_PATH, "e", "-si", "-so"], "r+b") do |lzma|

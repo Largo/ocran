@@ -48,12 +48,10 @@ module Ocran
 
     def mkdir(target)
       @iss.mkdir(target)
-      Ocran.verbose_msg "m #{target}"
     end
 
     def cp(source, target)
       @iss.cp(source, target)
-      Ocran.verbose_msg "a #{target}"
     end
 
     def touch(target)
@@ -69,18 +67,10 @@ module Ocran
       @script_info = true
 
       @launcher.exec(image, script, *argv)
-      extra_argc = argv.map { |arg| quote_and_escape(arg) }.join(" ")
-      Ocran.verbose_msg "p #{image} #{script} #{show_path extra_argc}"
     end
 
     def export(name, value)
       @launcher.export(name, value)
-      Ocran.verbose_msg "e #{name} #{show_path value}"
     end
-
-    def show_path(x)
-      x.to_s.gsub(TEMPDIR_ROOT.to_s, "{app}")
-    end
-    private :show_path
   end
 end

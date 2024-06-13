@@ -766,8 +766,10 @@ EOF
       builder.exec(installed_ruby_exe, target_script, *Ocran.arg)
     end
 
+    require_relative "../lib/ocran/builder_ops_logger"
     unless Ocran.inno_script
       require_relative "../lib/ocran/stub_builder"
+      StubBuilder.prepend(BuilderOpsLogger) unless Ocran.quiet
       StubBuilder.new(Ocran.output_executable,
                       chdir_before: Ocran.chdir_first,
                       debug_extract: Ocran.debug_extract,
@@ -779,6 +781,7 @@ EOF
       Ocran.msg "Finished building #{Ocran.output_executable} (#{Ocran.output_executable.size} bytes)"
     else
       require_relative "../lib/ocran/inno_setup_builder"
+      InnoSetupBuilder.prepend(BuilderOpsLogger) unless Ocran.quiet
       InnoSetupBuilder.new(Ocran.output_executable,
                            Ocran.inno_script,
                            chdir_before: Ocran.chdir_first,
