@@ -44,6 +44,26 @@ module Ocran
     alias == eql?
     alias === eql?
 
+    # Calculates a normalized hash value for a pathname to ensure consistent
+    # hashing across different environments, particularly in Windows.
+    # This method first normalizes the path by:
+    # 1. Converting the file separator from the platform-specific separator
+    #    to the common POSIX separator ('/') if necessary.
+    # 2. Converting the path to lowercase if the filesystem is case-insensitive.
+    # The normalized path string is then hashed, providing a stable hash value
+    # that is consistent with the behavior of eql? method, thus maintaining
+    # the integrity of hash-based data structures like Hash or Set.
+    #
+    # @return [Integer] A hash integer based on the normalized path.
+    def hash
+      path = if File::FNM_SYSCASE.nonzero?
+               to_s.downcase
+             else
+               to_s
+             end
+      NORMALIZE_FILE_SEPARATOR[path].hash
+    end
+
     # Checks if the current path is a sub path of the specified base_directory.
     # Both paths must be either absolute paths or relative paths; otherwise, this
     # method returns false.
