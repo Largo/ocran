@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 require "tempfile"
+require_relative "file_path_set"
 require_relative "windows_command_escaping"
 
 module Ocran
@@ -8,8 +9,8 @@ module Ocran
 
     def initialize(inno_setup_script)
       @inno_setup_script = inno_setup_script
-      @dirs = {}
-      @files = {}
+      @dirs = FilePathSet.new
+      @files = FilePathSet.new
       @_dirs = []
       @_files = []
     end
@@ -36,11 +37,7 @@ module Ocran
     end
 
     def mkdir(target)
-      return if target.to_s == "."
-
-      key = target.to_s.downcase
-      return if @dirs[key]
-      @dirs[key] = target
+      return unless @dirs.add?("/", target)
 
       @_dirs << { name: File.join("{app}", target) }
     end
@@ -50,9 +47,7 @@ module Ocran
         raise "The file does not exist (#{source})"
       end
 
-      key = target.to_s.downcase
-      return if @files[key]
-      @files[key] = [target, source]
+      return if @files.add?(source, target)
 
       @_files << {
         source: source,

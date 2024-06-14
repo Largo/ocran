@@ -1,3 +1,5 @@
+require_relative "file_path_set"
+
 module Ocran
   # Utility class that produces the actual executable. Opcodes
   # (create_file, mkdir etc) are added by invoking methods on an
@@ -47,8 +49,8 @@ module Ocran
     #
     def initialize(path, chdir_before: nil, debug_extract: nil, debug_mode: nil,
                    enable_compression: nil, gui_mode: nil, icon_path: nil, &b)
-      @paths = {}
-      @files = {}
+      @dirs = FilePathSet.new
+      @files = FilePathSet.new
 
       stub_path = Pathname.new(gui_mode ? STUBW_PATH : STUB_PATH)
 
@@ -95,31 +97,23 @@ module Ocran
       end
     end
 
-    def mkdir(path)
-      return if path.to_s == "."
-
-      key = path.to_s.downcase
-      return if @paths[key]
-
-      @paths[key] = path
+    def mkdir(target)
+      return unless @dirs.add?("/", target)
 
       write_opcode(OP_CREATE_DIRECTORY)
-      write_path(path)
+      write_path(target)
     end
 
-    def cp(src, tgt)
-      unless File.exist?(src)
-        raise "The file does not exist (#{src})"
+    def cp(source, target)
+      unless File.exist?(source)
+        raise "The file does not exist (#{source})"
       end
 
-      key = tgt.to_s.downcase
-      return if @files[key]
-
-      @files[key] = [tgt, src]
+      return unless @files.add?(source, target)
 
       write_opcode(OP_CREATE_FILE)
-      write_path(tgt)
-      write_file(src)
+      write_path(target)
+      write_file(source)
     end
 
     def touch(tgt)
