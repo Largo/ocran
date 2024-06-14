@@ -68,12 +68,16 @@ module Ocran
 
   @options.each_key { |opt| eval("def self.#{opt}; @options[:#{opt}]; end") }
 
+  def self.quiet = @options[:quiet]
+
+  def self.verbose = !Ocran.quiet && @options[:verbose]
+
   def Ocran.msg(s)
     puts "=== #{s}" unless Ocran.quiet
   end
 
   def Ocran.verbose_msg(s)
-    puts s if Ocran.verbose and not Ocran.quiet
+    puts s if Ocran.verbose
   end
 
   def Ocran.warn(s)
@@ -769,7 +773,7 @@ EOF
     require_relative "../lib/ocran/builder_ops_logger"
     unless Ocran.inno_script
       require_relative "../lib/ocran/stub_builder"
-      StubBuilder.prepend(BuilderOpsLogger) unless Ocran.quiet
+      StubBuilder.prepend(BuilderOpsLogger) if Ocran.verbose
       StubBuilder.new(Ocran.output_executable,
                       chdir_before: Ocran.chdir_first,
                       debug_extract: Ocran.debug_extract,
@@ -781,7 +785,7 @@ EOF
       Ocran.msg "Finished building #{Ocran.output_executable} (#{Ocran.output_executable.size} bytes)"
     else
       require_relative "../lib/ocran/inno_setup_builder"
-      InnoSetupBuilder.prepend(BuilderOpsLogger) unless Ocran.quiet
+      InnoSetupBuilder.prepend(BuilderOpsLogger) if Ocran.verbose
       InnoSetupBuilder.new(Ocran.output_executable,
                            Ocran.inno_script,
                            chdir_before: Ocran.chdir_first,
