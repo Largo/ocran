@@ -801,7 +801,7 @@ EOF
   end
 end # module Ocran
 
-if File.basename(__FILE__) == File.basename($0)
+if File.basename(__FILE__) == File.basename($PROGRAM_NAME)
   Ocran.init(ARGV)
   ARGV.replace(Ocran.arg)
 
@@ -818,7 +818,7 @@ if File.basename(__FILE__) == File.basename($0)
 
   if Ocran.run_script
     Ocran.msg "Loading script to check dependencies"
-    $0 = Ocran.main_script.to_s
+    $PROGRAM_NAME = Ocran.main_script.to_s
     load Ocran.main_script
   end
 end
