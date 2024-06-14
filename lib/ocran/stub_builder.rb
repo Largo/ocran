@@ -52,15 +52,15 @@ module Ocran
       @dirs = FilePathSet.new
       @files = FilePathSet.new
 
-      stub_path = Pathname.new(gui_mode ? STUBW_PATH : STUB_PATH)
+      stub_path = gui_mode ? STUBW_PATH : STUB_PATH
 
-      unless stub_path.exist?
+      unless File.exist?(stub_path)
         Ocran.fatal_error "Stub image not available"
       end
 
-      File.binwrite(path, stub_path.binread)
-
       begin
+        IO.copy_stream(stub_path, path)
+
         if icon_path
           system(EDICON_PATH, path.to_s, icon_path.to_s, exception: true)
         end
