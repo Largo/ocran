@@ -285,9 +285,10 @@ EOF
     @rubyopt ||= @options[:rubyopt] || ENV["RUBYOPT"] || ""
   end
 
-  def Ocran.init(argv)
+  def Ocran.init
     save_environment
-    parseargs(argv)
+    parseargs(ARGV)
+    ARGV.replace(Ocran.arg)
     IGNORE_MODULES.push(*ObjectSpace.each_object(Module).to_a)
   end
 
@@ -806,8 +807,7 @@ EOF
 end # module Ocran
 
 if File.basename(__FILE__) == File.basename($PROGRAM_NAME)
-  Ocran.init(ARGV)
-  ARGV.replace(Ocran.arg)
+  Ocran.init
 
   unless Ocran.main_script.exist?
     Ocran.fatal_error "#{Ocran.main_script} was not found!"
