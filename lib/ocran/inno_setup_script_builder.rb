@@ -47,7 +47,7 @@ module Ocran
         raise "The file does not exist (#{source})"
       end
 
-      return if @files.add?(source, target)
+      return unless @files.add?(source, target)
 
       @_files << {
         source: source,
