@@ -13,7 +13,7 @@ module Ocran
       @launcher = LauncherBatchBuilder.new(chdir_before: chdir_before, title: title)
 
       if icon_path
-        cp(icon_path, icon_path.basename)
+        cp(icon_path, File.basename(icon_path))
       end
 
       yield(self)
