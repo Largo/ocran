@@ -648,35 +648,6 @@ EOF
     # src_prefix was adjusted.
     load_path = src_load_path.map { |loadpath| TEMPDIR_ROOT / SRCDIR / loadpath.relative_path_from(src_prefix) }
 
-    # Decide where to put gem files, either the system gem folder, or
-    # GEMHOME.
-    gem_files.each do |gemfile|
-      if gemfile.subpath?(exec_prefix)
-        libs << [gemfile, gemfile.relative_path_from(exec_prefix)]
-      elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemfile.subpath?(pth) }
-        libs << [gemfile, GEMHOMEDIR / gemfile.relative_path_from(Pathname(gemhome))]
-      else
-        Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
-      end
-    end
-
-    # If requested, add all ruby standard libraries
-    if Ocran.add_all_core
-      Ocran.msg "Will include all ruby core libraries"
-      @load_path_before.each do |lp|
-        path = Pathname.new(lp)
-        # Match the load path against standard library, site_ruby, and vendor_ruby paths
-        path.to_posix.match(RUBY_LIBRARY_PATH_REGEX) do |m|
-          subdir = m[1]
-          path.find.each do |src|
-            next if src.directory?
-            dest = Pathname("lib").join(subdir, src.relative_path_from(path))
-            libs << [src, dest]
-          end
-        end
-      end
-    end
-
     Ocran.msg "Building #{Ocran.output_executable}"
     target_script = nil
     direction = proc do |builder|
@@ -749,6 +720,35 @@ EOF
       Ocran.msg "Adding library files"
       libs.each do |path, target|
         builder.cp(path, target)
+      end
+
+      # Decide where to put gem files, either the system gem folder, or
+      # GEMHOME.
+      gem_files.each do |gemfile|
+        if gemfile.subpath?(exec_prefix)
+          builder.cp(gemfile, gemfile.relative_path_from(exec_prefix))
+        elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemfile.subpath?(pth) }
+          builder.cp(gemfile, GEMHOMEDIR / gemfile.relative_path_from(Pathname(gemhome)))
+        else
+          Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
+        end
+      end
+
+      # If requested, add all ruby standard libraries
+      if Ocran.add_all_core
+        Ocran.msg "Will include all ruby core libraries"
+        @load_path_before.each do |lp|
+          path = Pathname.new(lp)
+          # Match the load path against standard library, site_ruby, and vendor_ruby paths
+          path.to_posix.match(RUBY_LIBRARY_PATH_REGEX) do |m|
+            subdir = m[1]
+            path.find.each do |src|
+              next if src.directory?
+              dest = Pathname("lib").join(subdir, src.relative_path_from(path))
+              builder.cp(src, dest)
+            end
+          end
+        end
       end
 
       # Workaround: RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
