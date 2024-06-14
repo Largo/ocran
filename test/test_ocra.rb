@@ -797,7 +797,8 @@ class TestOcran < Minitest::Test
   def test_innosetup
     skip unless system("where ISCC >NUL 2>&1")
     with_fixture 'innosetup' do
-      assert system("ruby", ocran, "innosetup.rb", "--quiet",
+      icon_file = File.join(OcranRoot, 'src', 'vit-ruby.ico')
+      assert system("ruby", ocran, "innosetup.rb", '--icon', icon_file, "--quiet",
                     "--innosetup", "innosetup.iss", "--chdir-first", "--no-lzma")
       assert File.exist?("Output/innosetup.exe")
     end
