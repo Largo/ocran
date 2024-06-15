@@ -638,21 +638,17 @@ EOF
       end
     end
 
-    # Recompute the src_prefix. Files may have been added implicitly
-    # while scanning through features.
-    files = source_files.map(&:expand_path)
-    src_prefix = find_src_prefix(files)
-    src_files = files.map { |file| file.relative_path_from(src_prefix) }
-
-    # Add the load path that are required with the correct path after
-    # src_prefix was adjusted.
-    load_path = src_load_path.map { |loadpath| TEMPDIR_ROOT / SRCDIR / loadpath.relative_path_from(src_prefix) }
-
     Ocran.msg "Building #{Ocran.output_executable}"
-    target_script = nil
     direction = proc do |builder|
+      # Recompute the src_prefix. Files may have been added implicitly
+      # while scanning through features.
+      files = source_files.map(&:expand_path)
+      src_prefix = find_src_prefix(files)
+      src_files = files.map { |file| file.relative_path_from(src_prefix) }
+
       # Add explicitly mentioned files
       Ocran.msg "Adding user-supplied source files"
+      target_script = nil
       src_files.each do |file|
         file = src_prefix / file
         if file.subpath?(exec_prefix)
@@ -763,6 +759,9 @@ EOF
       # absolute paths are included in RUBYOPT.
       # In the future, we plan to implement a more appropriate solution.
       builder.export("RUBYOPT", Ocran.rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), ""))
+      # Add the load path that are required with the correct path after
+      # src_prefix was adjusted.
+      load_path = src_load_path.map { |path| TEMPDIR_ROOT / SRCDIR / path.relative_path_from(src_prefix) }
       builder.export("RUBYLIB", load_path.uniq.join(";"))
       builder.export("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
 
