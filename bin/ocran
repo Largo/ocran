@@ -640,6 +640,8 @@ EOF
 
     Ocran.msg "Building #{Ocran.output_executable}"
     direction = proc do |builder|
+      require_relative "../lib/ocran/build_helper"
+      builder.extend(BuildHelper)
       # Recompute the src_prefix. Files may have been added implicitly
       # while scanning through features.
       files = source_files.map(&:expand_path)
@@ -761,9 +763,9 @@ EOF
       builder.export("RUBYOPT", Ocran.rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), ""))
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
-      load_path = src_load_path.map { |path| TEMPDIR_ROOT / SRCDIR / path.relative_path_from(src_prefix) }
-      builder.export("RUBYLIB", load_path.uniq.join(";"))
-      builder.export("GEM_PATH", TEMPDIR_ROOT / GEMHOMEDIR)
+      load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(src_prefix) }.uniq
+      builder.set_env_path("RUBYLIB", *load_path)
+      builder.set_env_path("GEM_PATH", GEMHOMEDIR)
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / Ocran.ruby_executable
