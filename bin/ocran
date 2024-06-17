@@ -37,6 +37,8 @@ module Ocran
   BINDIR = Pathname.new("bin")
   # Directory for GEMHOME files in temporary directory.
   GEMHOMEDIR = Pathname.new("gemhome")
+  # Directory for Ruby library in temporary directory.
+  LIBDIR = Pathname("lib")
 
   IGNORE_MODULES = []
 
@@ -674,9 +676,9 @@ EOF
 
       # Add the ruby executable and DLL
       Ocran.msg "Adding ruby executable #{Ocran.ruby_executable}"
-      builder.cp(bindir / Ocran.ruby_executable, BINDIR / Ocran.ruby_executable)
+      builder.copy_to_bin(bindir / Ocran.ruby_executable, Ocran.ruby_executable)
       if libruby_so
-        builder.cp(bindir / libruby_so, BINDIR / libruby_so)
+        builder.copy_to_bin(bindir / libruby_so, libruby_so)
       end
 
       # Add detected DLLs
@@ -684,9 +686,9 @@ EOF
         Ocran.detect_dlls.each do |dll|
           Ocran.msg "Adding detected DLL #{dll}"
           if dll.subpath?(exec_prefix)
-            builder.cp(dll, dll.relative_path_from(exec_prefix))
+            builder.duplicate_from_exec_prefix(dll)
           else
-            builder.cp(dll, BINDIR / File.basename(dll))
+            builder.copy_to_bin(dll, dll.basename)
           end
         end
       end
@@ -694,21 +696,21 @@ EOF
       # Add external manifest files
       [Ocran.ruby_builtin_manifest].compact.each do |manifest|
         Ocran.msg "Adding external manifest #{manifest}"
-        builder.cp(manifest, manifest.relative_path_from(exec_prefix))
+        builder.duplicate_from_exec_prefix(manifest)
       end
 
       # Add extra DLLs specified on the command line
       Ocran.extra_dlls.each do |dll|
         Ocran.msg "Adding supplied DLL #{dll}"
-        builder.cp(bindir / dll, BINDIR / dll)
+        builder.copy_to_bin(bindir / dll, dll)
       end
 
       # Add gemspec files
       @gemspecs.uniq.each do |gemspec|
         if gemspec.subpath?(exec_prefix)
-          builder.cp(gemspec, gemspec.relative_path_from(exec_prefix))
+          builder.duplicate_from_exec_prefix(gemspec)
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemspec.subpath?(pth) }
-          builder.cp(gemspec, GEMHOMEDIR / gemspec.relative_path_from(Pathname(gemhome)))
+          builder.duplicate_from_gem_path(gemspec, gemhome)
         else
           Ocran.fatal_error "Gem spec #{gemspec} does not exist in the Ruby installation. Don't know where to put it."
         end
@@ -724,9 +726,9 @@ EOF
       # GEMHOME.
       gem_files.each do |gemfile|
         if gemfile.subpath?(exec_prefix)
-          builder.cp(gemfile, gemfile.relative_path_from(exec_prefix))
+          builder.duplicate_from_exec_prefix(gemfile)
         elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemfile.subpath?(pth) }
-          builder.cp(gemfile, GEMHOMEDIR / gemfile.relative_path_from(Pathname(gemhome)))
+          builder.duplicate_from_gem_path(gemfile, gemhome)
         else
           Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
         end
@@ -742,8 +744,7 @@ EOF
             subdir = m[1]
             path.find.each do |src|
               next if src.directory?
-              dest = Pathname("lib").join(subdir, src.relative_path_from(path))
-              builder.cp(src, dest)
+              builder.copy_to_lib(src, Pathname(subdir) / src.relative_path_from(path))
             end
           end
         end

@@ -1,7 +1,28 @@
 # frozen_string_literal: true
+require "pathname"
 
 module Ocran
   module BuildHelper
+    def copy_to_bin(source, target)
+      cp(source, BINDIR / target)
+    end
+
+    def copy_to_gem_home(source, target)
+      cp(source, GEMHOMEDIR / target)
+    end
+
+    def copy_to_lib(source, target)
+      cp(source, LIBDIR / target)
+    end
+
+    def duplicate_from_exec_prefix(source)
+      cp(source, Pathname(source).relative_path_from(HostConfigHelper.exec_prefix))
+    end
+
+    def duplicate_from_gem_path(source, gem_path)
+      copy_to_gem_home(source, Pathname(source).relative_path_from(gem_path))
+    end
+
     # Sets an environment variable with a joined path value.
     # This method processes an array of path strings or Pathname objects, accepts
     # absolute paths as is, and appends a placeholder to relative paths to convert
