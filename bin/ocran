@@ -648,15 +648,12 @@ EOF
       builder.extend(BuildHelper)
       # Recompute the src_prefix. Files may have been added implicitly
       # while scanning through features.
-      files = source_files.map(&:expand_path)
-      src_prefix = find_src_prefix(files)
-      src_files = files.map { |file| file.relative_path_from(src_prefix) }
+      src_prefix = find_src_prefix(source_files)
 
       # Add explicitly mentioned files
       Ocran.msg "Adding user-supplied source files"
       target_script = nil
-      src_files.each do |file|
-        file = src_prefix / file
+      source_files.each do |file|
         if file.subpath?(exec_prefix)
           target = file.relative_path_from(exec_prefix)
         elsif file.subpath?(src_prefix)
