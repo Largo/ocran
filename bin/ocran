@@ -642,6 +642,8 @@ EOF
 
     Ocran.msg "Building #{Ocran.output_executable}"
     direction = proc do |builder|
+      require_relative "../lib/ocran/builder_ops_logger"
+      builder.extend(BuilderOpsLogger) if Ocran.verbose
       require_relative "../lib/ocran/build_helper"
       builder.extend(BuildHelper)
       # Recompute the src_prefix. Files may have been added implicitly
@@ -773,10 +775,8 @@ EOF
       builder.exec(installed_ruby_exe, target_script, *Ocran.arg)
     end
 
-    require_relative "../lib/ocran/builder_ops_logger"
     unless Ocran.inno_script
       require_relative "../lib/ocran/stub_builder"
-      StubBuilder.prepend(BuilderOpsLogger) if Ocran.verbose
       StubBuilder.new(Ocran.output_executable,
                       chdir_before: Ocran.chdir_first,
                       debug_extract: Ocran.debug_extract,
@@ -788,7 +788,6 @@ EOF
       Ocran.msg "Finished building #{Ocran.output_executable} (#{Ocran.output_executable.size} bytes)"
     else
       require_relative "../lib/ocran/inno_setup_builder"
-      InnoSetupBuilder.prepend(BuilderOpsLogger) if Ocran.verbose
       InnoSetupBuilder.new(Ocran.output_executable,
                            Ocran.inno_script,
                            chdir_before: Ocran.chdir_first,
