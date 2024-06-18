@@ -40,7 +40,7 @@ module Ocran
   # Directory for Ruby library in temporary directory.
   LIBDIR = Pathname("lib")
 
-  IGNORE_MODULES = []
+  @ignore_modules = []
 
   @options = {
     :lzma_mode => true,
@@ -291,14 +291,14 @@ EOF
     save_environment
     parseargs(ARGV)
     ARGV.replace(Ocran.arg)
-    IGNORE_MODULES.push(*ObjectSpace.each_object(Module).to_a)
+    @ignore_modules += ObjectSpace.each_object(Module).to_a
   end
 
   # Force loading autoloaded constants. Searches through all modules
   # (and hence classes), and checks their constants for autoloaded
   # ones, then attempts to load them.
-  def Ocran.attempt_load_autoload
-    checked_modules = IGNORE_MODULES.inject({}) { |h, mod| h[mod] = true; h }
+  def self.attempt_load_autoload(ignore_modules = [])
+    checked_modules = ignore_modules.inject({}) { |h, mod| h[mod] = true; h }
     loop do
       modules_count = ObjectSpace.each_object(Module).count do |mod|
         next if checked_modules.include?(mod)
@@ -539,7 +539,7 @@ EOF
 
     # If the script was run and autoload is enabled, attempt to autoload libraries.
     if Ocran.run_script && Ocran.load_autoload
-      attempt_load_autoload
+      attempt_load_autoload(@ignore_modules)
     end
 
     # Store the currently loaded files (before we require rbconfig for
