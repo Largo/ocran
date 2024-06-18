@@ -614,7 +614,7 @@ EOF
         Ocran.detect_dlls.each do |dll|
           Ocran.msg "Adding detected DLL #{dll}"
           if dll.subpath?(exec_prefix)
-            builder.duplicate_from_exec_prefix(dll)
+            builder.duplicate_to_exec_prefix(dll)
           else
             builder.copy_to_bin(dll, dll.basename)
           end
@@ -624,7 +624,7 @@ EOF
       # Add external manifest files
       [Ocran.ruby_builtin_manifest].compact.each do |manifest|
         Ocran.msg "Adding external manifest #{manifest}"
-        builder.duplicate_from_exec_prefix(manifest)
+        builder.duplicate_to_exec_prefix(manifest)
       end
 
       # Add extra DLLs specified on the command line
@@ -636,7 +636,7 @@ EOF
       # Add gemspec files
       @gemspecs.uniq.each do |gemspec|
         if gemspec.subpath?(exec_prefix)
-          builder.duplicate_from_exec_prefix(gemspec)
+          builder.duplicate_to_exec_prefix(gemspec)
         elsif defined?(Gem) and (gem_path = find_gem_path(gemspec))
           builder.duplicate_to_gem_home(gemspec, gem_path)
         else
@@ -648,7 +648,7 @@ EOF
       # GEMHOME.
       gem_files.each do |gemfile|
         if gemfile.subpath?(exec_prefix)
-          builder.duplicate_from_exec_prefix(gemfile)
+          builder.duplicate_to_exec_prefix(gemfile)
         elsif defined?(Gem) and (gem_path = find_gem_path(gemfile))
           builder.duplicate_to_gem_home(gemfile, gem_path)
         else
@@ -698,7 +698,7 @@ EOF
           if fullpath.subpath?(exec_prefix)
             # Features found in the Ruby installation are put in the
             # temporary Ruby installation.
-            builder.duplicate_from_exec_prefix(fullpath)
+            builder.duplicate_to_exec_prefix(fullpath)
           elsif defined?(Gem) and (gem_path = find_gem_path(fullpath))
             # Features found in any other Gem path (e.g. ~/.gems) is put
             # in a special 'gemhome' folder.

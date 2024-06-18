@@ -15,7 +15,7 @@ module Ocran
       cp(source, LIBDIR / target)
     end
 
-    def duplicate_from_exec_prefix(source)
+    def duplicate_to_exec_prefix(source)
       cp(source, Pathname(source).relative_path_from(HostConfigHelper.exec_prefix))
     end
 
