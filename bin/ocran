@@ -591,87 +591,12 @@ EOF
       Ocran.msg "Not including encoding support files"
     end
 
-    # Find the source root and adjust paths
-    source_files = Ocran.files.dup
-    src_prefix = find_src_prefix(source_files)
-
-    # Find features and decide where to put them in the temporary
-    # directory layout.
-    libs = []
-    src_load_path = []
-    instsitelibdir = sitelibdir.relative_path_from(exec_prefix)
-    features.each do |feature|
-      path = find_load_path(all_load_paths, feature)
-      if path.nil? || path.expand_path == Pathname.pwd
-        source_files << feature unless feature.basename.to_s =~ IGNORE_MODULE_NAMES
-      else
-        if feature.absolute?
-          feature = feature.relative_path_from(path.expand_path)
-        end
-        fullpath = feature.expand_path(path)
-
-        if fullpath.subpath?(exec_prefix)
-          # Features found in the Ruby installation are put in the
-          # temporary Ruby installation.
-          libs << [fullpath, fullpath.relative_path_from(exec_prefix)]
-        elsif defined?(Gem) and gemhome = Gem.path.find { |pth| fullpath.subpath?(pth) }
-          # Features found in any other Gem path (e.g. ~/.gems) is put
-          # in a special 'gemhome' folder.
-          libs << [fullpath, GEMHOMEDIR / fullpath.relative_path_from(Pathname(gemhome))]
-        elsif fullpath.subpath?(src_prefix) || path == working_directory
-          # Any feature found inside the src_prefix automatically gets
-          # added as a source file (to go in 'src').
-          source_files << fullpath
-          # Add the load path unless it was added by the script while
-          # running (or we assume that the script can also set it up
-          # correctly when running from the resulting executable).
-          src_load_path << path unless @added_load_paths.include?(path)
-        elsif @added_load_paths.include?(path)
-          # Any feature that exist in a load path added by the script
-          # itself is added as a file to go into the 'src' (src_prefix
-          # will be adjusted below to point to the common parent).
-          source_files << fullpath
-        else
-          # All other feature that can not be resolved go in the the
-          # Ruby sitelibdir. This is automatically in the load path
-          # when Ruby starts.
-          libs << [fullpath, instsitelibdir / feature]
-        end
-      end
-    end
-
-    Ocran.msg "Building #{Ocran.output_executable}"
     direction = proc do |builder|
+      Ocran.msg "Building #{Ocran.output_executable}"
       require_relative "../lib/ocran/builder_ops_logger"
       builder.extend(BuilderOpsLogger) if Ocran.verbose
       require_relative "../lib/ocran/build_helper"
       builder.extend(BuildHelper)
-      # Recompute the src_prefix. Files may have been added implicitly
-      # while scanning through features.
-      src_prefix = find_src_prefix(source_files)
-
-      # Add explicitly mentioned files
-      Ocran.msg "Adding user-supplied source files"
-      target_script = nil
-      source_files.each do |file|
-        if file.subpath?(exec_prefix)
-          target = file.relative_path_from(exec_prefix)
-        elsif file.subpath?(src_prefix)
-          target = SRCDIR / file.relative_path_from(src_prefix)
-        else
-          target = SRCDIR / file.basename
-        end
-
-        target_script ||= target
-
-        if file.directory?
-          builder.mkdir(target)
-        elsif file.exist?
-          builder.cp(file, target)
-        else
-          Ocran.fatal_error "The file does not exist (#{file})"
-        end
-      end
 
       # Add the ruby executable and DLL
       Ocran.msg "Adding ruby executable #{Ocran.ruby_executable}"
@@ -715,12 +640,6 @@ EOF
         end
       end
 
-      # Add loaded libraries (features, gems)
-      Ocran.msg "Adding library files"
-      libs.each do |path, target|
-        builder.cp(path, target)
-      end
-
       # Decide where to put gem files, either the system gem folder, or
       # GEMHOME.
       gem_files.each do |gemfile|
@@ -753,6 +672,83 @@ EOF
       # Add an empty file to /msys64/usr/bin/msys-2.0.dll if the dll was not required otherwise
       builder.touch('msys64/usr/bin/msys-2.0.dll')
 
+      # Find the source root and adjust paths
+      source_files = Ocran.files.dup
+      src_prefix = find_src_prefix(source_files)
+
+      # Find features and decide where to put them in the temporary
+      # directory layout.
+      src_load_path = []
+      # Add loaded libraries (features, gems)
+      Ocran.msg "Adding library files"
+      features.each do |feature|
+        load_path = find_load_path(all_load_paths, feature)
+        if load_path.nil? || load_path.expand_path == Pathname.pwd
+          source_files << feature unless feature.basename.to_s =~ IGNORE_MODULE_NAMES
+        else
+          if feature.absolute?
+            feature = feature.relative_path_from(load_path.expand_path)
+          end
+          fullpath = feature.expand_path(load_path)
+
+          if fullpath.subpath?(exec_prefix)
+            # Features found in the Ruby installation are put in the
+            # temporary Ruby installation.
+            builder.duplicate_from_exec_prefix(fullpath)
+          elsif defined?(Gem) and gemhome = Gem.path.find { |pth| fullpath.subpath?(pth) }
+            # Features found in any other Gem path (e.g. ~/.gems) is put
+            # in a special 'gemhome' folder.
+            builder.duplicate_from_gem_path(fullpath, gemhome)
+          elsif fullpath.subpath?(src_prefix) || load_path == working_directory
+            # Any feature found inside the src_prefix automatically gets
+            # added as a source file (to go in 'src').
+            source_files << fullpath
+            # Add the load path unless it was added by the script while
+            # running (or we assume that the script can also set it up
+            # correctly when running from the resulting executable).
+            src_load_path << load_path unless @added_load_paths.include?(load_path)
+          elsif @added_load_paths.include?(load_path)
+            # Any feature that exist in a load path added by the script
+            # itself is added as a file to go into the 'src' (src_prefix
+            # will be adjusted below to point to the common parent).
+            source_files << fullpath
+          else
+            # All other feature that can not be resolved go in the the
+            # Ruby sitelibdir. This is automatically in the load path
+            # when Ruby starts.
+            inst_sitelibdir = sitelibdir.relative_path_from(exec_prefix)
+            builder.cp(fullpath, inst_sitelibdir / feature)
+          end
+        end
+      end
+
+      # Recompute the src_prefix. Files may have been added implicitly
+      # while scanning through features.
+      inst_src_prefix = find_src_prefix(source_files)
+
+      # Add explicitly mentioned files
+      Ocran.msg "Adding user-supplied source files"
+      target_script = nil
+      source_files.each do |file|
+        if file.subpath?(exec_prefix)
+          target = file.relative_path_from(exec_prefix)
+        elsif file.subpath?(inst_src_prefix)
+          target = SRCDIR / file.relative_path_from(inst_src_prefix)
+        else
+          target = SRCDIR / file.basename
+        end
+
+        target_script ||= target
+
+        if file.directory?
+          builder.mkdir(target)
+        elsif file.exist?
+          builder.cp(file, target)
+        else
+          Ocran.fatal_error "The file does not exist (#{file})"
+        end
+      end
+
       # Set environment variable
 
       # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
@@ -763,7 +759,7 @@ EOF
       builder.export("RUBYOPT", Ocran.rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), ""))
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
-      load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(src_prefix) }.uniq
+      load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
       builder.set_env_path("RUBYLIB", *load_path)
       builder.set_env_path("GEM_PATH", GEMHOMEDIR)
 
