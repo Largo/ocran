@@ -484,15 +484,7 @@ EOF
             features_from_gems.select { |feature| feature.subpath?(gem_root) }
           when :files
             selected_files = gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix !~ GEM_NON_FILE_RE }
-            gem_extension = (gem_root / ".." / ".." / "extensions").expand_path
-            if gem_extension.exist?
-              build_complete = gem_extension.find.select do |pn|
-                pn.file? && pn.basename.to_s == "gem.build_complete" && pn.dirname.basename.to_s == spec.full_name
-              end
-              unless build_complete.empty?
-                selected_files << build_complete
-              end
-            end
+            Pathname(spec.gem_build_complete_path).tap { |path| selected_files << path if path.exist? }
             selected_files
           when :extras
             gem_root_files.select { |path| path.relative_path_from(gem_root).to_posix =~ GEM_EXTRA_RE }
