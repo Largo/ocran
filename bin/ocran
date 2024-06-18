@@ -530,6 +530,10 @@ EOF
     manifest_path.exist? ? manifest_path : nil
   end
 
+  def self.find_gem_path(file_path)
+    Gem.path.find { |pth| Pathname(file_path).subpath?(pth) }
+  end
+
   def Ocran.build_exe
     all_load_paths = $LOAD_PATH.map { |loadpath| Pathname(loadpath).expand_path }
     @added_load_paths = ($LOAD_PATH - @load_path_before).map { |loadpath| Pathname(loadpath).expand_path }
@@ -633,8 +637,8 @@ EOF
       @gemspecs.uniq.each do |gemspec|
         if gemspec.subpath?(exec_prefix)
           builder.duplicate_from_exec_prefix(gemspec)
-        elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemspec.subpath?(pth) }
-          builder.duplicate_from_gem_path(gemspec, gemhome)
+        elsif defined?(Gem) and (gem_path = find_gem_path(gemspec))
+          builder.duplicate_to_gem_home(gemspec, gem_path)
         else
           Ocran.fatal_error "Gem spec #{gemspec} does not exist in the Ruby installation. Don't know where to put it."
         end
@@ -645,8 +649,8 @@ EOF
       gem_files.each do |gemfile|
         if gemfile.subpath?(exec_prefix)
           builder.duplicate_from_exec_prefix(gemfile)
-        elsif defined?(Gem) and gemhome = Gem.path.find { |pth| gemfile.subpath?(pth) }
-          builder.duplicate_from_gem_path(gemfile, gemhome)
+        elsif defined?(Gem) and (gem_path = find_gem_path(gemfile))
+          builder.duplicate_to_gem_home(gemfile, gem_path)
         else
           Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
         end
@@ -695,10 +699,10 @@ EOF
             # Features found in the Ruby installation are put in the
             # temporary Ruby installation.
             builder.duplicate_from_exec_prefix(fullpath)
-          elsif defined?(Gem) and gemhome = Gem.path.find { |pth| fullpath.subpath?(pth) }
+          elsif defined?(Gem) and (gem_path = find_gem_path(fullpath))
             # Features found in any other Gem path (e.g. ~/.gems) is put
             # in a special 'gemhome' folder.
-            builder.duplicate_from_gem_path(fullpath, gemhome)
+            builder.duplicate_to_gem_home(fullpath, gem_path)
           elsif fullpath.subpath?(src_prefix) || load_path == working_directory
             # Any feature found inside the src_prefix automatically gets
             # added as a source file (to go in 'src').

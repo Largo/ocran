@@ -19,7 +19,7 @@ module Ocran
       cp(source, Pathname(source).relative_path_from(HostConfigHelper.exec_prefix))
     end
 
-    def duplicate_from_gem_path(source, gem_path)
+    def duplicate_to_gem_home(source, gem_path)
       copy_to_gem_home(source, Pathname(source).relative_path_from(gem_path))
     end
 
