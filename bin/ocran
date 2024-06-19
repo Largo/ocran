@@ -437,8 +437,9 @@ EOF
       features.each do |feature|
         # Detect load path unless absolute
         if feature.relative?
-          feature = find_load_path($LOAD_PATH.map { |path| Pathname(path) }, feature)
-          next if feature.nil? # Could be enumerator.so
+          load_path = find_load_path($LOAD_PATH.map { |path| Pathname(path) }, feature)
+          next if load_path.nil? # Could be enumerator.so
+          feature = feature.expand_path(load_path)
         end
         # Skip if found in known Gem dir
         if gems.find { |gem, spec| feature.subpath?(spec.gem_dir) }
