@@ -384,6 +384,19 @@ EOF
     include
   end
 
+  def self.find_gemspec(feature)
+    Gem.path.each do |gem_path|
+      gems_dir = File.join(gem_path, "gems")
+      next unless feature.subpath?(gems_dir)
+
+      full_name = feature.relative_path_from(gems_dir).each_filename.first
+      spec_path = File.join(gem_path, "specifications", "#{full_name}.gemspec")
+      spec = Gem::Specification.load(spec_path)
+      return spec if spec
+    end
+    nil
+  end
+
   # Searches for features that are loaded from gems, then produces a
   # list of files included in those gems' manifests. Also returns a
   # list of original features that are caused gems to be
@@ -432,18 +445,11 @@ EOF
           features_from_gems << feature
           next
         end
-        Gem.path.each do |gempath|
-          geminstallpath = Pathname(gempath) / "gems"
-          if feature.subpath?(geminstallpath)
-            fullgemname = feature.relative_path_from(geminstallpath).each_filename.first
-            gemspecpath = Pathname(gempath) / "specifications" / "#{fullgemname}.gemspec"
-            if spec = Gem::Specification.load(gemspecpath.to_s)
-              gems[spec.name] ||= spec
-              features_from_gems << feature
-            else
-              Ocran.warn "Failed to load gemspec for '#{fullgemname}'"
-            end
-          end
+        if (spec = find_gemspec(feature))
+          gems[spec.name] ||= spec
+          features_from_gems << feature
+        else
+          Ocran.warn "Failed to load gemspec for #{feature}"
         end
       end
 
