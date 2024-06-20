@@ -502,12 +502,7 @@ EOF
           end
         end
 
-        files.flatten!
-        actual_files = files.select { |file| file.file? }
-
-        (files - actual_files).each do |missing_file|
-          Ocran.warn "#{missing_file} was not found"
-        end
+        actual_files = files.flatten
 
         Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
 
