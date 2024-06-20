@@ -326,15 +326,15 @@ EOF
   # is less critical but still applicable for backward compatibility.
   def Ocran.find_load_path(loadpaths, feature)
     if feature.absolute?
-      # For an absolute path feature, find the loadpath that contains the feature
+      # For an absolute path feature, find the load path that contains the feature
       # and determine the shortest possible require-path (most specific path).
-      loadpaths.select { |loadpath| feature.subpath?(loadpath.expand_path) }
-               .min_by { |loadpath| feature.relative_path_from(loadpath.expand_path).to_s.size }
+      loadpaths.select { |load_path| feature.subpath?(File.expand_path(load_path)) }
+               .min_by { |load_path| feature.relative_path_from(File.expand_path(load_path)).to_s.size }
     else
-      # For a relative path feature, find the loadpath where the expanded feature exists
-      # and select the longest loadpath (most specific path).
-      loadpaths.select { |loadpath| feature.expand_path(loadpath).exist? }
-               .max_by { |loadpath| loadpath.to_s.size }
+      # For a relative path feature, find the load path where the expanded feature exists
+      # and select the longest load path (most specific path).
+      loadpaths.select { |load_path| feature.expand_path(load_path).exist? }
+               .max_by { |load_path| load_path.to_s.size }
     end
   end
 
@@ -437,7 +437,7 @@ EOF
       features.each do |feature|
         # Detect load path unless absolute
         if feature.relative?
-          load_path = find_load_path($LOAD_PATH.map { |path| Pathname(path) }, feature)
+          load_path = find_load_path($LOAD_PATH, feature)
           next if load_path.nil? # Could be enumerator.so
           feature = feature.expand_path(load_path)
         end
@@ -509,8 +509,7 @@ EOF
           Ocran.warn "#{missing_file} was not found"
         end
 
-        total_size = actual_files.sum(0, &:size)
-        Ocran.msg "\t#{actual_files.size} files, #{total_size} bytes"
+        Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
 
         gem_files += actual_files
       end
