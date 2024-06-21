@@ -430,18 +430,6 @@ EOF
       gem_files = []
 
       gems.each do |gemname, spec|
-        if File.exist?(spec.spec_file) then
-          @gemspecs << Pathname(spec.spec_file)
-        else
-          spec_name = File.basename(spec.spec_file)
-          spec_path = File.dirname(spec.spec_file)
-          default_spec_file = spec_path + "/default/" + spec_name
-          if File.exist?(default_spec_file) then
-            @gemspecs << Pathname(default_spec_file)
-            Ocran.msg "Using default specification #{default_spec_file} for gem #{spec.full_name}"
-          end 
-        end
-
         # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
         # returns a path that does not exist.
         unless File.directory?(spec.gem_dir)
@@ -485,7 +473,8 @@ EOF
       gem_files = []
     end
     features_from_gems -= gem_files
-    return gem_files, features_from_gems
+    gemspecs = gems.values
+    return gem_files, features_from_gems, gemspecs
   end
 
   # For RubyInstaller environments supporting Ruby 2.4 and above,
@@ -515,16 +504,6 @@ EOF
     # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually
     features.push(Pathname("rubygems/core_ext/kernel_require.rb"))
 
-    # Find gemspecs to include
-    if defined?(Gem)
-      # Since Bundler is integrated into RubyGems from Ruby 3.2 onwards,
-      # Bundler's loaded_from points to the root directory of the bundler gem.
-      # Here, we are only collecting gemspecs files.
-      @gemspecs = Gem.loaded_specs.map { |name, info| Pathname(info.loaded_from) }.reject(&:directory?)
-    else
-      @gemspecs = []
-    end
-
     # The `RefinePathname` module is prepended to the `Pathname` class. This is done
     # after the user script has finished executing and only the Ocran code is running,
     # to avoid affecting the script environment.
@@ -537,7 +516,7 @@ EOF
     Ocran.extend HostConfigHelper
 
     # Find gems files and remove them from features
-    gem_files, features_from_gems = find_gem_files(features)
+    gem_files, features_from_gems, gemspecs = find_gem_files(features)
     features -= features_from_gems
 
     # Include encoding support files
@@ -594,14 +573,24 @@ EOF
         builder.copy_to_bin(bindir / dll, dll)
       end
 
-      # Add gemspec files
-      @gemspecs.uniq.each do |gemspec|
-        if gemspec.subpath?(exec_prefix)
-          builder.duplicate_to_exec_prefix(gemspec)
-        elsif (gem_path = GemSpecQueryable.find_gem_path(gemspec))
-          builder.duplicate_to_gem_home(gemspec, gem_path)
-        else
-          Ocran.fatal_error "Gem spec #{gemspec} does not exist in the Ruby installation. Don't know where to put it."
+      # Find gemspecs to include
+      if defined?(Gem)
+        # Add gemspec files
+        gemspecs.each do |spec|
+          spec_file = Pathname(spec.loaded_from)
+
+          # Since Bundler is integrated into RubyGems from Ruby 3.2 onwards,
+          # Bundler's loaded_from points to the root directory of the bundler gem.
+          # Here, we are only collecting gemspecs files.
+          next if spec_file.directory?
+
+          if spec_file.subpath?(exec_prefix)
+            builder.duplicate_to_exec_prefix(spec_file)
+          elsif (gem_path = GemSpecQueryable.find_gem_path(spec_file))
+            builder.duplicate_to_gem_home(spec_file, gem_path)
+          else
+            Ocran.fatal_error "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
+          end
         end
       end
 
