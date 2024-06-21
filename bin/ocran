@@ -442,15 +442,18 @@ EOF
           end 
         end
 
+        # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
+        # returns a path that does not exist.
+        unless File.directory?(spec.gem_dir)
+          Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
+          next
+        end
+
         # Determine which set of files to include for this particular gem
         include = Ocran.gem_inclusion_set(spec.name)
         Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
 
         gem_root = Pathname(spec.gem_dir)
-        unless gem_root.directory?
-          Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
-          next
-        end
 
         spec.extend(GemSpecQueryable)
 
