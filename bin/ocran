@@ -370,10 +370,10 @@ EOF
 
   # Searches for features that are loaded from gems, then produces a
   # list of files included in those gems' manifests. Also returns a
-  # list of original features that are caused gems to be
-  # included. Ruby 1.8 provides Gem.loaded_specs to detect gems, but
-  # this is empty with Ruby 1.9. So instead, we look for any loaded
-  # file from a gem path.
+  # list of original features that caused those gems to be
+  # included. Ruby provides Gem.loaded_specs to detect gems.
+  # Now, we also detect gems that are not included in Gem.loaded_specs.
+  # Therefore, we look for any loaded file from a gem path.
   def Ocran.find_gem_files(features)
     features_from_gems = []
     gems = {}
