@@ -368,14 +368,7 @@ EOF
     include
   end
 
-  # Searches for features that are loaded from gems, then produces a
-  # list of files included in those gems' manifests. Also returns a
-  # list of original features that caused those gems to be
-  # included. Ruby provides Gem.loaded_specs to detect gems.
-  # Now, we also detect gems that are not included in Gem.loaded_specs.
-  # Therefore, we look for any loaded file from a gem path.
-  def Ocran.find_gem_files(features)
-    features_from_gems = []
+  def Ocran.scanning_gemfile
     gems = {}
 
     # If a Bundler Gemfile was provided, add all gems it specifies
@@ -399,6 +392,19 @@ EOF
       # Since Ruby 3.0 and later, the minimum version of Bundler is 2.0.0,
       # which ensures that Bundler itself will always be included.
     end
+
+    gems
+  end
+
+  # Searches for features that are loaded from gems, then produces a
+  # list of files included in those gems' manifests. Also returns a
+  # list of original features that caused those gems to be
+  # included. Ruby provides Gem.loaded_specs to detect gems.
+  # Now, we also detect gems that are not included in Gem.loaded_specs.
+  # Therefore, we look for any loaded file from a gem path.
+  def self.find_gem_files(features)
+    features_from_gems = []
+    gems = Ocran.scanning_gemfile
 
     if defined?(Gem)
       require_relative "../lib/ocran/gem_spec_queryable"
