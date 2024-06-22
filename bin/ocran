@@ -403,6 +403,7 @@ EOF
   # Now, we also detect gems that are not included in Gem.loaded_specs.
   # Therefore, we look for any loaded file from a gem path.
   def self.find_gem_files(features)
+    gem_files = []
     features_from_gems = []
     gems = Ocran.scanning_gemfile
 
@@ -432,8 +433,6 @@ EOF
           Ocran.warn "Failed to load gemspec for #{feature}"
         end
       end
-
-      gem_files = []
 
       gems.each do |gemname, spec|
         # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
@@ -475,8 +474,6 @@ EOF
         gem_files += actual_files
       end
       gem_files.uniq!
-    else
-      gem_files = []
     end
     features_from_gems -= gem_files
     gemspecs = gems.values
