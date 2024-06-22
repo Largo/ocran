@@ -368,11 +368,11 @@ EOF
     include
   end
 
-  def Ocran.scanning_gemfile(gemfile_path)
-    gems = []
+  def Ocran.scanning_gemfile
+    gems = {}
 
     # If a Bundler Gemfile was provided, add all gems it specifies
-    begin # Preserve indentation to avoid corrupting information used by `git blame`.
+    if Ocran.gemfile
       Ocran.msg "Scanning Gemfile"
       # Load Rubygems and Bundler so we can scan the Gemfile
       ["rubygems", "bundler"].each do |lib|
@@ -383,10 +383,10 @@ EOF
         end
       end
 
-      ENV["BUNDLE_GEMFILE"] = gemfile_path.to_s
+      ENV["BUNDLE_GEMFILE"] = Ocran.gemfile.to_s
       Bundler.load.specs.each do |spec|
         Ocran.verbose_msg "From Gemfile, adding gem #{spec.full_name}"
-        gems << spec
+        gems[spec.name] ||= spec
       end
 
       # Since Ruby 3.0 and later, the minimum version of Bundler is 2.0.0,
@@ -405,7 +405,7 @@ EOF
   def self.find_gem_files(features)
     gem_files = []
     features_from_gems = []
-    gems = {}
+    gems = Ocran.scanning_gemfile
 
     if defined?(Gem)
       require_relative "../lib/ocran/gem_spec_queryable"
@@ -515,18 +515,9 @@ EOF
     require_relative "../lib/ocran/host_config_helper"
     Ocran.extend HostConfigHelper
 
-    # If a Bundler Gemfile was provided, add all gems it specifies
-    gemfile_specs = if Ocran.gemfile
-                      Ocran.scanning_gemfile(Ocran.gemfile)
-                    else
-                      []
-                    end
-
     # Find gems files and remove them from features
-    gem_files, features_from_gems, loaded_specs = find_gem_files(features)
+    gem_files, features_from_gems, gemspecs = find_gem_files(features)
     features -= features_from_gems
-
-    gemspecs = (gemfile_specs + loaded_specs).uniq { |spec| spec.name }
 
     # Include encoding support files
     if Ocran.enc
