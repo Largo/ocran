@@ -450,7 +450,7 @@ EOF
 
         spec.extend(GemSpecQueryable)
 
-        files = include.map do |set|
+        actual_files = include.map do |set|
           case set
           when :spec
             spec.files.map { |file| Pathname(file) }
@@ -465,10 +465,7 @@ EOF
           else
             raise "Invalid file set: #{set}. Please specify a valid file set (:spec, :loaded, :files, :extras, :scripts)."
           end
-        end
-
-        actual_files = files.flatten
-
+        end.flatten
         Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
 
         gem_files += actual_files
