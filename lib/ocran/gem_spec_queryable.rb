@@ -19,15 +19,27 @@ module Ocran
     GEM_NON_FILE_RE = /(#{GEM_EXTRA_RE}|#{GEM_SCRIPT_RE})/
 
     class << self
-      def find_gem_path(feature)
+      # find_gem_path method searches for the path of the gem containing the
+      # specified path. The 'path' argument is a file or directory path.
+      # It checks each gem's installation path in Gem.path to see if the
+      # specified path is a subpath. Returns the gem's path if found, or
+      # nil if not found.
+      def find_gem_path(path)
         return unless defined?(Gem)
 
-        Gem.path.find { |path| Pathname(feature).subpath?(path) }
+        Gem.path.find { |gem_path| Pathname(path).subpath?(gem_path) }
       end
 
-      def find_gemspec_path(feature)
+      # find_spec_file method searches for the path of the gemspec file of
+      # the gem containing the specified path. The 'path' argument is a file
+      # or directory path. It searches within the "gems" directory in each
+      # directory listed in Gem.path to check if the specified path is a
+      # subpath. If the gemspec file exists, it returns its path; otherwise,
+      # it returns nil.
+      def find_spec_file(path)
         return unless defined?(Gem)
 
+        feature = Pathname(path)
         Gem.path.each do |gem_path|
           gems_dir = File.join(gem_path, "gems")
           next unless feature.subpath?(gems_dir)
@@ -37,6 +49,19 @@ module Ocran
           return spec_path if File.exist?(spec_path)
         end
         nil
+      end
+
+      # find_spec method searches and returns a Gem::Specification object
+      # based on the specified path. Internally, it uses find_spec_file to
+      # obtain the path to the gemspec file, and if that file exists, it
+      # calls Gem::Specification.load to load the gem's specifications.
+      # Returns the loaded Gem::Specification object, or nil if the gemspec
+      # file does not exist.
+      def find_spec(path)
+        return unless defined?(Gem)
+
+        spec_file = find_spec_file(path)
+        spec_file && Gem::Specification.load(spec_file)
       end
     end
 

@@ -425,8 +425,7 @@ EOF
           features_from_gems << feature
           next
         end
-        spec_path = GemSpecQueryable.find_gemspec_path(feature)
-        if spec_path && (spec = Gem::Specification.load(spec_path))
+        if (spec = GemSpecQueryable.find_spec(feature))
           gems[spec.name] ||= spec
           features_from_gems << feature
         else
