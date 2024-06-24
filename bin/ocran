@@ -438,9 +438,9 @@ EOF
     if defined?(Gem)
       features_from_gems, detected_gems = Ocran.extract_gem_files(features)
       # Prioritize the spec detected from Bundler.
-      gems = detected_gems.merge(gems)
+      gems = detected_gems.merge(gems).values
 
-      gems.each do |gemname, spec|
+      gems.each do |spec|
         # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
         # returns a path that does not exist.
         unless File.directory?(spec.gem_dir)
@@ -479,8 +479,8 @@ EOF
       gem_files.uniq!
     end
     features_from_gems -= gem_files
-    gemspecs = gems.values
-    return gem_files, features_from_gems, gemspecs
+
+    return gem_files, features_from_gems, gems
   end
 
   # For RubyInstaller environments supporting Ruby 2.4 and above,
