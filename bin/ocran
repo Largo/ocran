@@ -396,6 +396,38 @@ EOF
     gems
   end
 
+  def self.extract_gem_files(features)
+    require_relative "../lib/ocran/gem_spec_queryable"
+    features_from_gems = []
+    gems = {}
+
+    # Include Gems that are loaded
+    Gem.loaded_specs.each { |name, spec| gems[name] ||= spec }
+    # Fall back to gem detection (loaded_specs are not population on
+    # all Ruby versions)
+    features.each do |feature|
+      # Detect load path unless absolute
+      if feature.relative?
+        load_path = find_load_path($LOAD_PATH, feature)
+        next if load_path.nil? # Could be enumerator.so
+        feature = feature.expand_path(load_path)
+      end
+      # Skip if found in known Gem dir
+      if gems.find { |_gem, spec| feature.subpath?(spec.gem_dir) }
+        features_from_gems << feature
+        next
+      end
+      if (spec = GemSpecQueryable.find_spec(feature))
+        gems[spec.name] ||= spec
+        features_from_gems << feature
+      else
+        Ocran.warn "Failed to load gemspec for #{feature}"
+      end
+    end
+
+    return features_from_gems, gems
+  end
+
   # Searches for features that are loaded from gems, then produces a
   # list of files included in those gems' manifests. Also returns a
   # list of original features that caused those gems to be
@@ -408,30 +440,9 @@ EOF
     gems = Ocran.scanning_gemfile
 
     if defined?(Gem)
-      require_relative "../lib/ocran/gem_spec_queryable"
-      # Include Gems that are loaded
-      Gem.loaded_specs.each { |gemname, spec| gems[gemname] ||= spec }
-      # Fall back to gem detection (loaded_specs are not population on
-      # all Ruby versions)
-      features.each do |feature|
-        # Detect load path unless absolute
-        if feature.relative?
-          load_path = find_load_path($LOAD_PATH, feature)
-          next if load_path.nil? # Could be enumerator.so
-          feature = feature.expand_path(load_path)
-        end
-        # Skip if found in known Gem dir
-        if gems.find { |gem, spec| feature.subpath?(spec.gem_dir) }
-          features_from_gems << feature
-          next
-        end
-        if (spec = GemSpecQueryable.find_spec(feature))
-          gems[spec.name] ||= spec
-          features_from_gems << feature
-        else
-          Ocran.warn "Failed to load gemspec for #{feature}"
-        end
-      end
+      features_from_gems, detected_gems = Ocran.extract_gem_files(features)
+      # Prioritize the spec detected from Bundler.
+      gems = detected_gems.merge(gems)
 
       gems.each do |gemname, spec|
         # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
