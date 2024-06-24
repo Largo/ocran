@@ -430,17 +430,11 @@ EOF
   # included. Ruby provides Gem.loaded_specs to detect gems.
   # Now, we also detect gems that are not included in Gem.loaded_specs.
   # Therefore, we look for any loaded file from a gem path.
-  def self.find_gem_files(features, loaded_specs)
+  def self.find_gem_files(features_from_gems, loaded_specs)
     gem_files = []
-    features_from_gems = []
-    gems = loaded_specs.map { |spec| [spec.name, spec] }.to_h
 
     if defined?(Gem)
-      features_from_gems, detected_gems = Ocran.extract_gem_files(features)
-      # Prioritize the spec detected from Bundler.
-      gems = detected_gems.merge(gems).values
-
-      gems.each do |spec|
+      loaded_specs.each do |spec|
         # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
         # returns a path that does not exist.
         unless File.directory?(spec.gem_dir)
@@ -479,7 +473,7 @@ EOF
       gem_files.uniq!
     end
 
-    return gem_files, features_from_gems, gems
+    gem_files
   end
 
   # For RubyInstaller environments supporting Ruby 2.4 and above,
@@ -528,9 +522,16 @@ EOF
       specs_from_gemfile = []
     end
     # Find gems files and remove them from features
-    gem_files, features_from_gems, gemspecs = find_gem_files(features, specs_from_gemfile)
-    features_from_gems -= gem_files
-    features -= features_from_gems
+    if defined?(Gem)
+      gemfile_gems = specs_from_gemfile.map { |spec| [spec.name, spec] }.to_h
+      features_from_gems, detected_gems = extract_gem_files(features)
+      # Prioritize the spec detected from Gemfile.
+      gemspecs = detected_gems.merge(gemfile_gems).values
+      gem_files = find_gem_files(features_from_gems, gemspecs)
+      features -= (features_from_gems - gem_files)
+    else
+      gem_files, gemspecs = [], []
+    end
 
     # Include encoding support files
     if Ocran.enc
