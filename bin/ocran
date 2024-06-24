@@ -533,22 +533,6 @@ EOF
       gem_files, gemspecs = [], []
     end
 
-    # Include encoding support files
-    if Ocran.enc
-      all_load_paths.each do |path|
-        if path.subpath?(exec_prefix)
-          encpath = path / "enc"
-          if encpath.exist?
-            encfiles = encpath.find.select { |pn| pn.file? && pn.extname?(".so") }
-            Ocran.msg "Including #{encfiles.size} encoding support files (#{encfiles.sum(0, &:size)} bytes, use --no-enc to exclude)"
-            features.push(*encfiles)
-          end
-        end
-      end
-    else
-      Ocran.msg "Not including encoding support files"
-    end
-
     direction = proc do |builder|
       Ocran.msg "Building #{Ocran.output_executable}"
       require_relative "../lib/ocran/builder_ops_logger"
@@ -634,6 +618,23 @@ EOF
             end
           end
         end
+      end
+
+      # Include encoding support files
+      if Ocran.enc
+        exec_prefix_load_path = all_load_paths.select { |path| path.subpath?(exec_prefix) }
+        exec_prefix_load_path.each do |load_path|
+          enc_dir = load_path / "enc"
+          next unless enc_dir.directory?
+
+          enc_files = enc_dir.find.select { |path| path.file? && path.extname?(".so") }
+          Ocran.msg "Including #{enc_files.size} encoding support files (#{enc_files.sum(0, &:size)} bytes, use --no-enc to exclude)"
+          enc_files.each do |path|
+            builder.duplicate_to_exec_prefix(path)
+          end
+        end
+      else
+        Ocran.msg "Not including encoding support files"
       end
 
       # Workaround: RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
