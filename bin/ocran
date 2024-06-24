@@ -605,17 +605,17 @@ EOF
             Ocran.fatal_error "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
           end
         end
-      end
 
-      # Decide where to put gem files, either the system gem folder, or
-      # GEMHOME.
-      gem_files.each do |gemfile|
-        if gemfile.subpath?(exec_prefix)
-          builder.duplicate_to_exec_prefix(gemfile)
-        elsif (gem_path = GemSpecQueryable.find_gem_path(gemfile))
-          builder.duplicate_to_gem_home(gemfile, gem_path)
-        else
-          Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
+        # Decide where to put gem files, either the system gem folder, or
+        # GEMHOME.
+        gem_files.each do |gemfile|
+          if gemfile.subpath?(exec_prefix)
+            builder.duplicate_to_exec_prefix(gemfile)
+          elsif (gem_path = GemSpecQueryable.find_gem_path(gemfile))
+            builder.duplicate_to_gem_home(gemfile, gem_path)
+          else
+            Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
+          end
         end
       end
 
