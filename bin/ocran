@@ -368,12 +368,10 @@ EOF
     include
   end
 
-  def Ocran.scanning_gemfile
-    gems = {}
+  def Ocran.scanning_gemfile(gemfile_path)
+    gems = []
 
-    # If a Bundler Gemfile was provided, add all gems it specifies
-    if Ocran.gemfile
-      Ocran.msg "Scanning Gemfile"
+    begin # Preserve indentation to avoid corrupting information used by `git blame`.
       # Load Rubygems and Bundler so we can scan the Gemfile
       ["rubygems", "bundler"].each do |lib|
         begin
@@ -383,14 +381,12 @@ EOF
         end
       end
 
-      ENV["BUNDLE_GEMFILE"] = Ocran.gemfile.to_s
+      ENV["BUNDLE_GEMFILE"] = gemfile_path.to_s
+      # Bundler.load.specs includes the spec for Bundler itself (as of Ruby 3.0 and later).
       Bundler.load.specs.each do |spec|
         Ocran.verbose_msg "From Gemfile, adding gem #{spec.full_name}"
-        gems[spec.name] ||= spec
+        gems << spec
       end
-
-      # Since Ruby 3.0 and later, the minimum version of Bundler is 2.0.0,
-      # which ensures that Bundler itself will always be included.
     end
 
     gems
@@ -434,10 +430,10 @@ EOF
   # included. Ruby provides Gem.loaded_specs to detect gems.
   # Now, we also detect gems that are not included in Gem.loaded_specs.
   # Therefore, we look for any loaded file from a gem path.
-  def self.find_gem_files(features)
+  def self.find_gem_files(features, loaded_specs)
     gem_files = []
     features_from_gems = []
-    gems = Ocran.scanning_gemfile
+    gems = loaded_specs.map { |spec| [spec.name, spec] }.to_h
 
     if defined?(Gem)
       features_from_gems, detected_gems = Ocran.extract_gem_files(features)
@@ -525,8 +521,15 @@ EOF
     require_relative "../lib/ocran/host_config_helper"
     Ocran.extend HostConfigHelper
 
+    # If a Bundler Gemfile was provided, add all gems it specifies
+    if Ocran.gemfile
+      Ocran.msg "Scanning Gemfile"
+      specs_from_gemfile = Ocran.scanning_gemfile(Ocran.gemfile).to_a
+    else
+      specs_from_gemfile = []
+    end
     # Find gems files and remove them from features
-    gem_files, features_from_gems, gemspecs = find_gem_files(features)
+    gem_files, features_from_gems, gemspecs = find_gem_files(features, specs_from_gemfile)
     features -= features_from_gems
 
     # Include encoding support files
