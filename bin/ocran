@@ -478,7 +478,6 @@ EOF
       end
       gem_files.uniq!
     end
-    features_from_gems -= gem_files
 
     return gem_files, features_from_gems, gems
   end
@@ -530,6 +529,7 @@ EOF
     end
     # Find gems files and remove them from features
     gem_files, features_from_gems, gemspecs = find_gem_files(features, specs_from_gemfile)
+    features_from_gems -= gem_files
     features -= features_from_gems
 
     # Include encoding support files
