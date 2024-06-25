@@ -397,8 +397,6 @@ EOF
     features_from_gems = []
     gems = {}
 
-    # Include Gems that are loaded
-    Gem.loaded_specs.each { |name, spec| gems[name] ||= spec }
     # Fall back to gem detection (loaded_specs are not population on
     # all Ruby versions)
     features.each do |feature|
@@ -523,9 +521,12 @@ EOF
     # Find gems files and remove them from features
     if defined?(Gem)
       gemfile_gems = specs_from_gemfile.map { |spec| [spec.name, spec] }.to_h
+      # Include Gems that are loaded
+      loaded_specs = Gem.loaded_specs.values.map { |spec| [spec.name, spec] }.to_h
+
       features_from_gems, detected_gems = extract_gem_files(features)
       # Prioritize the spec detected from Gemfile.
-      gemspecs = detected_gems.merge(gemfile_gems).values
+      gemspecs = detected_gems.merge(loaded_specs).merge(gemfile_gems).values
       gem_files = find_gem_files(features_from_gems, gemspecs)
       features -= (features_from_gems - gem_files)
     else
