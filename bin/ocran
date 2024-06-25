@@ -433,46 +433,44 @@ EOF
   def self.find_gem_files(features_from_gems, loaded_specs)
     gem_files = []
 
-    if defined?(Gem)
-      loaded_specs.each do |spec|
-        # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
-        # returns a path that does not exist.
-        unless File.directory?(spec.gem_dir)
-          Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
-          next
-        end
-
-        # Determine which set of files to include for this particular gem
-        include = Ocran.gem_inclusion_set(spec.name)
-        Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
-
-        gem_root = Pathname(spec.gem_dir)
-
-        require_relative "../lib/ocran/gem_spec_queryable"
-        spec.extend(GemSpecQueryable)
-
-        actual_files = include.map do |set|
-          case set
-          when :spec
-            spec.files.map { |file| Pathname(file) }
-          when :loaded
-            features_from_gems.select { |feature| feature.subpath?(gem_root) }
-          when :files
-            spec.resource_files
-          when :extras
-            spec.extra_files
-          when :scripts
-            spec.script_files
-          else
-            raise "Invalid file set: #{set}. Please specify a valid file set (:spec, :loaded, :files, :extras, :scripts)."
-          end
-        end.flatten
-        Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
-
-        gem_files += actual_files
+    loaded_specs.each do |spec|
+      # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
+      # returns a path that does not exist.
+      unless File.directory?(spec.gem_dir)
+        Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
+        next
       end
-      gem_files.uniq!
+
+      # Determine which set of files to include for this particular gem
+      include = Ocran.gem_inclusion_set(spec.name)
+      Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
+
+      gem_root = Pathname(spec.gem_dir)
+
+      require_relative "../lib/ocran/gem_spec_queryable"
+      spec.extend(GemSpecQueryable)
+
+      actual_files = include.map do |set|
+        case set
+        when :spec
+          spec.files.map { |file| Pathname(file) }
+        when :loaded
+          features_from_gems.select { |feature| feature.subpath?(gem_root) }
+        when :files
+          spec.resource_files
+        when :extras
+          spec.extra_files
+        when :scripts
+          spec.script_files
+        else
+          raise "Invalid file set: #{set}. Please specify a valid file set (:spec, :loaded, :files, :extras, :scripts)."
+        end
+      end.flatten
+      Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
+
+      gem_files += actual_files
     end
+    gem_files.uniq!
 
     gem_files
   end
