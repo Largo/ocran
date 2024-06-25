@@ -655,9 +655,6 @@ EOF
         if load_path.nil? || load_path.expand_path == Pathname.pwd
           source_files << feature unless feature.basename.to_s =~ IGNORE_MODULE_NAMES
         else
-          if feature.absolute?
-            feature = feature.relative_path_from(load_path.expand_path)
-          end
           fullpath = feature.expand_path(load_path)
 
           if fullpath.subpath?(exec_prefix)
@@ -686,6 +683,9 @@ EOF
             # Ruby sitelibdir. This is automatically in the load path
             # when Ruby starts.
             inst_sitelibdir = sitelibdir.relative_path_from(exec_prefix)
+            if feature.absolute?
+              feature = feature.relative_path_from(load_path.expand_path)
+            end
             builder.cp(fullpath, inst_sitelibdir / feature)
           end
         end
