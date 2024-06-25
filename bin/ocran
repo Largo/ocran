@@ -448,6 +448,7 @@ EOF
 
         gem_root = Pathname(spec.gem_dir)
 
+        require_relative "../lib/ocran/gem_spec_queryable"
         spec.extend(GemSpecQueryable)
 
         actual_files = include.map do |set|
