@@ -392,20 +392,17 @@ EOF
 
   def self.extract_gem_files(features)
     require_relative "../lib/ocran/gem_spec_queryable"
-    features_from_gems = []
     gems = {}
 
     # Fall back to gem detection (loaded_specs are not population on
     # all Ruby versions)
-    features.each do |feature|
+    features_from_gems = features.filter_map do |feature|
       # Skip if found in known Gem dir
-      if gems.find { |_gem, spec| feature.subpath?(spec.gem_dir) }
-        features_from_gems << feature
-        next
-      end
-      if (spec = GemSpecQueryable.find_spec(feature))
+      if gems.any? { |_name, spec| feature.subpath?(spec.gem_dir) }
+        feature
+      elsif (spec = GemSpecQueryable.find_spec(feature))
         gems[spec.name] ||= spec
-        features_from_gems << feature
+        feature
       else
         Ocran.warn "Failed to load gemspec for #{feature}"
       end
