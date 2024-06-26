@@ -4,8 +4,6 @@
 require "pathname"
 
 module Ocran
-  IGNORE_MODULE_NAMES = /\A(enumerator.so|rational.so|complex.so|fiber.so|thread.rb|ruby2_keywords.rb)\z/
-
   # Match the load path against standard library, site_ruby, and vendor_ruby paths
   # This regular expression matches:
   # - /ruby/3.0.0/
@@ -400,12 +398,6 @@ EOF
     # Fall back to gem detection (loaded_specs are not population on
     # all Ruby versions)
     features.each do |feature|
-      # Detect load path unless absolute
-      if feature.relative?
-        load_path = find_load_path($LOAD_PATH, feature)
-        next if load_path.nil? # Could be enumerator.so
-        feature = feature.expand_path(load_path)
-      end
       # Skip if found in known Gem dir
       if gems.find { |_gem, spec| feature.subpath?(spec.gem_dir) }
         features_from_gems << feature
@@ -499,6 +491,24 @@ EOF
     # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
     # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually
     features.push(Pathname("rubygems/core_ext/kernel_require.rb"))
+
+    # Convert all relative paths to absolute paths before building.
+    # NOTE: In the future, different strategies may be needed before and after script execution.
+    features = features.filter_map do |feature|
+      if feature.absolute?
+        feature
+      elsif (load_path = find_load_path($LOAD_PATH, feature))
+        feature.expand_path(load_path)
+      else
+        # This message occurs when paths for core library files (e.g., enumerator.so,
+        # rational.so, complex.so, fiber.so, thread.rb, ruby2_keywords.rb) are not
+        # found. These are integral to Ruby's standard libraries or extensions and
+        # may not be located via normal load path searches, especially in RubyInstaller
+        # environments.
+        Ocran.verbose_msg "Load path not found for #{feature}, skip this feature"
+        nil
+      end
+    end
 
     # The `RefinePathname` module is prepended to the `Pathname` class. This is done
     # after the user script has finished executing and only the Ocran code is running,
@@ -653,7 +663,7 @@ EOF
       features.each do |feature|
         load_path = find_load_path(all_load_paths, feature)
         if load_path.nil? || load_path.expand_path == Pathname.pwd
-          source_files << feature unless feature.basename.to_s =~ IGNORE_MODULE_NAMES
+          source_files << feature
         else
           fullpath = feature.expand_path(load_path)
 
