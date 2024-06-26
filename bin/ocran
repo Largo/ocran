@@ -367,8 +367,6 @@ EOF
   end
 
   def Ocran.scanning_gemfile(gemfile_path)
-    gems = []
-
     begin # Preserve indentation to avoid corrupting information used by `git blame`.
       # Load Rubygems and Bundler so we can scan the Gemfile
       ["rubygems", "bundler"].each do |lib|
@@ -383,11 +381,8 @@ EOF
       # Bundler.load.specs includes the spec for Bundler itself (as of Ruby 3.0 and later).
       Bundler.load.specs.each do |spec|
         Ocran.verbose_msg "From Gemfile, adding gem #{spec.full_name}"
-        gems << spec
       end
     end
-
-    gems
   end
 
   def self.extract_gem_files(features)
