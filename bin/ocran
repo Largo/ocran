@@ -385,25 +385,21 @@ EOF
     end
   end
 
-  def self.extract_gem_files(features)
+  # Fall back to gem detection
+  def self.detect_gems_from(features)
     require_relative "../lib/ocran/gem_spec_queryable"
-    gems = {}
 
-    # Fall back to gem detection (loaded_specs are not population on
-    # all Ruby versions)
-    features_from_gems = features.filter_map do |feature|
-      # Skip if found in known Gem dir
-      if gems.any? { |_name, spec| feature.subpath?(spec.gem_dir) }
-        feature
+    features.inject([]) do |gems, feature|
+      if gems.any? { |spec| feature.subpath?(spec.gem_dir) }
+        # Skip if found in known Gem dir
       elsif (spec = GemSpecQueryable.find_spec(feature))
-        gems[spec.name] ||= spec
-        feature
+        gems << spec
       else
         Ocran.warn "Failed to load gemspec for #{feature}"
       end
-    end
 
-    return features_from_gems, gems
+      gems
+    end
   end
 
   # Searches for features that are loaded from gems, then produces a
@@ -524,7 +520,7 @@ EOF
       # Include Gems that are loaded
       loaded_specs = Gem.loaded_specs.values.map { |spec| [spec.name, spec] }.to_h
 
-      _, detected_gems = extract_gem_files(features)
+      detected_gems = detect_gems_from(features).map { |spec| [spec.name, spec] }.to_h
       # Prioritize the spec detected from Gemfile.
       gemspecs = detected_gems.merge(loaded_specs).merge(gemfile_gems).values
     else
