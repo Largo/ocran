@@ -402,34 +402,6 @@ EOF
     end
   end
 
-  # Searches for features that are loaded from gems, then produces a
-  # list of files included in those gems' manifests. Also returns a
-  # list of original features that caused those gems to be included.
-  def self.find_gem_files(features_from_gems, loaded_specs)
-    gem_files = loaded_specs.flat_map do |spec|
-      # In an environment executed from `bundle exec`, `bundler`'s `spec.gem_dir`
-      # returns a path that does not exist.
-      unless File.directory?(spec.gem_dir)
-        Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
-        next []
-      end
-
-      # Determine which set of files to include for this particular gem
-      include = Ocran.gem_inclusion_set(spec.name)
-      Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
-
-      require_relative "../lib/ocran/gem_spec_queryable"
-      spec.extend(GemSpecQueryable)
-
-      actual_files = spec.find_gem_files(include, features_from_gems)
-      Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
-      actual_files
-    end
-    gem_files.uniq!
-
-    gem_files
-  end
-
   # For RubyInstaller environments supporting Ruby 2.4 and above,
   # this method checks for the existence of a required manifest file
   def self.ruby_builtin_manifest
@@ -545,32 +517,42 @@ EOF
         builder.copy_to_bin(bindir / dll, dll)
       end
 
-      # Find gemspecs to include
-      if defined?(Gem)
-        # Add gemspec files
-        gemspecs.each do |spec|
-          spec_file = Pathname(spec.loaded_from)
-
-          # Since Bundler is integrated into RubyGems from Ruby 3.2 onwards,
-          # Bundler's loaded_from points to the root directory of the bundler gem.
-          # Here, we are only collecting gemspecs files.
-          next if spec_file.directory?
-
-          if spec_file.subpath?(exec_prefix)
-            builder.duplicate_to_exec_prefix(spec_file)
-          elsif (gem_path = GemSpecQueryable.find_gem_path(spec_file))
-            builder.duplicate_to_gem_home(spec_file, gem_path)
-          else
-            Ocran.fatal_error "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
-          end
+      # Searches for features that are loaded from gems, then produces a
+      # list of files included in those gems' manifests. Also returns a
+      # list of original features that caused those gems to be included.
+      gem_files = gemspecs.flat_map do |spec|
+        spec_file = Pathname(spec.loaded_from)
+        # From Ruby 3.2 onwards, launching Ruby with bundle exec causes
+        # Bundler's loaded_from to point to the root directory of the
+        # bundler gem, not returning the path to gemspec files. Here, we
+        # are only collecting gemspec files.
+        unless spec_file.file?
+          Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
+          next []
         end
 
-        gem_files = find_gem_files(features, gemspecs)
-        features -= gem_files
+        # Add gemspec files
+        if spec_file.subpath?(exec_prefix)
+          builder.duplicate_to_exec_prefix(spec_file)
+        elsif (gem_path = GemSpecQueryable.find_gem_path(spec_file))
+          builder.duplicate_to_gem_home(spec_file, gem_path)
+        else
+          Ocran.fatal_error "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
+        end
+
+        # Determine which set of files to include for this particular gem
+        include = Ocran.gem_inclusion_set(spec.name)
+        Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
+
+        require_relative "../lib/ocran/gem_spec_queryable"
+        spec.extend(GemSpecQueryable)
+
+        actual_files = spec.find_gem_files(include, features)
+        Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
 
         # Decide where to put gem files, either the system gem folder, or
         # GEMHOME.
-        gem_files.each do |gemfile|
+        actual_files.each do |gemfile|
           if gemfile.subpath?(exec_prefix)
             builder.duplicate_to_exec_prefix(gemfile)
           elsif (gem_path = GemSpecQueryable.find_gem_path(gemfile))
@@ -579,7 +561,12 @@ EOF
             Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
           end
         end
+
+        actual_files
       end
+      gem_files.uniq!
+
+      features -= gem_files
 
       # If requested, add all ruby standard libraries
       if Ocran.add_all_core
