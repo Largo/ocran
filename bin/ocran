@@ -418,28 +418,10 @@ EOF
       include = Ocran.gem_inclusion_set(spec.name)
       Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
 
-      gem_root = Pathname(spec.gem_dir)
-
       require_relative "../lib/ocran/gem_spec_queryable"
       spec.extend(GemSpecQueryable)
 
-      actual_files = include.flat_map do |set|
-        case set
-        when :spec
-          spec.files.map { |file| Pathname(file) }
-        when :loaded
-          features_from_gems.select { |feature| feature.subpath?(gem_root) }
-        when :files
-          spec.resource_files
-        when :extras
-          spec.extra_files
-        when :scripts
-          spec.script_files
-        else
-          raise "Invalid file set: #{set}. Please specify a valid file set (:spec, :loaded, :files, :extras, :scripts)."
-        end
-      end
-      actual_files.uniq!
+      actual_files = spec.find_gem_files(include, features_from_gems)
       Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
       actual_files
     end

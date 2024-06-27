@@ -84,5 +84,26 @@ module Ocran
       files << Pathname(gem_build_complete_path) if File.exist?(gem_build_complete_path)
       files
     end
+
+    def find_gem_files(file_sets, features_from_gems)
+      actual_files = file_sets.flat_map do |set|
+        case set
+        when :spec
+          files.map { |file| Pathname(file) }
+        when :loaded
+          features_from_gems.select { |feature| feature.subpath?(gem_dir) }
+        when :files
+          resource_files
+        when :extras
+          extra_files
+        when :scripts
+          script_files
+        else
+          raise "Invalid file set: #{set}. Please specify a valid file set (:spec, :loaded, :files, :extras, :scripts)."
+        end
+      end
+      actual_files.uniq
+      actual_files
+    end
   end
 end
