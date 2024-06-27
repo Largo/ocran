@@ -516,7 +516,8 @@ EOF
       gemfile_gems = specs_from_gemfile.map { |spec| [spec.name, spec] }.to_h
       # Include Gems that are loaded
       loaded_specs = Gem.loaded_specs.values.map { |spec| [spec.name, spec] }.to_h
-
+      # Now, we also detect gems that are not included in Gem.loaded_specs.
+      # Therefore, we look for any loaded file from a gem path.
       detected_gems = detect_gems_from(features).map { |spec| [spec.name, spec] }.to_h
       # Prioritize the spec detected from Gemfile.
       gemspecs = detected_gems.merge(loaded_specs).merge(gemfile_gems).values
