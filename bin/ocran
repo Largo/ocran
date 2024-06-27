@@ -524,13 +524,11 @@ EOF
       # Include Gems that are loaded
       loaded_specs = Gem.loaded_specs.values.map { |spec| [spec.name, spec] }.to_h
 
-      features_from_gems, detected_gems = extract_gem_files(features)
+      _, detected_gems = extract_gem_files(features)
       # Prioritize the spec detected from Gemfile.
       gemspecs = detected_gems.merge(loaded_specs).merge(gemfile_gems).values
-      gem_files = find_gem_files(features_from_gems, gemspecs)
-      features -= (features_from_gems - gem_files)
     else
-      gem_files, gemspecs = [], []
+      gemspecs = []
     end
 
     direction = proc do |builder|
@@ -590,6 +588,9 @@ EOF
             Ocran.fatal_error "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
           end
         end
+
+        gem_files = find_gem_files(features, gemspecs)
+        features -= gem_files
 
         # Decide where to put gem files, either the system gem folder, or
         # GEMHOME.
