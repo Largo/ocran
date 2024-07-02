@@ -12,7 +12,7 @@ executable that contains the Ruby interpreter, your source code and
 any additionally needed ruby libraries or DLL.
 
 OCRAN is a fork of Ocra (https://github.com/larsch/ocra) in order to
-maintain compatibility with newer Ruby versions after 2.6
+maintain compatibility with newer Ruby versions after 3.0
 
 ## Recommended usage
 Most commonly you will needs this, when you want to ship your program to windows servers / users that don't have Ruby installed.
