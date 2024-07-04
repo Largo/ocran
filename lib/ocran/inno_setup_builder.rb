@@ -34,7 +34,7 @@ module Ocran
 
     def compile
       iscc_cmd = ["ISCC"]
-      iscc_cmd << "/Q" unless Ocran.verbose
+      iscc_cmd << "/Q" unless Ocran.verbose?
       iscc_cmd << @iss.to_path
       unless system(*iscc_cmd)
         case $?.exitstatus
