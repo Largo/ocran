@@ -146,7 +146,7 @@ Executable options:
 --debug-extract    Executable will unpack to local dir and not delete after.
 EOF
 
-    while arg = argv.shift
+    while (arg = argv.shift)
       case arg
       when /\A--(no-)?lzma\z/
         @options[:lzma_mode] = !$1
