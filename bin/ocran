@@ -24,79 +24,11 @@ module Ocran
 
   @ignore_modules = []
 
-  @options = {
-    :add_all_core? => false,
-    :add_all_encoding? => true,
-    :argv => [],
-    :auto_detect_dlls? => true,
-    :chdir_before? => false,
-    :enable_compression? => true,
-    :enable_debug_extract? => false,
-    :enable_debug_mode? => false,
-    :extra_dlls => [],
-    :force_console? => false,
-    :force_windows? => false,
-    :gem_options => [],
-    :gemfile => nil,
-    :icon_filename => nil,
-    :inno_setup_script => nil,
-    :load_autoload? => true,
-    :output_override => nil,
-    :quiet? => false,
-    :rubyopt => nil,
-    :run_script? => true,
-    :source_files => [],
-    :verbose? => false,
-    :warn? => true,
-  }
+  def self.quiet? = @option.quiet?
 
-  def self.add_all_core? = @options[__method__]
+  def self.verbose? = @option.verbose?
 
-  def self.add_all_encoding? = @options[__method__]
-
-  def self.argv = @options[__method__]
-
-  def self.auto_detect_dlls? = @options[__method__]
-
-  def self.chdir_before? = @options[__method__]
-
-  def self.enable_compression? = @options[__method__]
-
-  def self.enable_debug_extract? = @options[__method__]
-
-  def self.enable_debug_mode? = @options[__method__]
-
-  def self.extra_dlls = @options[__method__]
-
-  def self.force_autoload? = run_script? && load_autoload?
-
-  def self.force_console? = @options[__method__]
-
-  def self.force_windows? = @options[__method__]
-
-  def self.gem_options = @options[__method__]
-
-  def self.gemfile = @options[__method__]
-
-  def self.icon_filename = @options[__method__]
-
-  def self.inno_setup_script = @options[__method__]
-
-  def self.load_autoload? = @options[__method__]
-
-  def self.output_override = @options[__method__]
-
-  def self.quiet? = @options[__method__]
-
-  def self.run_script? = @options[__method__]
-
-  def self.source_files = @options[__method__]
-
-  def self.use_inno_setup? = !!inno_setup_script
-
-  def self.verbose? = !quiet? && @options[__method__]
-
-  def self.warn? = @options[__method__]
+  def self.warn? = @option.warn?
 
   def Ocran.msg(s)
     puts "=== #{s}" unless Ocran.quiet?
@@ -126,183 +58,21 @@ module Ocran
     Dir.chdir @pwd_before
   end
 
-  def self.usage
-    <<EOF
-ocran [options] script.rb
-
-Ocran options:
-
---help             Display this information.
---quiet            Suppress output while building executable.
---verbose          Show extra output while building executable.
---version          Display version number and exit.
-
-Packaging options:
-
---dll dllname      Include additional DLLs from the Ruby bindir.
---add-all-core     Add all core ruby libraries to the executable.
---gemfile <file>   Add all gems and dependencies listed in a Bundler Gemfile.
---no-enc           Exclude encoding support files
-
-Gem content detection modes:
-
---gem-minimal[=gem1,..]  Include only loaded scripts
---gem-guess=[gem1,...]   Include loaded scripts & best guess (DEFAULT)
---gem-all[=gem1,..]      Include all scripts & files
---gem-full[=gem1,..]     Include EVERYTHING
---gem-spec[=gem1,..]     Include files in gemspec (Does not work with Rubygems 1.7+)
-
-  minimal: loaded scripts
-  guess: loaded scripts and other files
-  all: loaded scripts, other scripts, other files (except extras)
-  full: Everything found in the gem directory
-
---[no-]gem-scripts[=..]  Other script files than those loaded
---[no-]gem-files[=..]    Other files (e.g. data files)
---[no-]gem-extras[=..]   Extra files (README, etc.)
-
-  scripts: .rb/.rbw files
-  extras: C/C++ sources, object files, test, spec, README
-  files: all other files
-
-Auto-detection options:
-
---no-dep-run       Don't run script.rb to check for dependencies.
---no-autoload      Don't load/include script.rb's autoloads.
---no-autodll       Disable detection of runtime DLL dependencies.
-
-Output options:
-
---output <file>    Name the exe to generate. Defaults to ./<scriptname>.exe.
---no-lzma          Disable LZMA compression of the executable.
---innosetup <file> Use given Inno Setup script (.iss) to create an installer.
-
-Executable options:
-
---windows          Force Windows application (rubyw.exe)
---console          Force console application (ruby.exe)
---chdir-first      When exe starts, change working directory to app dir.
---icon <ico>       Replace icon with a custom one.
---rubyopt <str>    Set the RUBYOPT environment variable when running the executable
---debug            Executable will be verbose.
---debug-extract    Executable will unpack to local dir and not delete after.
-EOF
-  end
-
-  def self.parse(argv)
-    while (arg = argv.shift)
-      case arg
-      when /\A--(no-)?lzma\z/
-        @options[:enable_compression?] = !$1
-      when "--no-dep-run"
-        @options[:run_script?] = false
-      when "--add-all-core"
-        @options[:add_all_core?] = true
-      when "--output"
-        path = argv.shift
-        @options[:output_override] = Pathname.new(path) if path
-      when "--dll"
-        path = argv.shift
-        @options[:extra_dlls] << path if path
-      when "--quiet"
-        @options[:quiet?] = true
-      when "--verbose"
-        @options[:verbose?] = true
-      when "--windows"
-        @options[:force_windows?] = true
-      when "--console"
-        @options[:force_console?] = true
-      when "--no-autoload"
-        @options[:load_autoload?] = false
-      when "--chdir-first"
-        @options[:chdir_before?] = true
-      when "--icon"
-        path = argv.shift
-        Ocran.fatal_error "Icon file #{path} not found.\n" unless path && File.exist?(path)
-        @options[:icon_filename] = Pathname.new(path)
-      when "--rubyopt"
-        @options[:rubyopt] = argv.shift
-      when "--gemfile"
-        path = argv.shift
-        Ocran.fatal_error "Gemfile #{path} not found.\n" unless path && File.exist?(path)
-        @options[:gemfile] = Pathname.new(path)
-      when "--innosetup"
-        path = argv.shift
-        Ocran.fatal_error "Inno Script #{path} not found.\n" unless path && File.exist?(path)
-        @options[:inno_setup_script] = Pathname.new(path)
-      when "--no-autodll"
-        @options[:auto_detect_dlls?] = false
-      when "--version"
-        require_relative "../lib/ocran/version"
-        puts "Ocran #{VERSION}"
-        exit 0
-      when "--no-warnings"
-        @options[:warn?] = false
-      when "--debug"
-        @options[:enable_debug_mode?] = true
-      when "--debug-extract"
-        @options[:enable_debug_extract?] = true
-      when "--"
-        @options[:argv] = ARGV.dup
-        ARGV.clear
-      when /\A--(no-)?enc\z/
-        @options[:add_all_encoding?] = !$1
-      when /\A--(no-)?gem-(\w+)(?:=(.*))?$/
-        negate, group, list = $1, $2, $3
-        @options[:gem_options] << [negate, group.to_sym, list&.split(",")] if group
-      when "--help", /\A--./
-        puts usage
-        exit 0
-      else
-        if !File.exist?(arg)
-          Ocran.fatal_error "#{arg} not found!"
-        elsif File.directory?(arg)
-          if Dir.empty?(arg)
-            Ocran.fatal_error "#{arg} is empty!"
-          end
-          # If a directory is passed, we want all files under that directory
-          @options[:source_files] += Pathname.glob("#{arg}/**/*").map(&:expand_path)
-        else
-          @options[:source_files] << Pathname.new(arg).expand_path
-        end
-      end
-    end
-
-    if Ocran.enable_debug_extract? && Ocran.use_inno_setup?
-      Ocran.fatal_error "The --debug-extract option conflicts with use of Inno Setup"
-    end
-
-    if Ocran.enable_compression? && Ocran.use_inno_setup?
-      Ocran.fatal_error "LZMA compression must be disabled (--no-lzma) when using Inno Setup"
-    end
-
-    if !Ocran.chdir_before? && Ocran.use_inno_setup?
-      Ocran.fatal_error "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
-    end
-
-    if Ocran.source_files.empty?
-      puts usage
-      exit 1
-    end
-
-    @options[:script] = source_files.first
-  end
-
-  def self.script = @options[:script]
+  def self.script = @option.script
 
   def self.output_executable
-    @output_executable ||= if Ocran.output_override
-                             Ocran.output_override
+    @output_executable ||= if @option.output_override
+                             @option.output_override
                            else
-                             executable = Ocran.script
+                             executable = @option.script
                              # If debug mode is enabled, append "-debug" to the filename
-                             executable = executable.append_to_filename("-debug") if Ocran.enable_debug_mode?
+                             executable = executable.append_to_filename("-debug") if @option.enable_debug_mode?
                              executable.basename.sub_ext(".exe")
                            end
   end
 
   def self.windowed?
-    (Ocran.script.extname?(".rbw") || Ocran.force_windows?) && !Ocran.force_console?
+    (@option.script.extname?(".rbw") || @option.force_windows?) && !@option.force_console?
   end
 
   def self.ruby_executable
@@ -310,13 +80,17 @@ EOF
   end
 
   def self.rubyopt
-    @rubyopt ||= @options[:rubyopt] || ENV["RUBYOPT"] || ""
+    @rubyopt ||= @option.rubyopt || ENV["RUBYOPT"] || ""
   end
+
+  def self.run_script? = @option.run_script?
 
   def Ocran.init
     save_environment
-    parse(ARGV)
-    ARGV.replace(Ocran.argv)
+    load File.expand_path("../lib/ocran/option.rb", __dir__)
+    @option = Option.new
+    @option.parse(ARGV)
+    ARGV.replace(@option.argv)
     @ignore_modules += ObjectSpace.each_object(Module).to_a
   end
 
@@ -382,7 +156,7 @@ EOF
 
   def self.gem_inclusion_set(spec_name)
     include = [:loaded, :files]
-    Ocran.gem_options.each do |negate, option, list|
+    @option.gem_options.each do |negate, option, list|
       next unless list.nil? || list.include?(spec_name)
 
       case option
@@ -461,7 +235,7 @@ EOF
     restore_environment
 
     # If the script was run and autoload is enabled, attempt to autoload libraries.
-    if Ocran.force_autoload?
+    if @option.force_autoload?
       attempt_load_autoload(@ignore_modules)
     end
 
@@ -503,9 +277,9 @@ EOF
     Ocran.extend HostConfigHelper
 
     # If a Bundler Gemfile was provided, add all gems it specifies
-    if Ocran.gemfile
+    if @option.gemfile
       Ocran.msg "Scanning Gemfile"
-      specs_from_gemfile = Ocran.scanning_gemfile(Ocran.gemfile).to_a
+      specs_from_gemfile = Ocran.scanning_gemfile(@option.gemfile).to_a
     else
       specs_from_gemfile = []
     end
@@ -538,7 +312,7 @@ EOF
       end
 
       # Add detected DLLs
-      if Ocran.auto_detect_dlls?
+      if @option.auto_detect_dlls?
         Ocran.detect_dlls.each do |dll|
           Ocran.msg "Adding detected DLL #{dll}"
           if dll.subpath?(exec_prefix)
@@ -556,7 +330,7 @@ EOF
       end
 
       # Add extra DLLs specified on the command line
-      Ocran.extra_dlls.each do |dll|
+      @option.extra_dlls.each do |dll|
         Ocran.msg "Adding supplied DLL #{dll}"
         builder.copy_to_bin(bindir / dll, dll)
       end
@@ -613,7 +387,7 @@ EOF
       features -= gem_files
 
       # If requested, add all ruby standard libraries
-      if Ocran.add_all_core?
+      if @option.add_all_core?
         Ocran.msg "Will include all ruby core libraries"
         @load_path_before.each do |lp|
           path = Pathname.new(lp)
@@ -629,7 +403,7 @@ EOF
       end
 
       # Include encoding support files
-      if Ocran.add_all_encoding?
+      if @option.add_all_encoding?
         exec_prefix_load_path = all_load_paths.select { |path| path.subpath?(exec_prefix) }
         exec_prefix_load_path.each do |load_path|
           enc_dir = load_path / "enc"
@@ -650,7 +424,7 @@ EOF
       builder.touch('msys64/usr/bin/msys-2.0.dll')
 
       # Find the source root and adjust paths
-      source_files = Ocran.source_files.dup
+      source_files = @option.source_files.dup
       src_prefix = find_src_prefix(source_files)
 
       # Find features and decide where to put them in the temporary
@@ -742,26 +516,26 @@ EOF
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / Ocran.ruby_executable
-      builder.exec(installed_ruby_exe, target_script, *Ocran.argv)
+      builder.exec(installed_ruby_exe, target_script, *@option.argv)
     end
 
-    unless Ocran.use_inno_setup?
+    unless @option.use_inno_setup?
       require_relative "../lib/ocran/stub_builder"
       StubBuilder.new(Ocran.output_executable,
-                      chdir_before: Ocran.chdir_before?,
-                      debug_extract: Ocran.enable_debug_extract?,
-                      debug_mode: Ocran.enable_debug_mode?,
-                      enable_compression: Ocran.enable_compression?,
+                      chdir_before: @option.chdir_before?,
+                      debug_extract: @option.enable_debug_extract?,
+                      debug_mode: @option.enable_debug_mode?,
+                      enable_compression: @option.enable_compression?,
                       gui_mode: Ocran.windowed?,
-                      icon_path: Ocran.icon_filename,
+                      icon_path: @option.icon_filename,
                       &direction)
       Ocran.msg "Finished building #{Ocran.output_executable} (#{Ocran.output_executable.size} bytes)"
     else
       require_relative "../lib/ocran/inno_setup_builder"
       InnoSetupBuilder.new(Ocran.output_executable,
-                           Ocran.inno_setup_script,
-                           chdir_before: Ocran.chdir_before?,
-                           icon_path: Ocran.icon_filename,
+                           @option.inno_setup_script,
+                           chdir_before: @option.chdir_before?,
+                           icon_path: @option.icon_filename,
                            title: Ocran.output_executable.basename.sub_ext(""),
                            &direction)
       Ocran.msg "Finished building installer file"
