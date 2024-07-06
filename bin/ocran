@@ -284,17 +284,17 @@ EOF
       puts usage
       exit 1
     end
+
+    @options[:script] = source_files.first
   end
 
-  def self.main_script
-    Ocran.source_files.first
-  end
+  def self.script = @options[:script]
 
   def self.output_executable
     @output_executable ||= if Ocran.output_override
                              Ocran.output_override
                            else
-                             executable = Ocran.main_script
+                             executable = Ocran.script
                              # If debug mode is enabled, append "-debug" to the filename
                              executable = executable.append_to_filename("-debug") if Ocran.enable_debug_mode?
                              executable.basename.sub_ext(".exe")
@@ -302,7 +302,7 @@ EOF
   end
 
   def self.windowed?
-    (Ocran.main_script.extname?(".rbw") || Ocran.force_windows?) && !Ocran.force_console?
+    (Ocran.script.extname?(".rbw") || Ocran.force_windows?) && !Ocran.force_console?
   end
 
   def self.ruby_executable
@@ -780,8 +780,8 @@ end # module Ocran
 if File.basename(__FILE__) == File.basename($PROGRAM_NAME)
   Ocran.init
 
-  unless Ocran.main_script.exist?
-    Ocran.fatal_error "#{Ocran.main_script} was not found!"
+  unless Ocran.script.exist?
+    Ocran.fatal_error "#{Ocran.script} was not found!"
   end
 
   at_exit do
@@ -793,7 +793,7 @@ if File.basename(__FILE__) == File.basename($PROGRAM_NAME)
 
   if Ocran.run_script?
     Ocran.msg "Loading script to check dependencies"
-    $PROGRAM_NAME = Ocran.main_script.to_s
-    load Ocran.main_script
+    $PROGRAM_NAME = Ocran.script.to_s
+    load Ocran.script
   end
 end
