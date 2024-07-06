@@ -224,16 +224,18 @@ EOF
         end
       end
 
-      if enable_debug_extract? && use_inno_setup?
-        Ocran.fatal_error "The --debug-extract option conflicts with use of Inno Setup"
-      end
+      if use_inno_setup?
+        if enable_debug_extract?
+          Ocran.fatal_error "The --debug-extract option conflicts with use of Inno Setup"
+        end
 
-      if enable_compression? && use_inno_setup?
-        Ocran.fatal_error "LZMA compression must be disabled (--no-lzma) when using Inno Setup"
-      end
+        if enable_compression?
+          Ocran.fatal_error "LZMA compression must be disabled (--no-lzma) when using Inno Setup"
+        end
 
-      if !chdir_before? && use_inno_setup?
-        Ocran.fatal_error "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
+        unless chdir_before?
+          Ocran.fatal_error "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
+        end
       end
 
       if source_files.empty?
