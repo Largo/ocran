@@ -189,7 +189,7 @@ Executable options:
 EOF
   end
 
-  def Ocran.parseargs(argv)
+  def self.parse(argv)
     while (arg = argv.shift)
       case arg
       when /\A--(no-)?lzma\z/
@@ -315,7 +315,7 @@ EOF
 
   def Ocran.init
     save_environment
-    parseargs(ARGV)
+    parse(ARGV)
     ARGV.replace(Ocran.argv)
     @ignore_modules += ObjectSpace.each_object(Module).to_a
   end
