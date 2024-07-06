@@ -199,8 +199,8 @@ EOF
         when "--debug-extract"
           @options[:enable_debug_extract?] = true
         when "--"
-          @options[:argv] = ARGV.dup
-          ARGV.clear
+          @options[:argv] = argv.dup
+          argv.clear
         when /\A--(no-)?enc\z/
           @options[:add_all_encoding?] = !$1
         when /\A--(no-)?gem-(\w+)(?:=(.*))?$/
