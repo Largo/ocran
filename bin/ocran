@@ -517,7 +517,16 @@ module Ocran
       builder.exec(installed_ruby_exe, target_script, *@option.argv)
     end
 
-    unless @option.use_inno_setup?
+    if @option.use_inno_setup?
+      require_relative "../lib/ocran/inno_setup_builder"
+      InnoSetupBuilder.new(Ocran.output_executable,
+                           @option.inno_setup_script,
+                           chdir_before: @option.chdir_before?,
+                           icon_path: @option.icon_filename,
+                           title: Ocran.output_executable.basename.sub_ext(""),
+                           &direction)
+      Ocran.msg "Finished building installer file"
+    else
       require_relative "../lib/ocran/stub_builder"
       StubBuilder.new(Ocran.output_executable,
                       chdir_before: @option.chdir_before?,
@@ -528,15 +537,6 @@ module Ocran
                       icon_path: @option.icon_filename,
                       &direction)
       Ocran.msg "Finished building #{Ocran.output_executable} (#{Ocran.output_executable.size} bytes)"
-    else
-      require_relative "../lib/ocran/inno_setup_builder"
-      InnoSetupBuilder.new(Ocran.output_executable,
-                           @option.inno_setup_script,
-                           chdir_before: @option.chdir_before?,
-                           icon_path: @option.icon_filename,
-                           title: Ocran.output_executable.basename.sub_ext(""),
-                           &direction)
-      Ocran.msg "Finished building installer file"
     end
   end
 
