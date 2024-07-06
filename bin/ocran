@@ -22,8 +22,6 @@ module Ocran
   # Directory for Ruby library in temporary directory.
   LIBDIR = Pathname("lib")
 
-  @ignore_modules = []
-
   def self.quiet? = @option.quiet?
 
   def self.verbose? = @option.verbose?
@@ -91,7 +89,7 @@ module Ocran
     @option = Option.new
     @option.parse(ARGV)
     ARGV.replace(@option.argv)
-    @ignore_modules += ObjectSpace.each_object(Module).to_a
+    @ignore_modules = ObjectSpace.each_object(Module).to_a
   end
 
   # Force loading autoloaded constants. Searches through all modules
