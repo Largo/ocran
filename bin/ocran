@@ -45,17 +45,6 @@ module Ocran
     exit 1
   end
 
-  def Ocran.save_environment
-    @load_path_before = $LOAD_PATH.dup
-    @pwd_before = Dir.pwd
-    @env_before = ENV.to_hash
-  end
-
-  def Ocran.restore_environment
-    ENV.clear.update(@env_before)
-    Dir.chdir @pwd_before
-  end
-
   def self.script = @option.script
 
   def self.output_executable
@@ -84,7 +73,8 @@ module Ocran
   def self.run_script? = @option.run_script?
 
   def Ocran.init
-    save_environment
+    load File.expand_path("../lib/ocran/runtime_environment.rb", __dir__)
+    @pre_env = RuntimeEnvironment.save
     load File.expand_path("../lib/ocran/option.rb", __dir__)
     @option = Option.new
     @option.parse(ARGV)
@@ -227,10 +217,11 @@ module Ocran
 
   def Ocran.build_exe
     all_load_paths = $LOAD_PATH.map { |loadpath| Pathname(loadpath).expand_path }
-    @added_load_paths = ($LOAD_PATH - @load_path_before).map { |loadpath| Pathname(loadpath).expand_path }
+    @added_load_paths = ($LOAD_PATH - @pre_env.load_path).map { |loadpath| Pathname(loadpath).expand_path }
     working_directory = Pathname.pwd
 
-    restore_environment
+    ENV.replace(@pre_env.env)
+    Dir.chdir(@pre_env.pwd)
 
     # If the script was run and autoload is enabled, attempt to autoload libraries.
     if @option.force_autoload?
@@ -387,7 +378,7 @@ module Ocran
       # If requested, add all ruby standard libraries
       if @option.add_all_core?
         Ocran.msg "Will include all ruby core libraries"
-        @load_path_before.each do |lp|
+        @pre_env.load_path.each do |lp|
           path = Pathname.new(lp)
           # Match the load path against standard library, site_ruby, and vendor_ruby paths
           path.to_posix.match(RUBY_LIBRARY_PATH_REGEX) do |m|
