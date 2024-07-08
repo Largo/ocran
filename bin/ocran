@@ -218,8 +218,6 @@ module Ocran
   def Ocran.build_exe
     post_env = RuntimeEnvironment.save
     all_load_paths = post_env.load_path.map { |load_path| Pathname(post_env.expand_path(load_path)) }
-    @added_load_paths = (post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(post_env.expand_path(load_path)) }
-    working_directory = Pathname(post_env.pwd)
 
     ENV.replace(@pre_env.env)
     Dir.chdir(@pre_env.pwd)
@@ -422,6 +420,8 @@ module Ocran
       src_load_path = []
       # Add loaded libraries (features, gems)
       Ocran.msg "Adding library files"
+      added_load_paths = (post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(post_env.expand_path(load_path)) }
+      working_directory = Pathname(post_env.pwd)
       features.each do |feature|
         load_path = find_load_path(all_load_paths, feature)
         if load_path.nil? || load_path.expand_path == Pathname.pwd
@@ -444,8 +444,8 @@ module Ocran
             # Add the load path unless it was added by the script while
             # running (or we assume that the script can also set it up
             # correctly when running from the resulting executable).
-            src_load_path << load_path unless @added_load_paths.include?(load_path)
-          elsif @added_load_paths.include?(load_path)
+            src_load_path << load_path unless added_load_paths.include?(load_path)
+          elsif added_load_paths.include?(load_path)
             # Any feature that exist in a load path added by the script
             # itself is added as a file to go into the 'src' (src_prefix
             # will be adjusted below to point to the common parent).
