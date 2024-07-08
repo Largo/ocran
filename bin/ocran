@@ -216,9 +216,10 @@ module Ocran
   end
 
   def Ocran.build_exe
-    all_load_paths = $LOAD_PATH.map { |loadpath| Pathname(loadpath).expand_path }
-    @added_load_paths = ($LOAD_PATH - @pre_env.load_path).map { |loadpath| Pathname(loadpath).expand_path }
-    working_directory = Pathname.pwd
+    post_env = RuntimeEnvironment.save
+    all_load_paths = post_env.load_path.map { |load_path| Pathname(post_env.expand_path(load_path)) }
+    @added_load_paths = (post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(post_env.expand_path(load_path)) }
+    working_directory = Pathname(post_env.pwd)
 
     ENV.replace(@pre_env.env)
     Dir.chdir(@pre_env.pwd)
@@ -231,7 +232,7 @@ module Ocran
     # Store the currently loaded files (before we require rbconfig for
     # our own use).
     features = $LOADED_FEATURES.map { |feature| Pathname(feature) }
-    
+
     # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
     # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually
     features.push(Pathname("rubygems/core_ext/kernel_require.rb"))
@@ -241,7 +242,7 @@ module Ocran
     features = features.filter_map do |feature|
       if feature.absolute?
         feature
-      elsif (load_path = find_load_path($LOAD_PATH, feature))
+      elsif (load_path = find_load_path(post_env.load_path, feature))
         feature.expand_path(load_path)
       else
         # This message occurs when paths for core library files (e.g., enumerator.so,
