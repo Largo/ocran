@@ -107,22 +107,20 @@ module Ocran
     end
   end
 
-  # Guess the load path (from 'paths') that was used to load
-  # 'feature'. This is primarily relevant on Ruby 1.8 which stores
-  # "unqualified" paths in $LOADED_FEATURES. In Ruby 1.9 and later,
-  # $LOADED_FEATURES contains fully qualified paths, so this method
-  # is less critical but still applicable for backward compatibility.
-  def Ocran.find_load_path(loadpaths, feature)
-    if feature.absolute?
+  # Guess the load path (from 'load_paths') that was used to load 'path'.
+  # $LOADED_FEATURES can contain both fully qualified paths and "unqualified" paths.
+  # This method is applicable in environments that include unqualified paths.
+  def self.find_load_path(load_paths, path)
+    if path.absolute?
       # For an absolute path feature, find the load path that contains the feature
       # and determine the shortest possible require-path (most specific path).
-      loadpaths.select { |load_path| feature.subpath?(File.expand_path(load_path)) }
-               .min_by { |load_path| feature.relative_path_from(File.expand_path(load_path)).to_s.size }
+      load_paths.select { |load_path| path.subpath?(File.expand_path(load_path)) }
+                .min_by { |load_path| path.relative_path_from(File.expand_path(load_path)).to_s.size }
     else
       # For a relative path feature, find the load path where the expanded feature exists
       # and select the longest load path (most specific path).
-      loadpaths.select { |load_path| feature.expand_path(load_path).exist? }
-               .max_by { |load_path| load_path.to_s.size }
+      load_paths.select { |load_path| path.expand_path(load_path).exist? }
+                .max_by { |load_path| load_path.to_s.size }
     end
   end
 
