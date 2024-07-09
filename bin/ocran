@@ -421,11 +421,11 @@ module Ocran
       added_load_paths = (post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(post_env.expand_path(load_path)) }
       working_directory = Pathname(post_env.pwd)
       features.each do |feature|
-        load_path = find_load_path(all_load_paths, feature)
-        if load_path.nil? || load_path.expand_path == Pathname.pwd
+        abs_load_path = find_load_path(all_load_paths, feature)
+        if abs_load_path.nil? || abs_load_path == Pathname.pwd
           source_files << feature
         else
-          fullpath = feature.expand_path(load_path)
+          fullpath = feature.expand_path(abs_load_path)
 
           if fullpath.subpath?(exec_prefix)
             # Features found in the Ruby installation are put in the
@@ -435,15 +435,15 @@ module Ocran
             # Features found in any other Gem path (e.g. ~/.gems) is put
             # in a special 'gemhome' folder.
             builder.duplicate_to_gem_home(fullpath, gem_path)
-          elsif fullpath.subpath?(src_prefix) || load_path == working_directory
+          elsif fullpath.subpath?(src_prefix) || abs_load_path == working_directory
             # Any feature found inside the src_prefix automatically gets
             # added as a source file (to go in 'src').
             source_files << fullpath
             # Add the load path unless it was added by the script while
             # running (or we assume that the script can also set it up
             # correctly when running from the resulting executable).
-            src_load_path << load_path unless added_load_paths.include?(load_path)
-          elsif added_load_paths.include?(load_path)
+            src_load_path << abs_load_path unless added_load_paths.include?(abs_load_path)
+          elsif added_load_paths.include?(abs_load_path)
             # Any feature that exist in a load path added by the script
             # itself is added as a file to go into the 'src' (src_prefix
             # will be adjusted below to point to the common parent).
@@ -454,7 +454,7 @@ module Ocran
             # when Ruby starts.
             inst_sitelibdir = sitelibdir.relative_path_from(exec_prefix)
             if feature.absolute?
-              feature = feature.relative_path_from(load_path.expand_path)
+              feature = feature.relative_path_from(abs_load_path)
             end
             builder.cp(fullpath, inst_sitelibdir / feature)
           end
