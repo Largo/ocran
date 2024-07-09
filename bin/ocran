@@ -238,7 +238,7 @@ module Ocran
       if feature.absolute?
         feature
       elsif (load_path = post_env.find_load_path(feature))
-        feature.expand_path(load_path)
+        feature.expand_path(post_env.expand_path(load_path))
       else
         # This message occurs when paths for core library files (e.g., enumerator.so,
         # rational.so, complex.so, fiber.so, thread.rb, ruby2_keywords.rb) are not
