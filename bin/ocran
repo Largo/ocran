@@ -215,7 +215,6 @@ module Ocran
 
   def Ocran.build_exe
     post_env = RuntimeEnvironment.save
-    all_load_paths = post_env.load_path.map { |load_path| Pathname(post_env.expand_path(load_path)) }
 
     ENV.replace(@pre_env.env)
     Dir.chdir(@pre_env.pwd)
@@ -390,8 +389,10 @@ module Ocran
 
       # Include encoding support files
       if @option.add_all_encoding?
-        exec_prefix_load_path = all_load_paths.select { |path| path.subpath?(exec_prefix) }
-        exec_prefix_load_path.each do |load_path|
+        post_env.load_path.each do |load_path|
+          load_path = Pathname(post_env.expand_path(load_path))
+          next unless load_path.subpath?(exec_prefix)
+
           enc_dir = load_path / "enc"
           next unless enc_dir.directory?
 
