@@ -21,5 +21,21 @@ module Ocran
     def expand_path(path)
       File.expand_path(path, @pwd)
     end
+
+    def find_load_path(path)
+      path = Pathname(path) unless path.is_a?(Pathname)
+
+      if path.absolute?
+        # For an absolute path feature, find the load path that contains the feature
+        # and determine the longest matching path (most specific path).
+        @load_path.select { |load_path| path.subpath?(expand_path(load_path)) }
+                  .max_by { |load_path| expand_path(load_path).length }
+      else
+        # For a relative path feature, find the load path where the expanded feature exists
+        # and select the longest load path (most specific path).
+        @load_path.select { |load_path| path.expand_path(load_path).exist? }
+                  .max_by { |load_path| load_path.length }
+      end
+    end
   end
 end

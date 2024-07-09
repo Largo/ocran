@@ -238,7 +238,7 @@ module Ocran
     features = features.filter_map do |feature|
       if feature.absolute?
         feature
-      elsif (load_path = find_load_path(post_env.load_path, feature))
+      elsif (load_path = post_env.find_load_path(feature))
         feature.expand_path(load_path)
       else
         # This message occurs when paths for core library files (e.g., enumerator.so,
@@ -421,8 +421,13 @@ module Ocran
       added_load_paths = (post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(post_env.expand_path(load_path)) }
       working_directory = Pathname(post_env.pwd)
       features.each do |feature|
-        abs_load_path = find_load_path(all_load_paths, feature)
-        if abs_load_path.nil? || abs_load_path == Pathname.pwd
+        load_path = post_env.find_load_path(feature)
+        if load_path.nil?
+          source_files << feature
+          next
+        end
+        abs_load_path = Pathname(post_env.expand_path(load_path))
+        if abs_load_path == Pathname.pwd
           source_files << feature
         else
           fullpath = feature.expand_path(abs_load_path)
