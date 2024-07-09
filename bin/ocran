@@ -113,9 +113,9 @@ module Ocran
   def self.find_load_path(load_paths, path)
     if path.absolute?
       # For an absolute path feature, find the load path that contains the feature
-      # and determine the shortest possible require-path (most specific path).
+      # and determine the longest matching path (most specific path).
       load_paths.select { |load_path| path.subpath?(File.expand_path(load_path)) }
-                .min_by { |load_path| path.relative_path_from(File.expand_path(load_path)).to_s.size }
+                .max_by { |load_path| File.expand_path(load_path).length }
     else
       # For a relative path feature, find the load path where the expanded feature exists
       # and select the longest load path (most specific path).
