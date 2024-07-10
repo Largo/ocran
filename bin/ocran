@@ -201,7 +201,6 @@ module Ocran
     post_env = RuntimeEnvironment.save
 
     ENV.replace(@pre_env.env)
-    Dir.chdir(@pre_env.pwd)
 
     # If the script was run and autoload is enabled, attempt to autoload libraries.
     if @option.force_autoload?
