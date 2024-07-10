@@ -55,7 +55,7 @@ module Ocran
                              # If debug mode is enabled, append "-debug" to the filename
                              executable = executable.append_to_filename("-debug") if @option.enable_debug_mode?
                              executable.basename.sub_ext(".exe")
-                           end
+                           end.expand_path(@pre_env.pwd)
   end
 
   def self.windowed?
