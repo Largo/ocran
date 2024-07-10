@@ -197,6 +197,11 @@ module Ocran
     manifest_path.exist? ? manifest_path : nil
   end
 
+  def self.detect_dlls
+    require_relative "../lib/ocran/library_detector"
+    LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
+  end
+
   def Ocran.build_exe
     post_env = RuntimeEnvironment.save
 
@@ -282,6 +287,8 @@ module Ocran
       # Add detected DLLs
       if @option.auto_detect_dlls?
         Ocran.detect_dlls.each do |dll|
+          next unless dll.subpath?(exec_prefix) && dll.extname?(".dll") && dll.basename != libruby_so
+
           Ocran.msg "Adding detected DLL #{dll}"
           if dll.subpath?(exec_prefix)
             builder.duplicate_to_exec_prefix(dll)
@@ -510,14 +517,6 @@ module Ocran
                       icon_path: @option.icon_filename,
                       &direction)
       Ocran.msg "Finished building #{Ocran.output_executable} (#{Ocran.output_executable.size} bytes)"
-    end
-  end
-
-  def self.detect_dlls
-    require_relative "../lib/ocran/library_detector"
-    loaded = LibraryDetector.loaded_dlls
-    loaded.map { |s| Pathname.new(s) }.select do |path|
-      path.subpath?(exec_prefix) && path.extname?(".dll") && path.basename != libruby_so
     end
   end
 end # module Ocran
