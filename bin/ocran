@@ -421,6 +421,7 @@ module Ocran
       # Add loaded libraries (features, gems)
       Ocran.msg "Adding library files"
       added_load_paths = (post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(post_env.expand_path(load_path)) }
+      pre_working_directory = Pathname(@pre_env.pwd)
       working_directory = Pathname(post_env.pwd)
       features.each do |feature|
         load_path = post_env.find_load_path(feature)
@@ -429,7 +430,7 @@ module Ocran
           next
         end
         abs_load_path = Pathname(post_env.expand_path(load_path))
-        if abs_load_path == Pathname.pwd
+        if abs_load_path == pre_working_directory
           source_files << feature
         elsif feature.subpath?(exec_prefix)
           # Features found in the Ruby installation are put in the
