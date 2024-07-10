@@ -107,23 +107,6 @@ module Ocran
     end
   end
 
-  # Guess the load path (from 'load_paths') that was used to load 'path'.
-  # $LOADED_FEATURES can contain both fully qualified paths and "unqualified" paths.
-  # This method is applicable in environments that include unqualified paths.
-  def self.find_load_path(load_paths, path)
-    if path.absolute?
-      # For an absolute path feature, find the load path that contains the feature
-      # and determine the longest matching path (most specific path).
-      load_paths.select { |load_path| path.subpath?(File.expand_path(load_path)) }
-                .max_by { |load_path| File.expand_path(load_path).length }
-    else
-      # For a relative path feature, find the load path where the expanded feature exists
-      # and select the longest load path (most specific path).
-      load_paths.select { |load_path| path.expand_path(load_path).exist? }
-                .max_by { |load_path| load_path.to_s.size }
-    end
-  end
-
   # Resolves the common root directory prefix from an array of absolute paths.
   # This method iterates over each file path, checking if they have a subpath
   # that matches a given execution prefix.
