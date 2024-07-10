@@ -431,20 +431,18 @@ module Ocran
         if abs_load_path == Pathname.pwd
           source_files << feature
         else
-          fullpath = feature.expand_path(abs_load_path)
-
-          if fullpath.subpath?(exec_prefix)
+          if feature.subpath?(exec_prefix)
             # Features found in the Ruby installation are put in the
             # temporary Ruby installation.
-            builder.duplicate_to_exec_prefix(fullpath)
-          elsif (gem_path = GemSpecQueryable.find_gem_path(fullpath))
+            builder.duplicate_to_exec_prefix(feature)
+          elsif (gem_path = GemSpecQueryable.find_gem_path(feature))
             # Features found in any other Gem path (e.g. ~/.gems) is put
             # in a special 'gemhome' folder.
-            builder.duplicate_to_gem_home(fullpath, gem_path)
-          elsif fullpath.subpath?(src_prefix) || abs_load_path == working_directory
+            builder.duplicate_to_gem_home(feature, gem_path)
+          elsif feature.subpath?(src_prefix) || abs_load_path == working_directory
             # Any feature found inside the src_prefix automatically gets
             # added as a source file (to go in 'src').
-            source_files << fullpath
+            source_files << feature
             # Add the load path unless it was added by the script while
             # running (or we assume that the script can also set it up
             # correctly when running from the resulting executable).
@@ -453,16 +451,13 @@ module Ocran
             # Any feature that exist in a load path added by the script
             # itself is added as a file to go into the 'src' (src_prefix
             # will be adjusted below to point to the common parent).
-            source_files << fullpath
+            source_files << feature
           else
             # All other feature that can not be resolved go in the the
             # Ruby sitelibdir. This is automatically in the load path
             # when Ruby starts.
             inst_sitelibdir = sitelibdir.relative_path_from(exec_prefix)
-            if feature.absolute?
-              feature = feature.relative_path_from(abs_load_path)
-            end
-            builder.cp(fullpath, inst_sitelibdir / feature)
+            builder.cp(feature, inst_sitelibdir / feature.relative_path_from(abs_load_path))
           end
         end
       end
