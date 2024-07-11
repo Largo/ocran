@@ -73,6 +73,12 @@ module Ocran
   def self.run_script? = @option.run_script?
 
   def Ocran.init
+    load File.expand_path("../lib/ocran/refine_pathname.rb", __dir__)
+    ::Pathname.prepend(RefinePathname)
+
+    load File.expand_path("../lib/ocran/host_config_helper.rb", __dir__)
+    Ocran.extend HostConfigHelper
+
     load File.expand_path("../lib/ocran/runtime_environment.rb", __dir__)
     @pre_env = RuntimeEnvironment.save
     load File.expand_path("../lib/ocran/option.rb", __dir__)
@@ -215,6 +221,8 @@ module Ocran
     # Store the currently loaded files (before we require rbconfig for
     # our own use).
     features = $LOADED_FEATURES.map { |feature| Pathname(feature) }
+    # NOTE: From this point, $LOADED_FEATURES has been captured, so it is now
+    # safe to call require_relative.
 
     # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
     # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually
@@ -237,17 +245,6 @@ module Ocran
         nil
       end
     end
-
-    # The `RefinePathname` module is prepended to the `Pathname` class. This is done
-    # after the user script has finished executing and only the Ocran code is running,
-    # to avoid affecting the script environment.
-    # Additionally, it is placed here to ensure that the $LOADED_FEATURES variable
-    # includes all previously loaded files before the module is required.
-    require_relative "../lib/ocran/refine_pathname"
-    ::Pathname.prepend(RefinePathname)
-
-    require_relative "../lib/ocran/host_config_helper"
-    Ocran.extend HostConfigHelper
 
     # If a Bundler Gemfile was provided, add all gems it specifies
     if @option.gemfile
