@@ -24,7 +24,7 @@ module Ocran
     end
 
     def find_load_path(path)
-      path = Pathname(path) unless path.is_a?(Pathname)
+      path = Pathname.new(path) unless path.is_a?(Pathname)
 
       if path.absolute?
         # For an absolute path feature, find the load path that contains the feature
