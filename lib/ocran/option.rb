@@ -24,6 +24,7 @@ module Ocran
         :quiet? => false,
         :rubyopt => nil,
         :run_script? => true,
+        :script => nil,
         :source_files => [],
         :verbose? => false,
         :warn? => true,
