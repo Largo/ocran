@@ -48,7 +48,7 @@ module Ocran
 
     def extra_dlls = @options[__method__]
 
-    def force_autoload? = run_script? && load_autoload?
+    def force_autoload? = @options[__method__]
 
     def force_console? = @options[__method__]
 
@@ -76,9 +76,9 @@ module Ocran
 
     def source_files = @options[__method__]
 
-    def use_inno_setup? = !!inno_setup_script
+    def use_inno_setup? = @options[__method__]
 
-    def verbose? = !quiet? && @options[__method__]
+    def verbose? = @options[__method__]
 
     def warn? = @options[__method__]
 
@@ -244,6 +244,12 @@ EOF
       end
 
       @options[:script] = source_files.first
+
+      @options[:force_autoload?] = run_script? && load_autoload?
+
+      @options[:use_inno_setup?] = !!inno_setup_script
+
+      @options[:verbose?] &&= !quiet?
     end
   end
 end
