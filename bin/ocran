@@ -521,10 +521,6 @@ end # module Ocran
 if File.basename(__FILE__) == File.basename($PROGRAM_NAME)
   Ocran.init
 
-  unless Ocran.script.exist?
-    Ocran.fatal_error "#{Ocran.script} was not found!"
-  end
-
   at_exit do
     if $!.nil? or $!.kind_of?(SystemExit)
       Ocran.build_exe
