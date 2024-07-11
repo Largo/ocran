@@ -1,4 +1,5 @@
 require "rbconfig"
+require "pathname"
 
 module Ocran
   # Variables describing the host's build environment.
