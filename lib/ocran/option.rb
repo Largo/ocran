@@ -172,7 +172,7 @@ EOF
         end
       end
 
-      if use_inno_setup?
+      if inno_setup_script
         if enable_debug_extract?
           Ocran.fatal_error "The --debug-extract option conflicts with use of Inno Setup"
         end
