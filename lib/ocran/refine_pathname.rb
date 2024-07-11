@@ -5,12 +5,14 @@ module Ocran
   # The Pathname class in Ruby is modified to handle mixed path separators and
   # to be case-insensitive.
   module RefinePathname
-    NORMALIZE_FILE_SEPARATOR = if File::ALT_SEPARATOR
-                                 proc { |s| s.tr(File::ALT_SEPARATOR, File::SEPARATOR) }
-                               else
-                                 proc { |s| s }
-                               end
-    private_constant :NORMALIZE_FILE_SEPARATOR
+    def normalize_file_separator(s)
+      if File::ALT_SEPARATOR
+        s.tr(File::ALT_SEPARATOR, File::SEPARATOR)
+      else
+        s
+      end
+    end
+    private :normalize_file_separator
 
     # Compares two paths for equality based on the case sensitivity of the
     # Ruby execution environment's file system.
@@ -26,7 +28,7 @@ module Ocran
     private :pathequal
 
     def to_posix
-      NORMALIZE_FILE_SEPARATOR[to_s]
+      normalize_file_separator(to_s)
     end
 
     # Checks if two Pathname objects are equal, considering the file system's
@@ -36,8 +38,8 @@ module Ocran
     def eql?(other)
       return false unless other.is_a?(Pathname)
 
-      a = NORMALIZE_FILE_SEPARATOR[to_s]
-      b = NORMALIZE_FILE_SEPARATOR[other.to_s]
+      a = normalize_file_separator(to_s)
+      b = normalize_file_separator(other.to_s)
       pathequal(a, b)
     end
 
@@ -61,7 +63,7 @@ module Ocran
              else
                to_s
              end
-      NORMALIZE_FILE_SEPARATOR[path].hash
+      normalize_file_separator(path).hash
     end
 
     # Checks if the current path is a sub path of the specified base_directory.
