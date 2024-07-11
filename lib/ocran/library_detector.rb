@@ -22,7 +22,6 @@ module Ocran
 
     include Fiddle::Win32Types
     # https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
-    typealias "HINSTANCE", "HANDLE" # for Ruby2.6 only
     typealias "HMODULE", "HINSTANCE"
     typealias "LPDWORD", "PDWORD"
     typealias "LPWSTR", "char*"
