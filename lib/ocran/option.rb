@@ -197,9 +197,21 @@ EOF
 
       @options[:force_autoload?] = run_script? && load_autoload?
 
+      @options[:output_executable] =
+        if output_override
+          output_override
+        else
+          executable = script
+          # If debug mode is enabled, append "-debug" to the filename
+          executable = executable.append_to_filename("-debug") if enable_debug_mode?
+          executable.basename.sub_ext(".exe")
+        end.expand_path
+
       @options[:use_inno_setup?] = !!inno_setup_script
 
       @options[:verbose?] &&= !quiet?
+
+      @options[:windowed?] = (script.extname?(".rbw") || force_windows?) && !force_console?
     end
 
     def add_all_core? = @options[__method__]
@@ -236,6 +248,8 @@ EOF
 
     def load_autoload? = @options[__method__]
 
+    def output_executable = @options[__method__]
+
     def output_override = @options[__method__]
 
     def quiet? = @options[__method__]
@@ -253,5 +267,7 @@ EOF
     def verbose? = @options[__method__]
 
     def warn? = @options[__method__]
+
+    def windowed? = @options[__method__]
   end
 end

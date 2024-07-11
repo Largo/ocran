@@ -47,23 +47,8 @@ module Ocran
 
   def self.script = @option.script
 
-  def self.output_executable
-    @output_executable ||= if @option.output_override
-                             @option.output_override
-                           else
-                             executable = @option.script
-                             # If debug mode is enabled, append "-debug" to the filename
-                             executable = executable.append_to_filename("-debug") if @option.enable_debug_mode?
-                             executable.basename.sub_ext(".exe")
-                           end.expand_path(@pre_env.pwd)
-  end
-
-  def self.windowed?
-    (@option.script.extname?(".rbw") || @option.force_windows?) && !@option.force_console?
-  end
-
   def self.ruby_executable
-    @ruby_executable ||= Ocran.windowed? ? rubyw_exe : ruby_exe
+    @ruby_executable ||= @option.windowed? ? rubyw_exe : ruby_exe
   end
 
   def self.rubyopt
@@ -268,7 +253,7 @@ module Ocran
     end
 
     direction = proc do |builder|
-      Ocran.msg "Building #{Ocran.output_executable}"
+      Ocran.msg "Building #{@option.output_executable}"
       require_relative "../lib/ocran/builder_ops_logger"
       builder.extend(BuilderOpsLogger) if Ocran.verbose?
       require_relative "../lib/ocran/build_helper"
@@ -496,24 +481,24 @@ module Ocran
 
     if @option.use_inno_setup?
       require_relative "../lib/ocran/inno_setup_builder"
-      InnoSetupBuilder.new(Ocran.output_executable,
+      InnoSetupBuilder.new(@option.output_executable,
                            @option.inno_setup_script,
                            chdir_before: @option.chdir_before?,
                            icon_path: @option.icon_filename,
-                           title: Ocran.output_executable.basename.sub_ext(""),
+                           title: @option.output_executable.basename.sub_ext(""),
                            &direction)
       Ocran.msg "Finished building installer file"
     else
       require_relative "../lib/ocran/stub_builder"
-      StubBuilder.new(Ocran.output_executable,
+      StubBuilder.new(@option.output_executable,
                       chdir_before: @option.chdir_before?,
                       debug_extract: @option.enable_debug_extract?,
                       debug_mode: @option.enable_debug_mode?,
                       enable_compression: @option.enable_compression?,
-                      gui_mode: Ocran.windowed?,
+                      gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
                       &direction)
-      Ocran.msg "Finished building #{Ocran.output_executable} (#{Ocran.output_executable.size} bytes)"
+      Ocran.msg "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
     end
   end
 end # module Ocran
