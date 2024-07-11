@@ -30,58 +30,6 @@ module Ocran
       }
     end
 
-    def add_all_core? = @options[__method__]
-
-    def add_all_encoding? = @options[__method__]
-
-    def argv = @options[__method__]
-
-    def auto_detect_dlls? = @options[__method__]
-
-    def chdir_before? = @options[__method__]
-
-    def enable_compression? = @options[__method__]
-
-    def enable_debug_extract? = @options[__method__]
-
-    def enable_debug_mode? = @options[__method__]
-
-    def extra_dlls = @options[__method__]
-
-    def force_autoload? = @options[__method__]
-
-    def force_console? = @options[__method__]
-
-    def force_windows? = @options[__method__]
-
-    def gem_options = @options[__method__]
-
-    def gemfile = @options[__method__]
-
-    def icon_filename = @options[__method__]
-
-    def inno_setup_script = @options[__method__]
-
-    def load_autoload? = @options[__method__]
-
-    def output_override = @options[__method__]
-
-    def quiet? = @options[__method__]
-
-    def rubyopt = @options[__method__]
-
-    def run_script? = @options[__method__]
-
-    def script = @options[__method__]
-
-    def source_files = @options[__method__]
-
-    def use_inno_setup? = @options[__method__]
-
-    def verbose? = @options[__method__]
-
-    def warn? = @options[__method__]
-
     def usage
       <<EOF
 ocran [options] script.rb
@@ -251,5 +199,57 @@ EOF
 
       @options[:verbose?] &&= !quiet?
     end
+
+    def add_all_core? = @options[__method__]
+
+    def add_all_encoding? = @options[__method__]
+
+    def argv = @options[__method__]
+
+    def auto_detect_dlls? = @options[__method__]
+
+    def chdir_before? = @options[__method__]
+
+    def enable_compression? = @options[__method__]
+
+    def enable_debug_extract? = @options[__method__]
+
+    def enable_debug_mode? = @options[__method__]
+
+    def extra_dlls = @options[__method__]
+
+    def force_autoload? = @options[__method__]
+
+    def force_console? = @options[__method__]
+
+    def force_windows? = @options[__method__]
+
+    def gem_options = @options[__method__]
+
+    def gemfile = @options[__method__]
+
+    def icon_filename = @options[__method__]
+
+    def inno_setup_script = @options[__method__]
+
+    def load_autoload? = @options[__method__]
+
+    def output_override = @options[__method__]
+
+    def quiet? = @options[__method__]
+
+    def rubyopt = @options[__method__]
+
+    def run_script? = @options[__method__]
+
+    def script = @options[__method__]
+
+    def source_files = @options[__method__]
+
+    def use_inno_setup? = @options[__method__]
+
+    def verbose? = @options[__method__]
+
+    def warn? = @options[__method__]
   end
 end
