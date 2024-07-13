@@ -85,6 +85,7 @@ module Ocran
 
           if enable_compression
             compress(&b)
+            Ocran.msg "After decompression, the data will expand to #{@data_size} bytes."
           else
             b.yield
           end
@@ -156,7 +157,6 @@ module Ocran
         @of = _of
       end
 
-      Ocran.msg "After decompression, the data will expand to #{@data_size} bytes."
       # Calculate the position to write the LZMA decompressed size (64-bit unsigned integer)
       # @opcode_offset: start position of the data section
       # 1: size of the header byte
