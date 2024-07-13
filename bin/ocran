@@ -191,6 +191,8 @@ module Ocran
   def self.detect_dlls
     require_relative "../lib/ocran/library_detector"
     LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
+  rescue RuntimeError => e
+    Ocran.fatal_error e.message
   end
 
   def Ocran.build_exe

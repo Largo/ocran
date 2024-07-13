@@ -40,7 +40,7 @@ module Ocran
         handles = while true
                     buffer = "\x00" * bytes
                     if EnumProcessModules(process_handle, buffer, buffer.bytesize, bytes_needed) == 0
-                      Ocran.fatal_error "LibraryDetector: EnumProcessModules failed with error code %d" % GetLastError()
+                      raise "EnumProcessModules failed with error code #{GetLastError()}"
                     end
                     bytes = bytes_needed.unpack1(dword)
                     if bytes <= buffer.bytesize
@@ -51,7 +51,7 @@ module Ocran
         handles.map do |handle|
           length = GetModuleFileNameW(handle, str, str.bytesize)
           if length == 0
-            Ocran.fatal_error "LibraryDetector: GetModuleFileNameW failed with error code %d" % GetLastError()
+            raise "GetModuleFileNameW failed with error code #{GetLastError()}"
           end
           str[0, length].encode("UTF-8")
         end
