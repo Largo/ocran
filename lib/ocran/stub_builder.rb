@@ -52,7 +52,7 @@ module Ocran
     # Specifies the path to the icon file to be embedded in the stub's resources.
     #
     def initialize(path, chdir_before: nil, debug_extract: nil, debug_mode: nil,
-                   enable_compression: nil, gui_mode: nil, icon_path: nil, &b)
+                   enable_compression: nil, gui_mode: nil, icon_path: nil)
       @dirs = FilePathSet.new
       @files = FilePathSet.new
       @data_size = 0
