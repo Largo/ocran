@@ -492,6 +492,9 @@ module Ocran
       Ocran.msg "Finished building installer file"
     else
       require_relative "../lib/ocran/stub_builder"
+      if @option.enable_debug_mode?
+        Ocran.msg("Enabling debug mode in executable")
+      end
       StubBuilder.new(@option.output_executable,
                       chdir_before: @option.chdir_before?,
                       debug_extract: @option.enable_debug_extract?,

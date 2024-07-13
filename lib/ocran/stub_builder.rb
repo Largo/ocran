@@ -71,10 +71,6 @@ module Ocran
           @data_size = 0
           @of = ocran_file
 
-          if debug_mode
-            Ocran.msg("Enabling debug mode in executable")
-          end
-
           write_header(debug_mode, debug_extract, chdir_before, enable_compression)
 
           b = proc {
