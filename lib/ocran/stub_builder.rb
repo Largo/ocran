@@ -55,14 +55,8 @@ module Ocran
       @files = FilePathSet.new
       @data_size = 0
 
-      stub_path = gui_mode ? STUBW_PATH : STUB_PATH
-
-      unless File.exist?(stub_path)
-        raise "Stub image not available"
-      end
-
       begin
-        IO.copy_stream(stub_path, path)
+        IO.copy_stream(gui_mode ? STUBW_PATH : STUB_PATH, path)
 
         if icon_path
           system(EDICON_PATH, path.to_s, icon_path.to_s, exception: true)
