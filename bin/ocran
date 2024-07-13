@@ -502,8 +502,9 @@ module Ocran
                       enable_compression: @option.enable_compression?,
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
-                      &direction)
+                      &direction) => builder
       Ocran.msg "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
+      Ocran.msg "After decompression, the data will expand to #{builder.data_size} bytes."
     end
   end
 end # module Ocran
