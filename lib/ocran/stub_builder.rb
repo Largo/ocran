@@ -55,7 +55,7 @@ module Ocran
       stub_path = gui_mode ? STUBW_PATH : STUB_PATH
 
       unless File.exist?(stub_path)
-        Ocran.fatal_error "Stub image not available"
+        raise "Stub image not available"
       end
 
       begin
