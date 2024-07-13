@@ -75,8 +75,7 @@ module Ocran
             Ocran.msg("Enabling debug mode in executable")
           end
 
-          next_to_exe, delete_after = debug_extract, !debug_extract
-          write_header(debug_mode, next_to_exe, delete_after, chdir_before, enable_compression)
+          write_header(debug_mode, debug_extract, chdir_before, enable_compression)
 
           b = proc {
             yield(self)
@@ -165,7 +164,8 @@ module Ocran
     end
     private :compress
 
-    def write_header(debug_mode, next_to_exe, delete_after, chdir_before, compressed)
+    def write_header(debug_mode, debug_extract, chdir_before, compressed)
+      next_to_exe, delete_after = debug_extract, !debug_extract
       @of << [0 |
                 (debug_mode ? DEBUG_MODE : 0) |
                 (next_to_exe ? EXTRACT_TO_EXE_DIR : 0) |
