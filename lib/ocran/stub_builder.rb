@@ -1,3 +1,4 @@
+require "tempfile"
 require_relative "file_path_set"
 
 module Ocran
@@ -59,36 +60,35 @@ module Ocran
         raise "Icon file #{icon_path} not found"
       end
 
-      begin
-        IO.copy_stream(gui_mode ? STUBW_PATH : STUB_PATH, path)
+      stub = Tempfile.new("", File.dirname(path))
+      IO.copy_stream(gui_mode ? STUBW_PATH : STUB_PATH, stub)
+      stub.close
 
-        if icon_path
-          system(EDICON_PATH, path.to_s, icon_path.to_s, exception: true)
-        end
-
-        File.open(path, "ab") do |ocran_file|
-          @of = ocran_file
-          @opcode_offset = @of.size
-
-          write_header(debug_mode, debug_extract, chdir_before, enable_compression)
-
-          b = proc {
-            yield(self)
-            write_opcode(OP_END)
-          }
-
-          if enable_compression
-            compress(&b)
-          else
-            b.yield
-          end
-
-          write_tail_header
-        end
-      rescue Exception => e
-        File.unlink(path) if File.exist?(path)
-        raise e
+      if icon_path
+        system(EDICON_PATH, stub.path, icon_path.to_s, exception: true)
       end
+
+      File.open(stub, "ab") do |of|
+        @of = of
+        @opcode_offset = @of.size
+
+        write_header(debug_mode, debug_extract, chdir_before, enable_compression)
+
+        b = proc {
+          yield(self)
+          write_opcode(OP_END)
+        }
+
+        if enable_compression
+          compress(&b)
+        else
+          b.yield
+        end
+
+        write_tail_header
+      end
+
+      File.rename(stub, path)
     end
 
     def mkdir(target)
