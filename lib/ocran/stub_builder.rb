@@ -53,6 +53,7 @@ module Ocran
                    enable_compression: nil, gui_mode: nil, icon_path: nil, &b)
       @dirs = FilePathSet.new
       @files = FilePathSet.new
+      @data_size = 0
 
       stub_path = gui_mode ? STUBW_PATH : STUB_PATH
 
@@ -70,7 +71,6 @@ module Ocran
         @opcode_offset = File.size(path)
 
         File.open(path, "ab") do |ocran_file|
-          @data_size = 0
           @of = ocran_file
 
           write_header(debug_mode, debug_extract, chdir_before, enable_compression)
