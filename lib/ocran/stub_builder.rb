@@ -18,11 +18,11 @@ module Ocran
     CHDIR_BEFORE_SCRIPT = 0x08
     DATA_COMPRESSED     = 0x10
 
-    base_dir = File.join(File.dirname(__FILE__), "../../share/ocran")
-    STUB_PATH = File.join(base_dir, "stub.exe")
-    STUBW_PATH = File.join(base_dir, "stubw.exe")
-    LZMA_PATH = File.join(base_dir, "lzma.exe")
-    EDICON_PATH = File.join(base_dir, "edicon.exe")
+    base_dir = File.expand_path("../../share/ocran", File.dirname(__FILE__))
+    STUB_PATH = File.expand_path("stub.exe", base_dir)
+    STUBW_PATH = File.expand_path("stubw.exe", base_dir)
+    LZMA_PATH = File.expand_path("lzma.exe", base_dir)
+    EDICON_PATH = File.expand_path("edicon.exe", base_dir)
 
     attr_reader :data_size
 
