@@ -55,6 +55,10 @@ module Ocran
       @files = FilePathSet.new
       @data_size = 0
 
+      if icon_path && !File.exist?(icon_path)
+        raise "Icon file #{icon_path} not found"
+      end
+
       begin
         IO.copy_stream(gui_mode ? STUBW_PATH : STUB_PATH, path)
 
