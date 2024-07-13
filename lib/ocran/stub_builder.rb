@@ -66,10 +66,9 @@ module Ocran
           system(EDICON_PATH, path.to_s, icon_path.to_s, exception: true)
         end
 
-        @opcode_offset = File.size(path)
-
         File.open(path, "ab") do |ocran_file|
           @of = ocran_file
+          @opcode_offset = @of.size
 
           write_header(debug_mode, debug_extract, chdir_before, enable_compression)
 
