@@ -86,7 +86,7 @@ module Ocran
             b.yield
           end
 
-          close
+          write_close
         end
       rescue Exception => e
         File.unlink(path) if File.exist?(path)
@@ -138,11 +138,6 @@ module Ocran
       write_opcode(OP_SETENV)
       write_string(name.to_s)
       write_string(value.to_s)
-    end
-
-    def close
-      @of << ([@opcode_offset] + Signature).pack("VC*")
-      @of.close
     end
 
     def compress
@@ -222,6 +217,12 @@ module Ocran
       write_string(convert_to_native(path))
     end
     private :write_path
+
+    def write_close
+      @of << ([@opcode_offset] + Signature).pack("VC*")
+      @of.close
+    end
+    private :write_close
 
     def convert_to_native(path)
       path.to_s.tr(File::SEPARATOR, "\\")
