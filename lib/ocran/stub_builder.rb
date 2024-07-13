@@ -94,7 +94,7 @@ module Ocran
         end
       rescue Exception => e
         File.unlink(path) if File.exist?(path)
-        Ocran.fatal_error("Stub building failed: #{e.message}")
+        raise e
       end
     end
 
