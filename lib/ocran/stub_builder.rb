@@ -83,7 +83,7 @@ module Ocran
             b.yield
           end
 
-          write_close
+          write_tail_header
         end
       rescue Exception => e
         File.unlink(path) if File.exist?(path)
@@ -215,11 +215,10 @@ module Ocran
     end
     private :write_path
 
-    def write_close
+    def write_tail_header
       @of << ([@opcode_offset] + Signature).pack("VC*")
-      @of.close
     end
-    private :write_close
+    private :write_tail_header
 
     def convert_to_native(path)
       path.to_s.tr(File::SEPARATOR, "\\")
