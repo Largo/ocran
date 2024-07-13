@@ -224,6 +224,7 @@ module Ocran
     def write_path(path)
       write_string(convert_to_native(path))
     end
+    private :write_path
 
     def convert_to_native(path)
       path.to_s.tr(File::SEPARATOR, "\\")
