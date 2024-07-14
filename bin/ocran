@@ -41,7 +41,7 @@ module Ocran
   end
 
   def Ocran.fatal_error(s)
-    puts "ERROR: #{s}"
+    STDERR.puts "ERROR: #{s}"
     exit 1
   end
 
