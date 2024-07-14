@@ -160,9 +160,7 @@ module Ocran
 
       ENV["BUNDLE_GEMFILE"] = gemfile_path.to_s
       # Bundler.load.specs includes the spec for Bundler itself (as of Ruby 3.0 and later).
-      Bundler.load.specs.each do |spec|
-        Ocran.verbose_msg "From Gemfile, adding gem #{spec.full_name}"
-      end
+      Bundler.load.specs.to_a
     end
   end
 
@@ -236,7 +234,10 @@ module Ocran
     # If a Bundler Gemfile was provided, add all gems it specifies
     if @option.gemfile
       Ocran.msg "Scanning Gemfile"
-      specs_from_gemfile = Ocran.scanning_gemfile(@option.gemfile).to_a
+      specs_from_gemfile = Ocran.scanning_gemfile(@option.gemfile)
+      specs_from_gemfile.each do |spec|
+        Ocran.verbose_msg "From Gemfile, adding gem #{spec.full_name}"
+      end
     else
       specs_from_gemfile = []
     end
