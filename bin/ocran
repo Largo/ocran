@@ -149,7 +149,9 @@ module Ocran
 
   def Ocran.scanning_gemfile(gemfile_path)
     begin # Preserve indentation to avoid corrupting information used by `git blame`.
-      # Load Rubygems and Bundler so we can scan the Gemfile
+      # Ensure the necessary libraries are loaded to scan the Gemfile.
+      # This is particularly useful in custom-built Ruby environments or
+      # where certain libraries might be excluded.
       ["rubygems", "bundler"].each do |lib|
         begin
           require lib
