@@ -141,7 +141,7 @@ EOF
         when "--version"
           require_relative "version"
           puts "Ocran #{VERSION}"
-          exit 0
+          raise SystemExit
         when "--no-warnings"
           @options[:warn?] = false
         when "--debug"
@@ -158,7 +158,7 @@ EOF
           @options[:gem_options] << [negate, group.to_sym, list&.split(",")] if group
         when "--help", /\A--./
           puts usage
-          exit 0
+          raise SystemExit
         else
           if !File.exist?(arg)
             raise "#{arg} not found!"
