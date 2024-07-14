@@ -174,20 +174,6 @@ EOF
         end
       end
 
-      if inno_setup_script
-        if enable_debug_extract?
-          raise "The --debug-extract option conflicts with use of Inno Setup"
-        end
-
-        if enable_compression?
-          raise "LZMA compression must be disabled (--no-lzma) when using Inno Setup"
-        end
-
-        unless chdir_before?
-          raise "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
-        end
-      end
-
       @options[:script] = source_files.first
 
       if script.nil?
@@ -211,6 +197,20 @@ EOF
       @options[:verbose?] &&= !quiet?
 
       @options[:windowed?] = (script.extname?(".rbw") || force_windows?) && !force_console?
+
+      if inno_setup_script
+        if enable_debug_extract?
+          raise "The --debug-extract option conflicts with use of Inno Setup"
+        end
+
+        if enable_compression?
+          raise "LZMA compression must be disabled (--no-lzma) when using Inno Setup"
+        end
+
+        unless chdir_before?
+          raise "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
+        end
+      end
     end
 
     def add_all_core? = @options[__method__]
