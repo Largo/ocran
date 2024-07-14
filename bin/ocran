@@ -147,16 +147,14 @@ module Ocran
     include
   end
 
-  def Ocran.scanning_gemfile(gemfile_path)
+  def self.scanning_gemfile(gemfile_path)
     # Ensure the necessary libraries are loaded to scan the Gemfile.
     # This is particularly useful in custom-built Ruby environments or
     # where certain libraries might be excluded.
-    ["rubygems", "bundler"].each do |lib|
-      begin
-        require lib
-      rescue LoadError
-        raise "Couldn't scan Gemfile, unable to load #{lib}"
-      end
+    %w[rubygems bundler].each do |lib|
+      require lib
+    rescue LoadError
+      raise "Couldn't scan Gemfile, unable to load #{lib}"
     end
 
     ENV["BUNDLE_GEMFILE"] = gemfile_path.to_s
