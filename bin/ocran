@@ -71,6 +71,8 @@ module Ocran
     @option.parse(ARGV)
     ARGV.replace(@option.argv)
     @ignore_modules = ObjectSpace.each_object(Module).to_a
+  rescue RuntimeError => e
+    Ocran.fatal_error e.message
   end
 
   # Force loading autoloaded constants. Searches through all modules
@@ -108,7 +110,7 @@ module Ocran
       current_root.ascend.find do |candidate_root|
         path_from_root = file.relative_path_from(candidate_root)
       rescue ArgumentError
-        Ocran.fatal_error "No common directory contains all specified files"
+        raise "No common directory contains all specified files"
       else
         path_from_root.each_filename.first != ".."
       end
@@ -138,7 +140,7 @@ module Ocran
           include.push(option)
         end
       else
-        Ocran.fatal "Invalid Gem content detection option: #{option}"
+        raise "Invalid Gem content detection option: #{option}"
       end
     end
     include.uniq!
@@ -152,7 +154,7 @@ module Ocran
         begin
           require lib
         rescue LoadError
-          Ocran.fatal_error "Couldn't scan Gemfile, unable to load #{lib}"
+          raise "Couldn't scan Gemfile, unable to load #{lib}"
         end
       end
 
@@ -191,8 +193,6 @@ module Ocran
   def self.detect_dlls
     require_relative "../lib/ocran/library_detector"
     LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
-  rescue RuntimeError => e
-    Ocran.fatal_error e.message
   end
 
   def Ocran.build_exe
@@ -314,7 +314,7 @@ module Ocran
         elsif (gem_path = GemSpecQueryable.find_gem_path(spec_file))
           builder.duplicate_to_gem_home(spec_file, gem_path)
         else
-          Ocran.fatal_error "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
+          raise "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
         end
 
         # Determine which set of files to include for this particular gem
@@ -335,7 +335,7 @@ module Ocran
           elsif (gem_path = GemSpecQueryable.find_gem_path(gemfile))
             builder.duplicate_to_gem_home(gemfile, gem_path)
           else
-            Ocran.fatal_error "Don't know where to put gemfile #{gemfile}"
+            raise "Don't know where to put gemfile #{gemfile}"
           end
         end
 
@@ -458,7 +458,7 @@ module Ocran
         elsif file.exist?
           builder.cp(file, target)
         else
-          Ocran.fatal_error "The file does not exist (#{file})"
+          raise "The file does not exist (#{file})"
         end
       end
 
@@ -506,6 +506,8 @@ module Ocran
       Ocran.msg "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
       Ocran.msg "After decompression, the data will expand to #{builder.data_size} bytes."
     end
+  rescue RuntimeError => e
+    Ocran.fatal_error e.message
   end
 end # module Ocran
 
