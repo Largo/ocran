@@ -158,7 +158,7 @@ module Ocran
     end
 
     ENV["BUNDLE_GEMFILE"] = gemfile_path.to_s
-    # Bundler.load.specs includes the spec for Bundler itself (as of Ruby 3.0 and later).
+    # Bundler.load.specs includes the spec for Bundler itself
     Bundler.load.specs.to_a
   end
 
