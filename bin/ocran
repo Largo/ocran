@@ -282,7 +282,7 @@ module Ocran
       end
 
       # Add external manifest files
-      [Ocran.ruby_builtin_manifest].compact.each do |manifest|
+      if (manifest = Ocran.ruby_builtin_manifest)
         Ocran.msg "Adding external manifest #{manifest}"
         builder.duplicate_to_exec_prefix(manifest)
       end
