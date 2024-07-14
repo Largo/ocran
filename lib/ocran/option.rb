@@ -124,17 +124,17 @@ EOF
           @options[:chdir_before?] = true
         when "--icon"
           path = argv.shift
-          Ocran.fatal_error "Icon file #{path} not found.\n" unless path && File.exist?(path)
+          raise "Icon file #{path} not found.\n" unless path && File.exist?(path)
           @options[:icon_filename] = Pathname.new(path)
         when "--rubyopt"
           @options[:rubyopt] = argv.shift
         when "--gemfile"
           path = argv.shift
-          Ocran.fatal_error "Gemfile #{path} not found.\n" unless path && File.exist?(path)
+          raise "Gemfile #{path} not found.\n" unless path && File.exist?(path)
           @options[:gemfile] = Pathname.new(path)
         when "--innosetup"
           path = argv.shift
-          Ocran.fatal_error "Inno Script #{path} not found.\n" unless path && File.exist?(path)
+          raise "Inno Script #{path} not found.\n" unless path && File.exist?(path)
           @options[:inno_setup_script] = Pathname.new(path)
         when "--no-autodll"
           @options[:auto_detect_dlls?] = false
@@ -161,10 +161,10 @@ EOF
           exit 0
         else
           if !File.exist?(arg)
-            Ocran.fatal_error "#{arg} not found!"
+            raise "#{arg} not found!"
           elsif File.directory?(arg)
             if Dir.empty?(arg)
-              Ocran.fatal_error "#{arg} is empty!"
+              raise "#{arg} is empty!"
             end
             # If a directory is passed, we want all files under that directory
             @options[:source_files] += Pathname.glob("#{arg}/**/*").map(&:expand_path)
@@ -176,15 +176,15 @@ EOF
 
       if inno_setup_script
         if enable_debug_extract?
-          Ocran.fatal_error "The --debug-extract option conflicts with use of Inno Setup"
+          raise "The --debug-extract option conflicts with use of Inno Setup"
         end
 
         if enable_compression?
-          Ocran.fatal_error "LZMA compression must be disabled (--no-lzma) when using Inno Setup"
+          raise "LZMA compression must be disabled (--no-lzma) when using Inno Setup"
         end
 
         unless chdir_before?
-          Ocran.fatal_error "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
+          raise "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
         end
       end
 
