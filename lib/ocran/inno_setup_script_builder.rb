@@ -56,11 +56,6 @@ module Ocran
       }
     end
 
-    def touch(target)
-      @empty_source ||= Tempfile.new.tap { |f| f.close }
-      cp(@empty_source.to_path, target)
-    end
-
     def to_path
       @file.to_path
     end

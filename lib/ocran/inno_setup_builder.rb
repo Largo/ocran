@@ -54,10 +54,6 @@ module Ocran
       @iss.cp(source, target)
     end
 
-    def touch(target)
-      @iss.touch(target)
-    end
-
     # Specifies the final application script to be launched, which can be called
     # from any position in the data stream. It cannot be specified more than once.
     def exec(image, script, *argv)

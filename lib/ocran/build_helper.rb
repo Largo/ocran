@@ -3,6 +3,8 @@ require "pathname"
 
 module Ocran
   module BuildHelper
+    EMPTY_SOURCE = File.expand_path("empty_source", __dir__).freeze
+
     def copy_to_bin(source, target)
       cp(source, BINDIR / target)
     end
@@ -48,6 +50,10 @@ module Ocran
       }.join(File::PATH_SEPARATOR)
 
       export(name, value)
+    end
+
+    def touch(tgt)
+      cp(EMPTY_SOURCE, tgt)
     end
   end
 end

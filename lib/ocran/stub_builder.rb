@@ -111,11 +111,6 @@ module Ocran
       write_file(source)
     end
 
-    def touch(tgt)
-      src = File.expand_path("touch_placeholder", __dir__)
-      cp(src, tgt)
-    end
-
     # Specifies the final application script to be launched, which can be called
     # from any position in the data stream. It cannot be specified more than once.
     #
