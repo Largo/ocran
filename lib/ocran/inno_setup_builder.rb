@@ -54,14 +54,7 @@ module Ocran
       @iss.cp(source, target)
     end
 
-    # Specifies the final application script to be launched, which can be called
-    # from any position in the data stream. It cannot be specified more than once.
     def exec(image, script, *argv)
-      if @script_info
-        raise "Script is already set"
-      end
-      @script_info = true
-
       @launcher.exec(image, script, *argv)
     end
 
