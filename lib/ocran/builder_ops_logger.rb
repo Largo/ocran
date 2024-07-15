@@ -29,7 +29,7 @@ module Ocran
     end
 
     def replace_placeholder(s)
-      s.to_s.gsub(TEMPDIR_ROOT.to_s, "<tempdir>")
+      s.to_s.gsub(EXTRACT_ROOT.to_s, "<tempdir>")
     end
     private :replace_placeholder
   end

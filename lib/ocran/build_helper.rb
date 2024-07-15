@@ -45,7 +45,7 @@ module Ocran
         if File.absolute_path?(path)
           path
         else
-          File.join(TEMPDIR_ROOT, path)
+          File.join(EXTRACT_ROOT, path)
         end
       }.join(File::PATH_SEPARATOR)
 

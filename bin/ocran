@@ -12,7 +12,7 @@ module Ocran
   RUBY_LIBRARY_PATH_REGEX = %r{/(ruby/(?:site_ruby/|vendor_ruby/)?\d+\.\d+\.\d+)/?$}i
 
   # Alias for the temporary directory where files are extracted.
-  TEMPDIR_ROOT = Pathname.new("|")
+  EXTRACT_ROOT = Pathname.new("|")
   # Directory for source files in temporary directory.
   SRCDIR = Pathname.new("src")
   # Directory for Ruby binaries in temporary directory.

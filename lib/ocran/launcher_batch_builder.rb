@@ -45,7 +45,7 @@ module Ocran
     end
 
     def replace_inst_dir_placeholder(s)
-      s.to_s.gsub(/#{Regexp.escape(TEMPDIR_ROOT.to_s)}[\/\\]/, BATCH_FILE_DIR)
+      s.to_s.gsub(/#{Regexp.escape(EXTRACT_ROOT.to_s)}[\/\\]/, BATCH_FILE_DIR)
     end
     private :replace_inst_dir_placeholder
 
