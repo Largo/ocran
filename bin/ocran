@@ -17,8 +17,8 @@ module Ocran
   SRCDIR = Pathname.new("src")
   # Directory for Ruby binaries in temporary directory.
   BINDIR = Pathname.new("bin")
-  # Directory for GEMHOME files in temporary directory.
-  GEMHOMEDIR = Pathname.new("gemhome")
+  # Directory for gem files in temporary directory.
+  GEMDIR = Pathname.new("gems")
   # Directory for Ruby library in temporary directory.
   LIBDIR = Pathname("lib")
 
@@ -327,7 +327,7 @@ module Ocran
         Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
 
         # Decide where to put gem files, either the system gem folder, or
-        # GEMHOME.
+        # GEMDIR.
         actual_files.each do |gemfile|
           if gemfile.subpath?(exec_prefix)
             builder.duplicate_to_exec_prefix(gemfile)
@@ -410,7 +410,7 @@ module Ocran
           builder.duplicate_to_exec_prefix(feature)
         elsif (gem_path = GemSpecQueryable.find_gem_path(feature))
           # Features found in any other Gem path (e.g. ~/.gems) is put
-          # in a special 'gemhome' folder.
+          # in a special 'gems' folder.
           builder.duplicate_to_gem_home(feature, gem_path)
         elsif feature.subpath?(src_prefix) || abs_load_path == working_directory
           # Any feature found inside the src_prefix automatically gets
@@ -473,7 +473,7 @@ module Ocran
       # src_prefix was adjusted.
       load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
       builder.set_env_path("RUBYLIB", *load_path)
-      builder.set_env_path("GEM_PATH", GEMHOMEDIR)
+      builder.set_env_path("GEM_PATH", GEMDIR)
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / Ocran.ruby_executable

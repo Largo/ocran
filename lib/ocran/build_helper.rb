@@ -10,7 +10,7 @@ module Ocran
     end
 
     def copy_to_gem_home(source, target)
-      cp(source, GEMHOMEDIR / target)
+      cp(source, GEMDIR / target)
     end
 
     def copy_to_lib(source, target)
