@@ -9,7 +9,7 @@ module Ocran
       cp(source, BINDIR / target)
     end
 
-    def copy_to_gem_home(source, target)
+    def copy_to_gem(source, target)
       cp(source, GEMDIR / target)
     end
 
@@ -22,7 +22,7 @@ module Ocran
     end
 
     def duplicate_to_gem_home(source, gem_path)
-      copy_to_gem_home(source, Pathname(source).relative_path_from(gem_path))
+      copy_to_gem(source, Pathname(source).relative_path_from(gem_path))
     end
 
     # Sets an environment variable with a joined path value.
