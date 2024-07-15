@@ -7,7 +7,7 @@ module Ocran
   class InnoSetupBuilder
     include WindowsCommandEscaping
 
-    def initialize(path, inno_setup_script, chdir_before: nil, icon_path: nil, title: nil, &b)
+    def initialize(path, inno_setup_script, chdir_before: nil, icon_path: nil, title: nil)
       @path = path
       @iss = InnoSetupScriptBuilder.new(inno_setup_script)
       @launcher = LauncherBatchBuilder.new(chdir_before: chdir_before, title: title)
