@@ -27,9 +27,6 @@ module Ocran
       @iss.build
       Ocran.verbose_msg "### INNO SETUP SCRIPT ###"
       Ocran.verbose_msg File.read(@iss)
-
-      Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
-      compile
     end
 
     def compile

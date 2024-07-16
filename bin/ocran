@@ -487,7 +487,9 @@ module Ocran
                            chdir_before: @option.chdir_before?,
                            icon_path: @option.icon_filename,
                            title: @option.output_executable.basename.sub_ext(""),
-                           &direction)
+                           &direction) => builder
+      Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
+      builder.compile
       Ocran.msg "Finished building installer file"
     else
       require_relative "../lib/ocran/stub_builder"
