@@ -64,18 +64,27 @@ module Ocran
 
     load File.expand_path("../lib/ocran/runtime_environment.rb", __dir__)
     @pre_env = RuntimeEnvironment.save
+
     load File.expand_path("../lib/ocran/option.rb", __dir__)
-    @option = Option.new
-    @option.parse(ARGV)
-    ARGV.replace(@option.argv)
+    @option = Option.new.tap do |opt|
+      opt.parse(ARGV)
+    rescue RuntimeError => e
+      # Capture RuntimeError during parsing and display an appropriate
+      # error message to the user. This error usually occurs from invalid
+      # option arguments.
+      Ocran.fatal_error e.message
+    else
+      # Update ARGV with the parsed command line arguments to pass to
+      # the user's script. This ensures the script executes based on
+      # the user-specified arguments.
+      ARGV.replace(opt.argv)
+    end
 
     # Initializes @rubyopt with the user-intended RUBYOPT environment variable.
     # This ensures that RUBYOPT matches the user's initial settings before any
     # modifications that may occur during script execution.
     @rubyopt = @option.rubyopt || ENV["RUBYOPT"] || ""
     @ignore_modules = ObjectSpace.each_object(Module).to_a
-  rescue RuntimeError => e
-    Ocran.fatal_error e.message
   end
 
   # Force loading autoloaded constants. Searches through all modules
