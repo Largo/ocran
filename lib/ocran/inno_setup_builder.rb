@@ -29,9 +29,9 @@ module Ocran
       Ocran.verbose_msg File.read(@iss)
     end
 
-    def compile
+    def compile(verbose: false)
       iscc_cmd = ["ISCC"]
-      iscc_cmd << "/Q" unless Ocran.verbose?
+      iscc_cmd << "/Q" unless verbose
       iscc_cmd << @iss.to_path
       unless system(*iscc_cmd)
         case $?.exitstatus

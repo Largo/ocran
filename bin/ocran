@@ -489,7 +489,7 @@ module Ocran
                            title: @option.output_executable.basename.sub_ext(""),
                            &direction) => builder
       Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
-      builder.compile
+      builder.compile(verbose: Ocran.verbose?)
       Ocran.msg "Finished building installer file"
     else
       require_relative "../lib/ocran/stub_builder"
