@@ -7,11 +7,12 @@ module Ocran
       alias save new
     end
 
-    attr_reader :env, :load_path, :pwd
+    attr_reader :env, :load_path, :loaded_features, :pwd
 
     def initialize
       @env = ENV.to_hash.freeze
       @load_path = $LOAD_PATH.dup.freeze
+      @loaded_features = $LOADED_FEATURES.dup.freeze
       @pwd = Dir.pwd.freeze
     end
 

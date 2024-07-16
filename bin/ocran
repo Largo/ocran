@@ -210,14 +210,14 @@ module Ocran
     end
 
     post_env = RuntimeEnvironment.save
+    # NOTE: From this point, $LOADED_FEATURES has been captured, so it is now
+    # safe to call require_relative.
 
     ENV.replace(@pre_env.env)
 
     # Store the currently loaded files (before we require rbconfig for
     # our own use).
-    features = $LOADED_FEATURES.map { |feature| Pathname(feature) }
-    # NOTE: From this point, $LOADED_FEATURES has been captured, so it is now
-    # safe to call require_relative.
+    features = post_env.loaded_features.map { |feature| Pathname(feature) }
 
     # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
     # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually
