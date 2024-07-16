@@ -51,9 +51,7 @@ module Ocran
     @ruby_executable ||= @option.windowed? ? rubyw_exe : ruby_exe
   end
 
-  def self.rubyopt
-    @rubyopt ||= @option.rubyopt || ENV["RUBYOPT"] || ""
-  end
+  def self.rubyopt = @rubyopt
 
   def self.run_script? = @option.run_script?
 
@@ -70,6 +68,11 @@ module Ocran
     @option = Option.new
     @option.parse(ARGV)
     ARGV.replace(@option.argv)
+
+    # Initializes @rubyopt with the user-intended RUBYOPT environment variable.
+    # This ensures that RUBYOPT matches the user's initial settings before any
+    # modifications that may occur during script execution.
+    @rubyopt = @option.rubyopt || ENV["RUBYOPT"] || ""
     @ignore_modules = ObjectSpace.each_object(Module).to_a
   rescue RuntimeError => e
     Ocran.fatal_error e.message
