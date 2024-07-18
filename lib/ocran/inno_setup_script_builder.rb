@@ -18,18 +18,22 @@ module Ocran
       # ISS file. Therefore, it is necessary to create Tempfiles in the
       # working directory.
       @file = Tempfile.open("", Dir.pwd) do |f|
-        IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
+        if @inno_setup_script
+          IO.copy_stream(@inno_setup_script, f)
+        end
 
         if @dirs.any?
           f.puts
           f.puts "[Dirs]"
           @dirs.each { |_source, target| f.puts build_dir_item(target) }
         end
+
         if @files.any?
           f.puts
           f.puts "[Files]"
           @files.each { |source, target| f.puts build_file_item(source, target) }
         end
+
         f
       end
     end
