@@ -11,8 +11,6 @@ module Ocran
       @inno_setup_script = inno_setup_script
       @dirs = FilePathSet.new
       @files = FilePathSet.new
-      @_dirs = []
-      @_files = []
     end
 
     def build
@@ -22,24 +20,32 @@ module Ocran
       @file = Tempfile.open("", Dir.pwd) do |f|
         IO.copy_stream(@inno_setup_script, f) if @inno_setup_script
 
-        unless @_dirs.empty?
+        if @dirs.any?
           f.puts
           f.puts "[Dirs]"
-          @_dirs.each { |obj| f.puts build_dirs_section_item(**obj) }
+          @dirs.each do |_source, target|
+            f.puts build_dirs_section_item(
+                     name: File.join("{app}", target)
+                   )
+          end
         end
-        unless @_files.empty?
+        if @files.any?
           f.puts
           f.puts "[Files]"
-          @_files.each { |obj| f.puts build_files_section_item(**obj) }
+          @files.each do |source, target|
+            f.puts build_files_section_item(
+                     source: source,
+                     dest_dir: File.join("{app}", File.dirname(target)),
+                     dest_name: File.basename(target)
+                   )
+          end
         end
         f
       end
     end
 
     def mkdir(target)
-      return unless @dirs.add?("/", target)
-
-      @_dirs << { name: File.join("{app}", target) }
+      @dirs.add?("/", target)
     end
 
     def cp(source, target)
@@ -47,13 +53,7 @@ module Ocran
         raise "The file does not exist (#{source})"
       end
 
-      return unless @files.add?(source, target)
-
-      @_files << {
-        source: source,
-        dest_dir: File.join("{app}", File.dirname(target)),
-        dest_name: File.basename(target)
-      }
+      @files.add?(source, target)
     end
 
     def to_path
