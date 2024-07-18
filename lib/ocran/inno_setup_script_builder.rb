@@ -23,22 +23,12 @@ module Ocran
         if @dirs.any?
           f.puts
           f.puts "[Dirs]"
-          @dirs.each do |_source, target|
-            f.puts build_dirs_section_item(
-                     name: File.join("{app}", target)
-                   )
-          end
+          @dirs.each { |_source, target| f.puts build_dir_item(target) }
         end
         if @files.any?
           f.puts
           f.puts "[Files]"
-          @files.each do |source, target|
-            f.puts build_files_section_item(
-                     source: source,
-                     dest_dir: File.join("{app}", File.dirname(target)),
-                     dest_name: File.basename(target)
-                   )
-          end
+          @files.each { |source, target| f.puts build_file_item(source, target) }
         end
         f
       end
@@ -60,19 +50,25 @@ module Ocran
       @file.to_path
     end
 
-    def build_dirs_section_item(name:)
+    def build_dir_item(target)
+      name = File.join("{app}", target)
       "Name: #{quote_and_escape(name)};"
     end
-    private :build_dirs_section_item
+    private :build_dir_item
 
-    def build_files_section_item(source:, dest_dir:, dest_name: nil)
-      s = ["Source: #{quote_and_escape(source)};"]
-      s << "DestDir: #{quote_and_escape(dest_dir)};"
-      if dest_name
+    def build_file_item(source, target)
+      dest_dir = File.join("{app}", File.dirname(target))
+      s = [
+        "Source: #{quote_and_escape(source)};",
+        "DestDir: #{quote_and_escape(dest_dir)};"
+      ]
+      src_name = File.basename(source)
+      dest_name = File.basename(target)
+      if src_name != dest_name
         s << "DestName: #{quote_and_escape(dest_name)};"
       end
       s.join(" ")
     end
-    private :build_files_section_item
+    private :build_file_item
   end
 end
