@@ -5,6 +5,37 @@ require_relative "windows_command_escaping"
 
 module Ocran
   class InnoSetupScriptBuilder
+    ISCC_CMD = "ISCC"
+    ISCC_SUCCESS = 0
+    ISCC_INVALID_PARAMS = 1
+    ISCC_COMPILATION_FAILED = 2
+
+    extend WindowsCommandEscaping
+
+    class << self
+      def compile(iss_filename, quiet: false)
+        unless system("where #{quote_and_escape(ISCC_CMD)} >NUL 2>&1")
+          raise "ISCC command not found. Is the InnoSetup directory in your PATH?"
+        end
+
+        cmd_line = [ISCC_CMD]
+        cmd_line << "/Q" if quiet
+        cmd_line << iss_filename
+        system(*cmd_line)
+
+        case $?&.exitstatus
+        when ISCC_SUCCESS
+          # ISCC reported success
+        when ISCC_INVALID_PARAMS
+          raise "ISCC reports invalid command line parameters"
+        when ISCC_COMPILATION_FAILED
+          raise "ISCC reports that compilation failed"
+        else
+          raise "ISCC failed to run"
+        end
+      end
+    end
+
     include WindowsCommandEscaping
 
     def initialize(inno_setup_script)
@@ -36,6 +67,10 @@ module Ocran
 
         f
       end
+    end
+
+    def compile(verbose: false)
+      InnoSetupScriptBuilder.compile(@file.to_path, quiet: !verbose)
     end
 
     def mkdir(target)

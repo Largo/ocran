@@ -29,19 +29,7 @@ module Ocran
       Ocran.verbose_msg File.read(@iss)
     end
 
-    def compile(verbose: false)
-      iscc_cmd = ["ISCC"]
-      iscc_cmd << "/Q" unless verbose
-      iscc_cmd << @iss.to_path
-      unless system(*iscc_cmd)
-        case $?.exitstatus
-        when 0 then raise "ISCC reported success, but system reported error?"
-        when 1 then raise "ISCC reports invalid command line parameters"
-        when 2 then raise "ISCC reports that compilation failed"
-        else raise "ISCC failed to run. Is the InnoSetup directory in your PATH?"
-        end
-      end
-    end
+    def compile(...) = @iss.compile(...)
 
     def mkdir(target)
       @iss.mkdir(target)
