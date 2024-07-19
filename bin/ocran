@@ -203,7 +203,7 @@ module Ocran
     LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
   end
 
-  def Ocran.build_exe
+  def self.create_direction_proc
     # If the script was run and autoload is enabled, attempt to autoload libraries.
     if @option.force_autoload?
       attempt_load_autoload(@ignore_modules)
@@ -265,7 +265,7 @@ module Ocran
       gemspecs = []
     end
 
-    direction = proc do |builder|
+    proc do |builder|
       Ocran.msg "Building #{@option.output_executable}"
       require_relative "../lib/ocran/builder_ops_logger"
       builder.extend(BuilderOpsLogger) if Ocran.verbose?
@@ -491,33 +491,50 @@ module Ocran
       installed_ruby_exe = BINDIR / Ocran.ruby_executable
       builder.exec(installed_ruby_exe, target_script, *@option.argv)
     end
+  end
+
+  def self.build_inno_setup_installer(&direction)
+    require_relative "../lib/ocran/inno_setup_builder"
+
+    InnoSetupBuilder.new(@option.output_executable,
+                         @option.inno_setup_script,
+                         chdir_before: @option.chdir_before?,
+                         icon_path: @option.icon_filename,
+                         title: @option.output_executable.basename.sub_ext(""),
+                         &direction) => builder
+
+    Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
+    builder.compile(verbose: Ocran.verbose?)
+
+    Ocran.msg "Finished building installer file"
+  end
+
+  def self.build_stab_exe(&direction)
+    require_relative "../lib/ocran/stub_builder"
+
+    if @option.enable_debug_mode?
+      Ocran.msg("Enabling debug mode in executable")
+    end
+
+    StubBuilder.new(@option.output_executable,
+                    chdir_before: @option.chdir_before?,
+                    debug_extract: @option.enable_debug_extract?,
+                    debug_mode: @option.enable_debug_mode?,
+                    enable_compression: @option.enable_compression?,
+                    gui_mode: @option.windowed?,
+                    icon_path: @option.icon_filename,
+                    &direction) => builder
+    Ocran.msg "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
+    Ocran.msg "After decompression, the data will expand to #{builder.data_size} bytes."
+  end
+
+  def self.build
+    direction = create_direction_proc
 
     if @option.use_inno_setup?
-      require_relative "../lib/ocran/inno_setup_builder"
-      InnoSetupBuilder.new(@option.output_executable,
-                           @option.inno_setup_script,
-                           chdir_before: @option.chdir_before?,
-                           icon_path: @option.icon_filename,
-                           title: @option.output_executable.basename.sub_ext(""),
-                           &direction) => builder
-      Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
-      builder.compile(verbose: Ocran.verbose?)
-      Ocran.msg "Finished building installer file"
+      build_inno_setup_installer(&direction)
     else
-      require_relative "../lib/ocran/stub_builder"
-      if @option.enable_debug_mode?
-        Ocran.msg("Enabling debug mode in executable")
-      end
-      StubBuilder.new(@option.output_executable,
-                      chdir_before: @option.chdir_before?,
-                      debug_extract: @option.enable_debug_extract?,
-                      debug_mode: @option.enable_debug_mode?,
-                      enable_compression: @option.enable_compression?,
-                      gui_mode: @option.windowed?,
-                      icon_path: @option.icon_filename,
-                      &direction) => builder
-      Ocran.msg "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
-      Ocran.msg "After decompression, the data will expand to #{builder.data_size} bytes."
+      build_stab_exe(&direction)
     end
   rescue RuntimeError => e
     Ocran.fatal_error e.message
@@ -529,7 +546,7 @@ if File.basename(__FILE__) == File.basename($PROGRAM_NAME)
 
   at_exit do
     if $!.nil? or $!.kind_of?(SystemExit)
-      Ocran.build_exe
+      Ocran.build
       exit 0
     end
   end
