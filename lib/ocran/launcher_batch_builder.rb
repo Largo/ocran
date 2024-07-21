@@ -17,20 +17,25 @@ module Ocran
     BATCH_FILE_PATH = "%~f0"
 
     def initialize(chdir_before: nil, title: nil)
+      @build_file = Tempfile.new
       @title = title
       @chdir_before = chdir_before
       @environments = {}
     end
 
     def build
-      @file = Tempfile.open do |f|
+      @build_file.tap do |f|
         f.puts "@echo off"
         @environments.each { |name, val| f.puts build_set_command(name, val) }
         f.puts build_set_command("OCRAN_EXECUTABLE", BATCH_FILE_PATH)
         f.puts build_start_command(@title, @executable, @script, *@args, chdir_before: @chdir_before)
         f
-      end
-      @file.to_path
+      end.close
+      path
+    end
+
+    def path
+      @build_file.to_path
     end
 
     def export(name, value)
@@ -39,10 +44,6 @@ module Ocran
 
     def exec(executable, script, *args)
       @executable, @script, @args = executable, script, args
-    end
-
-    def to_path
-      @file.to_path
     end
 
     def replace_inst_dir_placeholder(s)
