@@ -67,6 +67,7 @@ module Ocran
 
         f
       end
+      @file.to_path
     end
 
     def compile(verbose: false)

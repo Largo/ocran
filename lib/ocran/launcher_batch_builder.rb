@@ -30,6 +30,7 @@ module Ocran
         f.puts build_start_command(@title, @executable, @script, *@args, chdir_before: @chdir_before)
         f
       end
+      @file.to_path
     end
 
     def export(name, value)
