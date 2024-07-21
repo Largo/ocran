@@ -494,17 +494,35 @@ module Ocran
   end
 
   def self.build_inno_setup_installer(&direction)
-    require_relative "../lib/ocran/inno_setup_builder"
+    require_relative "../lib/ocran/inno_setup_script_builder"
+    iss_builder = InnoSetupScriptBuilder.new(@option.inno_setup_script)
 
-    InnoSetupBuilder.new(@option.output_executable,
-                         @option.inno_setup_script,
-                         chdir_before: @option.chdir_before?,
-                         icon_path: @option.icon_filename,
-                         title: @option.output_executable.basename.sub_ext(""),
-                         &direction) => builder
+    require_relative "../lib/ocran/launcher_batch_builder"
+    launcher_builder = LauncherBatchBuilder.new(
+      chdir_before: @option.chdir_before?,
+      title: @option.output_executable.basename.sub_ext("")
+    )
+
+    require_relative "../lib/ocran/build_facade"
+    builder = BuildFacade.new(iss_builder, launcher_builder)
+
+    if @option.icon_filename
+      builder.cp(@option.icon_filename, File.basename(@option.icon_filename))
+    end
+
+    direction.call(builder)
+
+    Ocran.msg "Build launcher batch file"
+    launcher_builder.build
+    Ocran.verbose_msg File.read(launcher_builder.to_path)
+    builder.cp(launcher_builder.to_path, "launcher.bat")
+
+    Ocran.msg "Build inno setup script file"
+    iss_builder.build
+    Ocran.verbose_msg File.read(iss_builder.to_path)
 
     Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
-    builder.compile(verbose: Ocran.verbose?)
+    iss_builder.compile(verbose: Ocran.verbose?)
 
     Ocran.msg "Finished building installer file"
   end
