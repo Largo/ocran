@@ -39,20 +39,19 @@ module Ocran
     include WindowsCommandEscaping
 
     def initialize(inno_setup_script)
-      @inno_setup_script = inno_setup_script
+      # ISSC generates the installer files relative to the directory of the
+      # ISS file. Therefore, it is necessary to create Tempfiles in the
+      # working directory.
+      @build_file = Tempfile.new("", Dir.pwd)
+      if inno_setup_script
+        IO.copy_stream(inno_setup_script, @build_file)
+      end
       @dirs = FilePathSet.new
       @files = FilePathSet.new
     end
 
     def build
-      # ISSC generates the installer files relative to the directory of the
-      # ISS file. Therefore, it is necessary to create Tempfiles in the
-      # working directory.
-      @file = Tempfile.open("", Dir.pwd) do |f|
-        if @inno_setup_script
-          IO.copy_stream(@inno_setup_script, f)
-        end
-
+      @build_file.tap do |f|
         if @dirs.any?
           f.puts
           f.puts "[Dirs]"
@@ -64,14 +63,16 @@ module Ocran
           f.puts "[Files]"
           @files.each { |source, target| f.puts build_file_item(source, target) }
         end
+      end.close
+      path
+    end
 
-        f
-      end
-      @file.to_path
+    def path
+      @build_file.to_path
     end
 
     def compile(verbose: false)
-      InnoSetupScriptBuilder.compile(@file.to_path, quiet: !verbose)
+      InnoSetupScriptBuilder.compile(path, quiet: !verbose)
     end
 
     def mkdir(target)
@@ -84,10 +85,6 @@ module Ocran
       end
 
       @files.add?(source, target)
-    end
-
-    def to_path
-      @file.to_path
     end
 
     def build_dir_item(target)
