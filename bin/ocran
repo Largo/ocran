@@ -513,13 +513,13 @@ module Ocran
     direction.call(builder)
 
     Ocran.msg "Build launcher batch file"
-    launcher_builder.build
-    Ocran.verbose_msg File.read(launcher_builder.to_path)
-    builder.cp(launcher_builder.to_path, "launcher.bat")
+    launcher_path = launcher_builder.build
+    Ocran.verbose_msg File.read(launcher_path)
+    builder.cp(launcher_path, "launcher.bat")
 
     Ocran.msg "Build inno setup script file"
-    iss_builder.build
-    Ocran.verbose_msg File.read(iss_builder.to_path)
+    iss_path = iss_builder.build
+    Ocran.verbose_msg File.read(iss_path)
 
     Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
     iss_builder.compile(verbose: Ocran.verbose?)
