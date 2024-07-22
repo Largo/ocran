@@ -25,6 +25,18 @@ module Ocran
       copy_to_gem(source, Pathname(source).relative_path_from(gem_path))
     end
 
+    def resolve_source_path(source, root_prefix)
+      source = Pathname(source)
+
+      if source.subpath?(HostConfigHelper.exec_prefix)
+        source.relative_path_from(HostConfigHelper.exec_prefix)
+      elsif source.subpath?(root_prefix)
+        SRCDIR / source.relative_path_from(root_prefix)
+      else
+        SRCDIR / source.basename
+      end
+    end
+
     # Sets an environment variable with a joined path value.
     # This method processes an array of path strings or Pathname objects, accepts
     # absolute paths as is, and appends a placeholder to relative paths to convert

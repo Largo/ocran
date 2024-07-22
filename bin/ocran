@@ -452,22 +452,13 @@ module Ocran
 
       # Add explicitly mentioned files
       Ocran.msg "Adding user-supplied source files"
-      target_script = nil
-      source_files.each do |file|
-        if file.subpath?(exec_prefix)
-          target = file.relative_path_from(exec_prefix)
-        elsif file.subpath?(inst_src_prefix)
-          target = SRCDIR / file.relative_path_from(inst_src_prefix)
-        else
-          target = SRCDIR / file.basename
-        end
+      source_files.each do |source|
+        target = builder.resolve_source_path(source, inst_src_prefix)
 
-        target_script ||= target
-
-        if file.directory?
+        if source.directory?
           builder.mkdir(target)
         else
-          builder.cp(file, target)
+          builder.cp(source, target)
         end
       end
 
@@ -487,6 +478,7 @@ module Ocran
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / Ocran.ruby_executable
+      target_script = builder.resolve_source_path(Ocran.script, inst_src_prefix)
       builder.exec(installed_ruby_exe, target_script, *@option.argv)
     end
   end
