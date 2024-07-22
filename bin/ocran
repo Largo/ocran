@@ -466,10 +466,8 @@ module Ocran
 
         if file.directory?
           builder.mkdir(target)
-        elsif file.exist?
-          builder.cp(file, target)
         else
-          raise "The file does not exist (#{file})"
+          builder.cp(file, target)
         end
       end
 
