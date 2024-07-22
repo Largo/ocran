@@ -84,6 +84,14 @@ module Ocran
     # This ensures that RUBYOPT matches the user's initial settings before any
     # modifications that may occur during script execution.
     @rubyopt = @option.rubyopt || ENV["RUBYOPT"] || ""
+
+    # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
+    # This is a temporary measure to ensure compatibility with self-extracting executables
+    # built in a bundle exec environment, particularly for Ruby 3.2 and later where
+    # absolute paths are included in RUBYOPT.
+    # In the future, we plan to implement a more appropriate solution.
+    @rubyopt = @rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
+
     @ignore_modules = ObjectSpace.each_object(Module).to_a
   end
 
@@ -463,13 +471,7 @@ module Ocran
       end
 
       # Set environment variable
-
-      # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
-      # This is a temporary measure to ensure compatibility with self-extracting executables
-      # built in a bundle exec environment, particularly for Ruby 3.2 and later where
-      # absolute paths are included in RUBYOPT.
-      # In the future, we plan to implement a more appropriate solution.
-      builder.export("RUBYOPT", Ocran.rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), ""))
+      builder.export("RUBYOPT", Ocran.rubyopt)
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
       load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
