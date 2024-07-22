@@ -212,11 +212,6 @@ module Ocran
   end
 
   def self.create_direction_proc
-    # If the script was run and autoload is enabled, attempt to autoload libraries.
-    if @option.force_autoload?
-      attempt_load_autoload(@ignore_modules)
-    end
-
     post_env = RuntimeEnvironment.save
     # NOTE: From this point, $LOADED_FEATURES has been captured, so it is now
     # safe to call require_relative.
@@ -539,6 +534,11 @@ module Ocran
   end
 
   def self.build
+    # If the script was run and autoload is enabled, attempt to autoload libraries.
+    if @option.force_autoload?
+      attempt_load_autoload(@ignore_modules)
+    end
+
     direction = create_direction_proc
 
     if @option.use_inno_setup?
