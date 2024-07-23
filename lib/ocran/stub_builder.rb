@@ -86,7 +86,7 @@ module Ocran
           b.yield
         end
 
-        write_tail_header
+        write_footer
       end
 
       File.rename(stub, path)
@@ -211,10 +211,10 @@ module Ocran
     end
     private :write_path
 
-    def write_tail_header
+    def write_footer
       @of << ([@opcode_offset] + Signature).pack("VC*")
     end
-    private :write_tail_header
+    private :write_footer
 
     def convert_to_native(path)
       path.to_s.tr(File::SEPARATOR, "\\")
