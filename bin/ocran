@@ -245,29 +245,23 @@ module Ocran
       end
     end
 
+    # Find gemspecs
+    gemspecs = []
     # If a Bundler Gemfile was provided, add all gems it specifies
     if @option.gemfile
       Ocran.msg "Scanning Gemfile"
-      specs_from_gemfile = Ocran.scanning_gemfile(@option.gemfile)
-      specs_from_gemfile.each do |spec|
+      gemspecs += Ocran.scanning_gemfile(@option.gemfile).each do |spec|
         Ocran.verbose_msg "From Gemfile, adding gem #{spec.full_name}"
       end
-    else
-      specs_from_gemfile = []
     end
-    # Find gems files and remove them from features
     if defined?(Gem)
-      gemfile_gems = specs_from_gemfile
-      # Include Gems that are loaded
-      loaded_specs = Gem.loaded_specs.values
+      gemspecs += Gem.loaded_specs.values
       # Now, we also detect gems that are not included in Gem.loaded_specs.
       # Therefore, we look for any loaded file from a gem path.
-      detected_gems = detect_gems_from(features)
-      # Prioritize the spec detected from Gemfile.
-      gemspecs = (gemfile_gems + loaded_specs + detected_gems).uniq(&:name)
-    else
-      gemspecs = []
+      gemspecs += detect_gems_from(features)
     end
+    # Prioritize the spec detected from Gemfile.
+    gemspecs.uniq!(&:name)
 
     proc do |builder|
       Ocran.msg "Building #{@option.output_executable}"
