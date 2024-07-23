@@ -100,25 +100,24 @@ module Ocran
   # ones, then attempts to load them.
   def self.attempt_load_autoload(ignore_modules = [])
     checked_modules = ignore_modules.inject({}) { |h, mod| h[mod] = true; h }
-    loop do
-      modules_count = ObjectSpace.each_object(Module).count do |mod|
-        next if checked_modules.include?(mod)
-        mod.constants.each do |const|
-          next unless mod.autoload?(const)
-          Ocran.msg "Attempting to trigger autoload of #{mod}::#{const}"
-          begin
-            mod.const_get(const)
-          rescue ScriptError, StandardError => e
-            # Some autoload constants may throw exceptions beyond the expected
-            # errors. This includes issues dependent on the system or execution
-            # environment, so it is preferable to ignore exceptions other than
-            # critical errors.
-            Ocran.warn "#{mod}::#{const} loading failed: #{e.message}"
-          end
+    while ObjectSpace.each_object(Module).count { |mod|
+      next if checked_modules.include?(mod)
+      mod.constants.each do |const|
+        next unless mod.autoload?(const)
+        Ocran.msg "Attempting to trigger autoload of #{mod}::#{const}"
+        begin
+          mod.const_get(const)
+        rescue ScriptError, StandardError => e
+          # Some autoload constants may throw exceptions beyond the expected
+          # errors. This includes issues dependent on the system or execution
+          # environment, so it is preferable to ignore exceptions other than
+          # critical errors.
+          Ocran.warn "#{mod}::#{const} loading failed: #{e.message}"
         end
-        checked_modules[mod] = true
       end
-      break if modules_count == 0
+      checked_modules[mod] = true
+    }.nonzero?
+      # Loops until all constants have been checked.
     end
   end
 
