@@ -108,10 +108,12 @@ module Ocran
           Ocran.msg "Attempting to trigger autoload of #{mod}::#{const}"
           begin
             mod.const_get(const)
-          rescue NameError
-            Ocran.warn "#{mod}::#{const} was defined autoloadable, but caused NameError"
-          rescue LoadError
-            Ocran.warn "#{mod}::#{const} was not loadable"
+          rescue ScriptError, StandardError => e
+            # Some autoload constants may throw exceptions beyond the expected
+            # errors. This includes issues dependent on the system or execution
+            # environment, so it is preferable to ignore exceptions other than
+            # critical errors.
+            Ocran.warn "#{mod}::#{const} loading failed: #{e.message}"
           end
         end
         checked_modules[mod] = true
