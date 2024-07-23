@@ -1,5 +1,3 @@
-# -*- ruby -*-
-
 require "rubygems"
 require 'bundler/setup'
 require "hoe"
@@ -92,6 +90,3 @@ task :test_single, [:test_name] do |t, args|
     sh "ruby #{File.join("test", "test_ocra.rb")} -n test_#{args[:test_name]}"
   end
 end
-
-
-# vim: syntax=Ruby

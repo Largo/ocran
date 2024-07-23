@@ -1,5 +1,4 @@
 #!/usr/bin/env ruby
-# -*- ruby -*-
 # encoding: UTF-8
 require "pathname"
 
