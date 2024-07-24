@@ -49,10 +49,6 @@ Alternatively you can download the gem at either
 http://rubygems.org/gems/ocran or
 https://github.com/largo/ocran/releases/.
 
-Stand-alone Version: Get ocransa.rb from
-https://github.com/largo/ocran/releases/. Requires nothing but a
-working Ruby installation on Windows.
-
 ## Synopsis
 
 ### Building an executable:
@@ -178,11 +174,6 @@ Executable options:
 * Windows
 * Working Ruby installation.
 * Ruby Installation with devkit from rubyinstaller (when working with the source code only)
-
-### Stand-alone version
-
-Get ocransa.rb from the github releases. Requires
-nothing but a working Ruby installation on Windows. (currently not supported - open an issue if you need this)
 
 ## Technical details
 
