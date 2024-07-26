@@ -214,12 +214,12 @@ module Ocran
       # list of original features that caused those gems to be included.
       gem_files = gemspecs.flat_map do |spec|
         spec_file = Pathname(spec.loaded_from)
-        # From Ruby 3.2 onwards, launching Ruby with bundle exec causes
+        # FIXME: From Ruby 3.2 onwards, launching Ruby with bundle exec causes
         # Bundler's loaded_from to point to the root directory of the
         # bundler gem, not returning the path to gemspec files. Here, we
         # are only collecting gemspec files.
         unless spec_file.file?
-          Ocran.warn "Gem #{spec.full_name} root folder was not found, skipping"
+          Ocran.verbose_msg "Gem #{spec.full_name} root folder was not found, skipping"
           next []
         end
 
