@@ -150,38 +150,6 @@ module Ocran
     include
   end
 
-  def self.scanning_gemfile(gemfile_path)
-    # Ensure the necessary libraries are loaded to scan the Gemfile.
-    # This is particularly useful in custom-built Ruby environments or
-    # where certain libraries might be excluded.
-    %w[rubygems bundler].each do |lib|
-      require lib
-    rescue LoadError
-      raise "Couldn't scan Gemfile, unable to load #{lib}"
-    end
-
-    ENV["BUNDLE_GEMFILE"] = gemfile_path.to_s
-    # Bundler.load.specs includes the spec for Bundler itself
-    Bundler.load.specs.to_a
-  end
-
-  # Fall back to gem detection
-  def self.detect_gems_from(features)
-    require_relative "../lib/ocran/gem_spec_queryable"
-
-    features.inject([]) do |gems, feature|
-      if gems.any? { |spec| feature.subpath?(spec.gem_dir) }
-        # Skip if found in known Gem dir
-      elsif (spec = GemSpecQueryable.find_spec(feature))
-        gems << spec
-      else
-        Ocran.warn "Failed to load gemspec for #{feature}"
-      end
-
-      gems
-    end
-  end
-
   def self.create_direction_proc
     require_relative "../lib/ocran/direction_tools"
     extend DirectionTools
@@ -212,12 +180,13 @@ module Ocran
       end
     end
 
+    require_relative "../lib/ocran/gem_spec_queryable"
     # Find gemspecs
     gemspecs = []
     # If a Bundler Gemfile was provided, add all gems it specifies
     if @option.gemfile
       Ocran.msg "Scanning Gemfile"
-      gemspecs += Ocran.scanning_gemfile(@option.gemfile).each do |spec|
+      gemspecs += GemSpecQueryable.scanning_gemfile(@option.gemfile).each do |spec|
         Ocran.verbose_msg "From Gemfile, adding gem #{spec.full_name}"
       end
     end
@@ -225,7 +194,7 @@ module Ocran
       gemspecs += Gem.loaded_specs.values
       # Now, we also detect gems that are not included in Gem.loaded_specs.
       # Therefore, we look for any loaded file from a gem path.
-      gemspecs += detect_gems_from(features)
+      gemspecs += GemSpecQueryable.detect_gems_from(features, verbose: Ocran.verbose?)
     end
     # Prioritize the spec detected from Gemfile.
     gemspecs.uniq!(&:name)
@@ -297,7 +266,6 @@ module Ocran
         include = Ocran.gem_inclusion_set(spec.name)
         Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
 
-        require_relative "../lib/ocran/gem_spec_queryable"
         spec.extend(GemSpecQueryable)
 
         actual_files = spec.find_gem_files(include, features)

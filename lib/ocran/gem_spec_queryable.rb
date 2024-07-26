@@ -64,6 +64,36 @@ module Ocran
         spec_file = find_spec_file(path)
         spec_file && Gem::Specification.load(spec_file)
       end
+
+      def scanning_gemfile(gemfile_path)
+        # Ensure the necessary libraries are loaded to scan the Gemfile.
+        # This is particularly useful in custom-built Ruby environments or
+        # where certain libraries might be excluded.
+        %w[rubygems bundler].each do |lib|
+          require lib
+        rescue LoadError
+          raise "Couldn't scan Gemfile, unable to load #{lib}"
+        end
+
+        ENV["BUNDLE_GEMFILE"] = gemfile_path.to_s
+        # Bundler.load.specs includes the spec for Bundler itself
+        Bundler.load.specs.to_a
+      end
+
+      # Fall back to gem detection
+      def detect_gems_from(features, verbose: false)
+        features.inject([]) do |gems, feature|
+          if gems.any? { |spec| feature.subpath?(spec.gem_dir) }
+            # Skip if found in known Gem dir
+          elsif (spec = GemSpecQueryable.find_spec(feature))
+            gems << spec
+          else
+            puts "Failed to load gemspec for #{feature}" if verbose
+          end
+
+          gems
+        end
+      end
     end
 
     def gem_root = Pathname(gem_dir)
