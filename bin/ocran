@@ -171,6 +171,10 @@ module Ocran
 
     ENV.replace(@pre_env.env)
 
+    # It might be useful to reset the current directory to the point where the
+    # command was launched, especially when implementing the builder object.
+    Dir.chdir(@pre_env.pwd)
+
     require_relative "../lib/ocran/direction"
     direction = Direction.new(@post_env, @pre_env, @option)
 
