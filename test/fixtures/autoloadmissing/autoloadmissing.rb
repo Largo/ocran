@@ -1,3 +1,4 @@
 $:.unshift File.dirname(__FILE__)
-autoload :Foo, 'foo'
-
+module Foo
+  autoload :Bar, 'bar'
+end
