@@ -396,12 +396,12 @@ class TestOcran < Minitest::Test
   end
 
   # Test that autoload statement which point to non-existing files are
-  # ignored by Ocran (a warning may be logged).
+  # ignored by Ocran
   def test_autoload_missing
     with_fixture 'autoloadmissing' do
-      args = DefaultArgs.dup
-      args.push '--no-warnings'
-      assert system("ruby", ocran, "autoloadmissing.rb", *args)
+      require "open3"
+      _o, e, _s = Open3.capture3("ruby", ocran, "autoloadmissing.rb", *DefaultArgs)
+      assert_match %r{\AWARNING: Foo::Bar loading failed:}, e
       assert File.exist?("autoloadmissing.exe")
       pristine_env "autoloadmissing.exe" do
         assert system("autoloadmissing.exe")
