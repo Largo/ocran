@@ -36,7 +36,7 @@ module Ocran
   end
 
   def Ocran.warn(s)
-    msg "WARNING: #{s}" if Ocran.warn?
+    STDERR.puts "WARNING: #{s}" if Ocran.warn?
   end
 
   def Ocran.fatal_error(s)
