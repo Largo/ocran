@@ -183,17 +183,12 @@ module Ocran
   end
 
   def self.create_direction_proc
-    post_env = RuntimeEnvironment.save
-    # NOTE: From this point, $LOADED_FEATURES has been captured, so it is now
-    # safe to call require_relative.
     require_relative "../lib/ocran/direction_tools"
     extend DirectionTools
 
-    ENV.replace(@pre_env.env)
-
     # Store the currently loaded files (before we require rbconfig for
     # our own use).
-    features = post_env.loaded_features.map { |feature| Pathname(feature) }
+    features = @post_env.loaded_features.map { |feature| Pathname(feature) }
 
     # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
     # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually
@@ -204,8 +199,8 @@ module Ocran
     features = features.filter_map do |feature|
       if feature.absolute?
         feature
-      elsif (load_path = post_env.find_load_path(feature))
-        feature.expand_path(post_env.expand_path(load_path))
+      elsif (load_path = @post_env.find_load_path(feature))
+        feature.expand_path(@post_env.expand_path(load_path))
       else
         # This message occurs when paths for core library files (e.g., enumerator.so,
         # rational.so, complex.so, fiber.so, thread.rb, ruby2_keywords.rb) are not
@@ -344,8 +339,8 @@ module Ocran
 
       # Include encoding support files
       if @option.add_all_encoding?
-        post_env.load_path.each do |load_path|
-          load_path = Pathname(post_env.expand_path(load_path))
+        @post_env.load_path.each do |load_path|
+          load_path = Pathname(@post_env.expand_path(load_path))
           next unless load_path.subpath?(exec_prefix)
 
           enc_dir = load_path / "enc"
@@ -374,16 +369,16 @@ module Ocran
       src_load_path = []
       # Add loaded libraries (features, gems)
       Ocran.msg "Adding library files"
-      added_load_paths = (post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(post_env.expand_path(load_path)) }
+      added_load_paths = (@post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(@post_env.expand_path(load_path)) }
       pre_working_directory = Pathname(@pre_env.pwd)
-      working_directory = Pathname(post_env.pwd)
+      working_directory = Pathname(@post_env.pwd)
       features.each do |feature|
-        load_path = post_env.find_load_path(feature)
+        load_path = @post_env.find_load_path(feature)
         if load_path.nil?
           source_files << feature
           next
         end
-        abs_load_path = Pathname(post_env.expand_path(load_path))
+        abs_load_path = Pathname(@post_env.expand_path(load_path))
         if abs_load_path == pre_working_directory
           source_files << feature
         elsif feature.subpath?(exec_prefix)
@@ -505,6 +500,12 @@ module Ocran
     if @option.force_autoload?
       attempt_load_autoload(@ignore_modules)
     end
+
+    @post_env = RuntimeEnvironment.save
+    # NOTE: From this point, $LOADED_FEATURES has been captured, so it is now
+    # safe to call require_relative.
+
+    ENV.replace(@pre_env.env)
 
     direction = create_direction_proc
 
