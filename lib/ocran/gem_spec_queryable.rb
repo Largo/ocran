@@ -94,6 +94,36 @@ module Ocran
           gems
         end
       end
+
+      def gem_inclusion_set(spec_name, gem_options)
+        include = [:loaded, :files]
+        gem_options.each do |negate, option, list|
+          next unless list.nil? || list.include?(spec_name)
+
+          case option
+          when :minimal
+            include = [:loaded]
+          when :guess
+            include = [:loaded, :files]
+          when :all
+            include = [:scripts, :files]
+          when :full
+            include = [:scripts, :files, :extras]
+          when :spec
+            include = [:spec]
+          when :scripts, :files, :extras
+            if negate
+              include.delete(option)
+            else
+              include.push(option)
+            end
+          else
+            raise "Invalid Gem content detection option: #{option}"
+          end
+        end
+        include.uniq!
+        include
+      end
     end
 
     def gem_root = Pathname(gem_dir)

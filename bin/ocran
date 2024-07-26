@@ -120,36 +120,6 @@ module Ocran
     end
   end
 
-  def self.gem_inclusion_set(spec_name)
-    include = [:loaded, :files]
-    @option.gem_options.each do |negate, option, list|
-      next unless list.nil? || list.include?(spec_name)
-
-      case option
-      when :minimal
-        include = [:loaded]
-      when :guess
-        include = [:loaded, :files]
-      when :all
-        include = [:scripts, :files]
-      when :full
-        include = [:scripts, :files, :extras]
-      when :spec
-        include = [:spec]
-      when :scripts, :files, :extras
-        if negate
-          include.delete(option)
-        else
-          include.push(option)
-        end
-      else
-        raise "Invalid Gem content detection option: #{option}"
-      end
-    end
-    include.uniq!
-    include
-  end
-
   def self.create_direction_proc
     require_relative "../lib/ocran/direction_tools"
     extend DirectionTools
@@ -263,7 +233,7 @@ module Ocran
         end
 
         # Determine which set of files to include for this particular gem
-        include = Ocran.gem_inclusion_set(spec.name)
+        include = GemSpecQueryable.gem_inclusion_set(spec.name, @option.gem_options)
         Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
 
         spec.extend(GemSpecQueryable)
