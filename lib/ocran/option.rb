@@ -168,7 +168,7 @@ EOF
               raise "#{arg} is empty!"
             end
             # If a directory is passed, we want all files under that directory
-            @options[:source_files] += Pathname.glob("#{arg}/**/*").map(&:expand_path)
+            @options[:source_files] += Pathname.new(arg).find.reject(&:directory?).map(&:expand_path)
           else
             @options[:source_files] << Pathname.new(arg).expand_path
           end
