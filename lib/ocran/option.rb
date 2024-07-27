@@ -173,11 +173,9 @@ EOF
         end
       end
 
-      @options[:script] = source_files.first
+      raise "No script file specified" if source_files.empty?
 
-      if script.nil?
-        raise "No script file specified"
-      end
+      @options[:script] = source_files.first
 
       @options[:force_autoload?] = run_script? && load_autoload?
 
