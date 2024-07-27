@@ -106,7 +106,7 @@ EOF
           @options[:add_all_core?] = true
         when "--output"
           path = argv.shift
-          @options[:output_override] = Pathname.new(path) if path
+          @options[:output_override] = Pathname.new(path).expand_path if path
         when "--dll"
           path = argv.shift
           @options[:extra_dlls] << path if path
@@ -125,17 +125,17 @@ EOF
         when "--icon"
           path = argv.shift
           raise "Icon file #{path} not found" unless path && File.exist?(path)
-          @options[:icon_filename] = Pathname.new(path)
+          @options[:icon_filename] = Pathname.new(path).expand_path
         when "--rubyopt"
           @options[:rubyopt] = argv.shift
         when "--gemfile"
           path = argv.shift
           raise "Gemfile #{path} not found" unless path && File.exist?(path)
-          @options[:gemfile] = Pathname.new(path)
+          @options[:gemfile] = Pathname.new(path).expand_path
         when "--innosetup"
           path = argv.shift
           raise "Inno Script #{path} not found" unless path && File.exist?(path)
-          @options[:inno_setup_script] = Pathname.new(path)
+          @options[:inno_setup_script] = Pathname.new(path).expand_path
         when "--no-autodll"
           @options[:auto_detect_dlls?] = false
         when "--version"
