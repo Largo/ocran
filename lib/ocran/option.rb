@@ -186,8 +186,9 @@ EOF
           executable = script
           # If debug mode is enabled, append "-debug" to the filename
           executable = executable.append_to_filename("-debug") if enable_debug_mode?
-          executable.basename.sub_ext(".exe")
-        end.expand_path
+          # Build output files are created in the current directory
+          executable.basename.sub_ext(".exe").expand_path
+        end
 
       @options[:use_inno_setup?] = !!inno_setup_script
 
