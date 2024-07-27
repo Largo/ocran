@@ -151,6 +151,7 @@ EOF
         when "--"
           @options[:argv] = argv.dup
           argv.clear
+          break
         when /\A--(no-)?enc\z/
           @options[:add_all_encoding?] = !$1
         when /\A--(no-)?gem-(\w+)(?:=(.*))?$/
