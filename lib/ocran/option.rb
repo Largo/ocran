@@ -124,17 +124,17 @@ EOF
           @options[:chdir_before?] = true
         when "--icon"
           path = argv.shift
-          raise "Icon file #{path} not found.\n" unless path && File.exist?(path)
+          raise "Icon file #{path} not found" unless path && File.exist?(path)
           @options[:icon_filename] = Pathname.new(path)
         when "--rubyopt"
           @options[:rubyopt] = argv.shift
         when "--gemfile"
           path = argv.shift
-          raise "Gemfile #{path} not found.\n" unless path && File.exist?(path)
+          raise "Gemfile #{path} not found" unless path && File.exist?(path)
           @options[:gemfile] = Pathname.new(path)
         when "--innosetup"
           path = argv.shift
-          raise "Inno Script #{path} not found.\n" unless path && File.exist?(path)
+          raise "Inno Script #{path} not found" unless path && File.exist?(path)
           @options[:inno_setup_script] = Pathname.new(path)
         when "--no-autodll"
           @options[:auto_detect_dlls?] = false
