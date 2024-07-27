@@ -1,9 +1,12 @@
 # frozen_string_literal: true
-
+require "pathname"
+require_relative "refine_pathname"
 require_relative "host_config_helper"
 
 module Ocran
   class Direction
+    using RefinePathname
+
     # Match the load path against standard library, site_ruby, and vendor_ruby paths
     # This regular expression matches:
     # - /ruby/3.0.0/

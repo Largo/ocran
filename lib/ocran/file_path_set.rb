@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 require "pathname"
+require_relative "refine_pathname"
 
 module Ocran
   class FilePathSet
+    using RefinePathname
     include Enumerable
 
     def initialize

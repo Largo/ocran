@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 require "pathname"
+require_relative "refine_pathname"
 
 module Ocran
   module BuildHelper
+    using RefinePathname
+
     EMPTY_SOURCE = File.expand_path("empty_source", __dir__).freeze
 
     def copy_to_bin(source, target)

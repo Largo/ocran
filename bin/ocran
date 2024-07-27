@@ -44,9 +44,6 @@ module Ocran
   def self.run_script? = @option.run_script?
 
   def Ocran.init
-    load File.expand_path("../lib/ocran/refine_pathname.rb", __dir__)
-    ::Pathname.prepend(RefinePathname)
-
     load File.expand_path("../lib/ocran/runtime_environment.rb", __dir__)
     @pre_env = RuntimeEnvironment.save
 

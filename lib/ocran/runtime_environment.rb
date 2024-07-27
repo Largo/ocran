@@ -2,6 +2,9 @@
 require "pathname"
 
 module Ocran
+  load File.expand_path("refine_pathname.rb", __dir__) unless defined? RefinePathname
+  using RefinePathname
+
   class RuntimeEnvironment
     class << self
       alias save new

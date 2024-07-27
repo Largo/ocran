@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 require "rubygems"
 require "pathname"
+require_relative "refine_pathname"
 
 module Ocran
   module GemSpecQueryable
+    using RefinePathname
+
     GEM_SCRIPT_RE = /\.rbw?$/
     GEM_EXTRA_RE = %r{(
       # Auxiliary files in the root of the gem

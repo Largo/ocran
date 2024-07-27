@@ -3,6 +3,9 @@ require "pathname"
 
 module Ocran
   class Option
+    load File.expand_path("refine_pathname.rb", __dir__) unless defined? RefinePathname
+    using RefinePathname
+
     def initialize
       @options = {
         :add_all_core? => false,
