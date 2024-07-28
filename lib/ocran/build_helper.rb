@@ -1,12 +1,41 @@
 # frozen_string_literal: true
 require "pathname"
 require_relative "refine_pathname"
+require_relative "command_output"
 
 module Ocran
   module BuildHelper
     using RefinePathname
 
+    include CommandOutput
+
     EMPTY_SOURCE = File.expand_path("empty_source", __dir__).freeze
+
+    def mkdir(target)
+      verbose "mkdir #{target}"
+      super
+    end
+
+    def cp(source, target)
+      verbose "cp #{source} #{target}"
+      super
+    end
+
+    def exec(image, script, *argv)
+      args = argv.map { |s| replace_placeholder(s) }.join(" ")
+      verbose "exec #{image} #{script} #{args}"
+      super
+    end
+
+    def export(name, value)
+      verbose "export #{name}=#{replace_placeholder(value)}"
+      super
+    end
+
+    def replace_placeholder(s)
+      s.to_s.gsub(EXTRACT_ROOT.to_s, "<tempdir>")
+    end
+    private :replace_placeholder
 
     def copy_to_bin(source, target)
       cp(source, BINDIR / target)
@@ -67,8 +96,9 @@ module Ocran
       export(name, value)
     end
 
-    def touch(tgt)
-      cp(EMPTY_SOURCE, tgt)
+    def touch(target)
+      verbose "touch #{target}"
+      cp(EMPTY_SOURCE, target)
     end
   end
 end

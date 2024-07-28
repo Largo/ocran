@@ -2,6 +2,7 @@
 require "pathname"
 require_relative "refine_pathname"
 require_relative "host_config_helper"
+require_relative "command_output"
 
 module Ocran
   class Direction
@@ -14,7 +15,7 @@ module Ocran
     # - /ruby/vendor_ruby/3.0.0/
     RUBY_LIBRARY_PATH_REGEX = %r{/(ruby/(?:site_ruby/|vendor_ruby/)?\d+\.\d+\.\d+)/?$}i
 
-    include HostConfigHelper
+    include HostConfigHelper, CommandOutput
 
     attr_reader :ruby_executable
 
@@ -74,7 +75,7 @@ module Ocran
           # found. These are integral to Ruby's standard libraries or extensions and
           # may not be located via normal load path searches, especially in RubyInstaller
           # environments.
-          Ocran.verbose_msg "Load path not found for #{feature}, skip this feature"
+          verbose "Load path not found for #{feature}, skip this feature"
           nil
         end
       end
@@ -84,9 +85,9 @@ module Ocran
       gemspecs = []
       # If a Bundler Gemfile was provided, add all gems it specifies
       if @option.gemfile
-        Ocran.msg "Scanning Gemfile"
+        say "Scanning Gemfile"
         gemspecs += GemSpecQueryable.scanning_gemfile(@option.gemfile).each do |spec|
-          Ocran.verbose_msg "From Gemfile, adding gem #{spec.full_name}"
+          verbose "From Gemfile, adding gem #{spec.full_name}"
         end
       end
       if defined?(Gem)
@@ -99,14 +100,12 @@ module Ocran
       gemspecs.uniq!(&:name)
 
       proc do |builder|
-        Ocran.msg "Building #{@option.output_executable}"
-        require_relative "builder_ops_logger"
-        builder.extend(BuilderOpsLogger) if Ocran.verbose?
+        say "Building #{@option.output_executable}"
         require_relative "build_helper"
         builder.extend(BuildHelper)
 
         # Add the ruby executable and DLL
-        Ocran.msg "Adding ruby executable #{ruby_executable}"
+        say "Adding ruby executable #{ruby_executable}"
         builder.copy_to_bin(bindir / ruby_executable, ruby_executable)
         if libruby_so
           builder.copy_to_bin(bindir / libruby_so, libruby_so)
@@ -117,7 +116,7 @@ module Ocran
           detect_dlls.each do |dll|
             next unless dll.subpath?(exec_prefix) && dll.extname?(".dll") && dll.basename != libruby_so
 
-            Ocran.msg "Adding detected DLL #{dll}"
+            say "Adding detected DLL #{dll}"
             if dll.subpath?(exec_prefix)
               builder.duplicate_to_exec_prefix(dll)
             else
@@ -128,13 +127,13 @@ module Ocran
 
         # Add external manifest files
         if (manifest = ruby_builtin_manifest)
-          Ocran.msg "Adding external manifest #{manifest}"
+          say "Adding external manifest #{manifest}"
           builder.duplicate_to_exec_prefix(manifest)
         end
 
         # Add extra DLLs specified on the command line
         @option.extra_dlls.each do |dll|
-          Ocran.msg "Adding supplied DLL #{dll}"
+          say "Adding supplied DLL #{dll}"
           builder.copy_to_bin(bindir / dll, dll)
         end
 
@@ -148,7 +147,7 @@ module Ocran
           # bundler gem, not returning the path to gemspec files. Here, we
           # are only collecting gemspec files.
           unless spec_file.file?
-            Ocran.verbose_msg "Gem #{spec.full_name} root folder was not found, skipping"
+            verbose "Gem #{spec.full_name} root folder was not found, skipping"
             next []
           end
 
@@ -163,12 +162,12 @@ module Ocran
 
           # Determine which set of files to include for this particular gem
           include = GemSpecQueryable.gem_inclusion_set(spec.name, @option.gem_options)
-          Ocran.msg "Detected gem #{spec.full_name} (#{include.join(", ")})"
+          say "Detected gem #{spec.full_name} (#{include.join(", ")})"
 
           spec.extend(GemSpecQueryable)
 
           actual_files = spec.find_gem_files(include, features)
-          Ocran.msg "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
+          say "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
 
           # Decide where to put gem files, either the system gem folder, or
           # GEMDIR.
@@ -190,7 +189,7 @@ module Ocran
 
         # If requested, add all ruby standard libraries
         if @option.add_all_core?
-          Ocran.msg "Will include all ruby core libraries"
+          say "Will include all ruby core libraries"
           @pre_env.load_path.each do |load_path|
             path = Pathname.new(load_path)
             # Match the load path against standard library, site_ruby, and vendor_ruby paths
@@ -214,13 +213,13 @@ module Ocran
             next unless enc_dir.directory?
 
             enc_files = enc_dir.find.select { |path| path.file? && path.extname?(".so") }
-            Ocran.msg "Including #{enc_files.size} encoding support files (#{enc_files.sum(0, &:size)} bytes, use --no-enc to exclude)"
+            say "Including #{enc_files.size} encoding support files (#{enc_files.sum(0, &:size)} bytes, use --no-enc to exclude)"
             enc_files.each do |path|
               builder.duplicate_to_exec_prefix(path)
             end
           end
         else
-          Ocran.msg "Not including encoding support files"
+          say "Not including encoding support files"
         end
 
         # Workaround: RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
@@ -235,7 +234,7 @@ module Ocran
         # directory layout.
         src_load_path = []
         # Add loaded libraries (features, gems)
-        Ocran.msg "Adding library files"
+        say "Adding library files"
         added_load_paths = (@post_env.load_path - @pre_env.load_path).map { |load_path| Pathname(@post_env.expand_path(load_path)) }
         pre_working_directory = Pathname(@pre_env.pwd)
         working_directory = Pathname(@post_env.pwd)
@@ -283,7 +282,7 @@ module Ocran
         inst_src_prefix = resolve_root_prefix(source_files)
 
         # Add explicitly mentioned files
-        Ocran.msg "Adding user-supplied source files"
+        say "Adding user-supplied source files"
         source_files.each do |source|
           target = builder.resolve_source_path(source, inst_src_prefix)
 

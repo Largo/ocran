@@ -18,22 +18,10 @@ module Ocran
 
   def self.verbose? = @option.verbose?
 
-  def self.warn? = @option.warn?
-
-  def Ocran.msg(s)
-    puts "=== #{s}" unless Ocran.quiet?
-  end
-
-  def Ocran.verbose_msg(s)
-    puts s if Ocran.verbose?
-  end
-
-  def Ocran.warn(s)
-    STDERR.puts "WARNING: #{s}" if Ocran.warn?
-  end
+  def self.warning? = @option.warn?
 
   def Ocran.fatal_error(s)
-    STDERR.puts "ERROR: #{s}"
+    error s
     exit 1
   end
 
@@ -44,6 +32,9 @@ module Ocran
   def self.run_script? = @option.run_script?
 
   def Ocran.init
+    load File.expand_path("../lib/ocran/command_output.rb", __dir__)
+    extend CommandOutput
+
     load File.expand_path("../lib/ocran/runtime_environment.rb", __dir__)
     @pre_env = RuntimeEnvironment.save
 
@@ -86,7 +77,7 @@ module Ocran
       next if checked_modules.include?(mod)
       mod.constants.each do |const|
         next unless mod.autoload?(const)
-        Ocran.msg "Attempting to trigger autoload of #{mod}::#{const}"
+        say "Attempting to trigger autoload of #{mod}::#{const}"
         begin
           mod.const_get(const)
         rescue ScriptError, StandardError => e
@@ -94,7 +85,7 @@ module Ocran
           # errors. This includes issues dependent on the system or execution
           # environment, so it is preferable to ignore exceptions other than
           # critical errors.
-          Ocran.warn "#{mod}::#{const} loading failed: #{e.message}"
+          warning "#{mod}::#{const} loading failed: #{e.message}"
         end
       end
       checked_modules[mod] = true
@@ -122,26 +113,26 @@ module Ocran
 
     direction.call(builder)
 
-    Ocran.msg "Build launcher batch file"
+    say "Build launcher batch file"
     launcher_path = launcher_builder.build
-    Ocran.verbose_msg File.read(launcher_path)
+    verbose File.read(launcher_path)
     builder.cp(launcher_path, "launcher.bat")
 
-    Ocran.msg "Build inno setup script file"
+    say "Build inno setup script file"
     iss_path = iss_builder.build
-    Ocran.verbose_msg File.read(iss_path)
+    verbose File.read(iss_path)
 
-    Ocran.msg "Running Inno Setup Command-Line compiler (ISCC)"
+    say "Running Inno Setup Command-Line compiler (ISCC)"
     iss_builder.compile(verbose: Ocran.verbose?)
 
-    Ocran.msg "Finished building installer file"
+    say "Finished building installer file"
   end
 
   def self.build_stab_exe(&direction)
     require_relative "../lib/ocran/stub_builder"
 
     if @option.enable_debug_mode?
-      Ocran.msg("Enabling debug mode in executable")
+      say "Enabling debug mode in executable"
     end
 
     StubBuilder.new(@option.output_executable,
@@ -152,8 +143,8 @@ module Ocran
                     gui_mode: @option.windowed?,
                     icon_path: @option.icon_filename,
                     &direction) => builder
-    Ocran.msg "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
-    Ocran.msg "After decompression, the data will expand to #{builder.data_size} bytes."
+    say "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
+    say "After decompression, the data will expand to #{builder.data_size} bytes."
   end
 
   def self.build
@@ -196,7 +187,7 @@ if File.basename(__FILE__) == File.basename($PROGRAM_NAME)
   end
 
   if Ocran.run_script?
-    Ocran.msg "Loading script to check dependencies"
+    Ocran.say "Loading script to check dependencies"
     $PROGRAM_NAME = Ocran.script.to_s
     load Ocran.script
   end
