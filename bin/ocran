@@ -18,7 +18,7 @@ module Ocran
 
   def self.verbose? = @option.verbose?
 
-  def self.warning? = @option.warn?
+  def self.warning? = @option.warning?
 
   def Ocran.fatal_error(s)
     error s

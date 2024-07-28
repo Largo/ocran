@@ -31,7 +31,7 @@ module Ocran
         :script => nil,
         :source_files => [],
         :verbose? => false,
-        :warn? => true,
+        :warning? => true,
       }
     end
 
@@ -146,7 +146,7 @@ EOF
           puts "Ocran #{VERSION}"
           raise SystemExit
         when "--no-warnings"
-          @options[:warn?] = false
+          @options[:warning?] = false
         when "--debug"
           @options[:enable_debug_mode?] = true
         when "--debug-extract"
@@ -266,7 +266,7 @@ EOF
 
     def verbose? = @options[__method__]
 
-    def warn? = @options[__method__]
+    def warning? = @options[__method__]
 
     def windowed? = @options[__method__]
   end
