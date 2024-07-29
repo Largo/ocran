@@ -75,9 +75,7 @@ module Ocran
       specs
     end
 
-    def to_proc
-      # Store the currently loaded files (before we require rbconfig for
-      # our own use).
+    def normalized_features
       features = @post_env.loaded_features.map { |feature| Pathname(feature) }
 
       # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
@@ -86,7 +84,7 @@ module Ocran
 
       # Convert all relative paths to absolute paths before building.
       # NOTE: In the future, different strategies may be needed before and after script execution.
-      features = features.filter_map do |feature|
+      features.filter_map do |feature|
         if feature.absolute?
           feature
         elsif (load_path = @post_env.find_load_path(feature))
@@ -101,6 +99,11 @@ module Ocran
           nil
         end
       end
+    end
+
+    def to_proc
+      # Store the currently loaded files
+      features = normalized_features
 
       proc do |builder|
         say "Building #{@option.output_executable}"
