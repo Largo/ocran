@@ -27,8 +27,6 @@ module Ocran
 
   def self.script = @option.script
 
-  def self.rubyopt = @rubyopt
-
   def self.run_script? = @option.run_script?
 
   def Ocran.init
@@ -52,18 +50,6 @@ module Ocran
       # the user-specified arguments.
       ARGV.replace(opt.argv)
     end
-
-    # Initializes @rubyopt with the user-intended RUBYOPT environment variable.
-    # This ensures that RUBYOPT matches the user's initial settings before any
-    # modifications that may occur during script execution.
-    @rubyopt = @option.rubyopt || ENV["RUBYOPT"] || ""
-
-    # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
-    # This is a temporary measure to ensure compatibility with self-extracting executables
-    # built in a bundle exec environment, particularly for Ruby 3.2 and later where
-    # absolute paths are included in RUBYOPT.
-    # In the future, we plan to implement a more appropriate solution.
-    @rubyopt = @rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
 
     @ignore_modules = ObjectSpace.each_object(Module).to_a
   end

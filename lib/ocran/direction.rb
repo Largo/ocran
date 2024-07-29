@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+require "rbconfig"
 require "pathname"
 require_relative "refine_pathname"
 require_relative "host_config_helper"
@@ -17,11 +18,23 @@ module Ocran
 
     include HostConfigHelper, CommandOutput
 
-    attr_reader :ruby_executable
+    attr_reader :ruby_executable, :rubyopt
 
     def initialize(post_env, pre_env, option)
       @post_env, @pre_env, @option = post_env, pre_env, option
       @ruby_executable = @option.windowed? ? rubyw_exe : ruby_exe
+
+      # Initializes @rubyopt with the user-intended RUBYOPT environment variable.
+      # This ensures that RUBYOPT matches the user's initial settings before any
+      # modifications that may occur during script execution.
+      @rubyopt = @option.rubyopt || pre_env.env["RUBYOPT"] || ""
+
+      # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
+      # This is a temporary measure to ensure compatibility with self-extracting executables
+      # built in a bundle exec environment, particularly for Ruby 3.2 and later where
+      # absolute paths are included in RUBYOPT.
+      # In the future, we plan to implement a more appropriate solution.
+      @rubyopt = @rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
     end
 
     # Resolves the common root directory prefix from an array of absolute paths.
@@ -300,7 +313,7 @@ module Ocran
         end
 
         # Set environment variable
-        builder.export("RUBYOPT", Ocran.rubyopt)
+        builder.export("RUBYOPT", rubyopt)
         # Add the load path that are required with the correct path after
         # src_prefix was adjusted.
         load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
