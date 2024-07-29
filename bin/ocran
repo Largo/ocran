@@ -14,6 +14,9 @@ module Ocran
   # Directory for Ruby library in temporary directory.
   LIBDIR = Pathname("lib")
 
+  load File.expand_path("../lib/ocran/option.rb", __dir__)
+  @option = Option.new
+
   def self.quiet? = @option.quiet?
 
   def self.verbose? = @option.verbose?
@@ -36,7 +39,6 @@ module Ocran
     load File.expand_path("../lib/ocran/runtime_environment.rb", __dir__)
     @pre_env = RuntimeEnvironment.save
 
-    load File.expand_path("../lib/ocran/option.rb", __dir__)
     @option = Option.new.tap do |opt|
       opt.parse(ARGV)
     rescue RuntimeError => e
