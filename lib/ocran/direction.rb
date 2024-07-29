@@ -328,5 +328,58 @@ module Ocran
     def to_proc
       method(:construct).to_proc
     end
+
+    def build_inno_setup_installer
+      require_relative "inno_setup_script_builder"
+      iss_builder = InnoSetupScriptBuilder.new(@option.inno_setup_script)
+
+      require_relative "launcher_batch_builder"
+      launcher_builder = LauncherBatchBuilder.new(
+        chdir_before: @option.chdir_before?,
+        title: @option.output_executable.basename.sub_ext("")
+      )
+
+      require_relative "build_facade"
+      builder = BuildFacade.new(iss_builder, launcher_builder)
+
+      if @option.icon_filename
+        builder.cp(@option.icon_filename, File.basename(@option.icon_filename))
+      end
+
+      construct(builder)
+
+      say "Build launcher batch file"
+      launcher_path = launcher_builder.build
+      verbose File.read(launcher_path)
+      builder.cp(launcher_path, "launcher.bat")
+
+      say "Build inno setup script file"
+      iss_path = iss_builder.build
+      verbose File.read(iss_path)
+
+      say "Running Inno Setup Command-Line compiler (ISCC)"
+      iss_builder.compile(verbose: @option.verbose?)
+
+      say "Finished building installer file"
+    end
+
+    def build_stab_exe
+      require_relative "stub_builder"
+
+      if @option.enable_debug_mode?
+        say "Enabling debug mode in executable"
+      end
+
+      StubBuilder.new(@option.output_executable,
+                      chdir_before: @option.chdir_before?,
+                      debug_extract: @option.enable_debug_extract?,
+                      debug_mode: @option.enable_debug_mode?,
+                      enable_compression: @option.enable_compression?,
+                      gui_mode: @option.windowed?,
+                      icon_path: @option.icon_filename,
+                      &to_proc) => builder
+      say "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
+      say "After decompression, the data will expand to #{builder.data_size} bytes."
+    end
   end
 end
