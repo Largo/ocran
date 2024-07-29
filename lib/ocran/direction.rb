@@ -53,6 +53,28 @@ module Ocran
       LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
     end
 
+    def find_gemspecs(features)
+      require_relative "gem_spec_queryable"
+
+      specs = []
+      # If a Bundler Gemfile was provided, add all gems it specifies
+      if @option.gemfile
+        say "Scanning Gemfile"
+        specs += GemSpecQueryable.scanning_gemfile(@option.gemfile).each do |spec|
+          verbose "From Gemfile, adding gem #{spec.full_name}"
+        end
+      end
+      if defined?(Gem)
+        specs += Gem.loaded_specs.values
+        # Now, we also detect gems that are not included in Gem.loaded_specs.
+        # Therefore, we look for any loaded file from a gem path.
+        specs += GemSpecQueryable.detect_gems_from(features, verbose: @option.verbose?)
+      end
+      # Prioritize the spec detected from Gemfile.
+      specs.uniq!(&:name)
+      specs
+    end
+
     def to_proc
       # Store the currently loaded files (before we require rbconfig for
       # our own use).
@@ -79,25 +101,6 @@ module Ocran
           nil
         end
       end
-
-      require_relative "gem_spec_queryable"
-      # Find gemspecs
-      gemspecs = []
-      # If a Bundler Gemfile was provided, add all gems it specifies
-      if @option.gemfile
-        say "Scanning Gemfile"
-        gemspecs += GemSpecQueryable.scanning_gemfile(@option.gemfile).each do |spec|
-          verbose "From Gemfile, adding gem #{spec.full_name}"
-        end
-      end
-      if defined?(Gem)
-        gemspecs += Gem.loaded_specs.values
-        # Now, we also detect gems that are not included in Gem.loaded_specs.
-        # Therefore, we look for any loaded file from a gem path.
-        gemspecs += GemSpecQueryable.detect_gems_from(features, verbose: Ocran.verbose?)
-      end
-      # Prioritize the spec detected from Gemfile.
-      gemspecs.uniq!(&:name)
 
       proc do |builder|
         say "Building #{@option.output_executable}"
@@ -140,7 +143,7 @@ module Ocran
         # Searches for features that are loaded from gems, then produces a
         # list of files included in those gems' manifests. Also returns a
         # list of original features that caused those gems to be included.
-        gem_files = gemspecs.flat_map do |spec|
+        gem_files = find_gemspecs(features).flat_map do |spec|
           spec_file = Pathname(spec.loaded_from)
           # FIXME: From Ruby 3.2 onwards, launching Ruby with bundle exec causes
           # Bundler's loaded_from to point to the root directory of the
