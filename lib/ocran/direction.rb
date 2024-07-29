@@ -322,7 +322,7 @@ module Ocran
 
         # Add the opcode to launch the script
         installed_ruby_exe = BINDIR / ruby_executable
-        target_script = builder.resolve_source_path(Ocran.script, inst_src_prefix)
+        target_script = builder.resolve_source_path(@option.script, inst_src_prefix)
         builder.exec(installed_ruby_exe, target_script, *@option.argv)
       end
     end
