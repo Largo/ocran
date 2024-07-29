@@ -23,6 +23,9 @@ module Ocran
 
   def self.warning? = @option.warning?
 
+  load File.expand_path("../lib/ocran/command_output.rb", __dir__)
+  extend CommandOutput
+
   def Ocran.fatal_error(s)
     error s
     exit 1
@@ -33,9 +36,6 @@ module Ocran
   def self.run_script? = @option.run_script?
 
   def Ocran.init
-    load File.expand_path("../lib/ocran/command_output.rb", __dir__)
-    extend CommandOutput
-
     load File.expand_path("../lib/ocran/runtime_environment.rb", __dir__)
     @pre_env = RuntimeEnvironment.save
 
