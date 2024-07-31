@@ -2,12 +2,13 @@
 require "pathname"
 require_relative "refine_pathname"
 require_relative "command_output"
+require_relative "build_constants"
 
 module Ocran
   module BuildHelper
     using RefinePathname
 
-    include CommandOutput
+    include BuildConstants, CommandOutput
 
     EMPTY_SOURCE = File.expand_path("empty_source", __dir__).freeze
 

@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 require "tempfile"
 require_relative "windows_command_escaping"
+require_relative "build_constants"
 
 module Ocran
   class LauncherBatchBuilder
-    include WindowsCommandEscaping
+    include BuildConstants, WindowsCommandEscaping
 
     # BATCH_FILE_DIR is a parameter expansion used in Windows batch files,
     # representing the full path to the directory where the batch file resides.

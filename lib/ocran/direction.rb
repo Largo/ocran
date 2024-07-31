@@ -4,6 +4,7 @@ require "pathname"
 require_relative "refine_pathname"
 require_relative "host_config_helper"
 require_relative "command_output"
+require_relative "build_constants"
 
 module Ocran
   class Direction
@@ -16,7 +17,7 @@ module Ocran
     # - /ruby/vendor_ruby/3.0.0/
     RUBY_LIBRARY_PATH_REGEX = %r{/(ruby/(?:site_ruby/|vendor_ruby/)?\d+\.\d+\.\d+)/?$}i
 
-    include HostConfigHelper, CommandOutput
+    include BuildConstants, CommandOutput, HostConfigHelper
 
     attr_reader :ruby_executable, :rubyopt
 
