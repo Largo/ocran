@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "ocran/version"
-
 module Ocran
+  autoload :VERSION, "ocran/version"
+
   singleton_class.attr_accessor :option
 end
