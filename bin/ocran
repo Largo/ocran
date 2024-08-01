@@ -1,10 +1,6 @@
 #!/usr/bin/env ruby
 # encoding: UTF-8
 
-module Ocran
-  singleton_class.attr_accessor :option
-end # module Ocran
-
 load File.expand_path("../lib/ocran/runner.rb", __dir__)
 if File.basename(__FILE__) == File.basename($PROGRAM_NAME)
   load Ocran::Runner.new.run

@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+load File.expand_path("../ocran.rb", __dir__)
 
 module Ocran
   module CommandOutput
