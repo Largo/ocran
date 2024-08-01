@@ -3,14 +3,7 @@
 require "pathname"
 
 module Ocran
-  load File.expand_path("../lib/ocran/option.rb", __dir__)
-  @option = Option.new
-
-  def self.quiet? = @option.quiet?
-
-  def self.verbose? = @option.verbose?
-
-  def self.warning? = @option.warning?
+  def self.option = @option
 
   load File.expand_path("../lib/ocran/command_output.rb", __dir__)
   extend CommandOutput
@@ -20,14 +13,15 @@ module Ocran
     exit 1
   end
 
-  def self.script = @option.script
+  def self.script = @option&.script
 
-  def self.run_script? = @option.run_script?
+  def self.run_script? = @option&.run_script?
 
   def Ocran.init
     load File.expand_path("../lib/ocran/runtime_environment.rb", __dir__)
     @pre_env = RuntimeEnvironment.save
 
+    load File.expand_path("../lib/ocran/option.rb", __dir__)
     @option = Option.new.tap do |opt|
       opt.parse(ARGV)
     rescue RuntimeError => e
