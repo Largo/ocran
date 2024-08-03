@@ -17,6 +17,7 @@
 - Fixed issue where the gem.build_complete file was not included in the package due to an incorrect change.
 - Changed error output from standard output to standard error (stderr).
 - ocransa (Ocran-stand-alone) has been discontinued.
+- The implementation of bin/ocran.rb has been refactored and split into multiple files. These files have been relocated to the lib directory.
 
 === 1.3.15
 - Support for Ruby 2.6 and above.
