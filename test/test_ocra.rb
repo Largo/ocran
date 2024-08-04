@@ -80,17 +80,12 @@ class TestOcran < Minitest::Test
   # block. When the block exits, the environment variables are set
   # back to their original values.
   def with_env(hash)
-    old = {}
-    hash.each do |k,v|
-      old[k] = ENV[k]
-      ENV[k] = v
-    end
+    old = ENV.except(hash.keys)
+    ENV.update(hash)
     begin
       yield
     ensure
-      hash.each do |k,v|
-        ENV[k] = old[k]
-      end
+      ENV.update(old)
     end
   end
 
