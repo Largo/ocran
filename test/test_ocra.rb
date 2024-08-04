@@ -20,8 +20,9 @@ include FileUtils
 class TestOcran < Minitest::Test
 
   # Default arguments for invoking OCRAN when running tests.
-  DefaultArgs = [ '--no-lzma', '--verbose' ]
-  DefaultArgs << "--quiet" unless ENV["OCRAN_VERBOSE_TEST"]
+  DefaultArgs = %w[--no-lzma --verbose].tap do |ary|
+    ary << "--quiet" unless ENV["OCRAN_VERBOSE_TEST"]
+  end.freeze
 
   # Name of the tested ocran script.
   TESTED_OCRAN = ENV['TESTED_OCRAN'] || 'ocran'
