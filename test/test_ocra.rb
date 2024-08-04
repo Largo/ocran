@@ -1,6 +1,7 @@
 require "minitest/autorun"
 
 require "tmpdir"
+require "tmpdir"
 require "fileutils"
 require "rbconfig"
 require "pathname"
@@ -93,7 +94,7 @@ class TestOcran < Minitest::Test
   end
 
   def with_tmpdir(files = [], path = nil)
-    tempdirname = path || File.join(ENV['TEMP'], ".ocrantest-#{$$}-#{rand 2**32}").tr('\\','/')
+    tempdirname = path || Dir.mktmpdir(".ocrantest-")
     mkdir_p tempdirname
     begin
       cp files, tempdirname
