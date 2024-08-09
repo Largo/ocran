@@ -27,7 +27,6 @@ module Ocran
     STUB_PATH = File.expand_path(WINDOWS ? "stub.exe" : "stub", base_dir)
     STUBW_PATH = WINDOWS ? File.expand_path("stubw.exe", base_dir) : nil
     LZMA_PATH = WINDOWS ? File.expand_path("lzma.exe", base_dir) : nil
-    EDICON_PATH = WINDOWS ? File.expand_path("edicon.exe", base_dir) : nil
 
     def self.find_posix_lzma_cmd
       if system("which lzma > /dev/null 2>&1")
@@ -122,7 +121,8 @@ module Ocran
 
       # Embed icon resource (Windows only)
       if icon_path && WINDOWS
-        system(EDICON_PATH, stub, icon_path.to_s, exception: true)
+        require_relative "ed_icon"
+        EdIcon.update_icon(stub, icon_path.to_s)
       end
 
       File.open(stub, "ab") do |of|
