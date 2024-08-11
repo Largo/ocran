@@ -66,7 +66,8 @@ module Ocran
       stub.close
 
       if icon_path
-        system(EDICON_PATH, stub.path, icon_path.to_s, exception: true)
+        require_relative "ed_icon"
+        EdIcon.update_icon(stub.path, icon_path.to_s)
       end
 
       File.open(stub, "ab") do |of|

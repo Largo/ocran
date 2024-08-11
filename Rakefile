@@ -16,16 +16,14 @@ task :build_stub do
   sh "ridk exec make -C src"
   cp "src/stub.exe", "share/ocran/stub.exe"
   cp "src/stubw.exe", "share/ocran/stubw.exe"
-  cp "src/edicon.exe", "share/ocran/edicon.exe"
 end
 
 file "share/ocran/stub.exe" => :build_stub
 file "share/ocran/stubw.exe" => :build_stub
-file "share/ocran/edicon.exe" => :build_stub
 
 task :clean do
   rm_f Dir["{bin,samples}/*.exe"]
-  rm_f Dir["share/ocran/{stub,stubw,edicon}.exe"]
+  rm_f Dir["share/ocran/{stub,stubw}.exe"]
   sh "ridk exec make -C src clean"
 end
 
