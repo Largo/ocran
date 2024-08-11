@@ -23,8 +23,6 @@ file "share/ocran/stub.exe" => :build_stub
 file "share/ocran/stubw.exe" => :build_stub
 file "share/ocran/edicon.exe" => :build_stub
 
-task :test => :build_stub
-
 task :clean do
   rm_f Dir["{bin,samples}/*.exe"]
   rm_f Dir["share/ocran/{stub,stubw,edicon}.exe"]
