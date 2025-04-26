@@ -1,1 +1,3 @@
+#include <winresrc.h>
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "stub.manifest"
 101 ICON vit-ruby.ico

@@ -1,5 +1,5 @@
 SRCS = lzma/LzmaDec.c
-OBJS = $(SRCS:.c=.o) stubicon.o
+OBJS = $(SRCS:.c=.o) stub.res
 CONSOLE_OBJS = error_console.o filesystem_utils_console.o inst_dir_console.o script_info_console.o unpack_console.o
 WINDOW_OBJS = error_window.o filesystem_utils_window.o inst_dir_window.o script_info_window.o unpack_window.o
 CC = gcc
@@ -12,8 +12,8 @@ STUBW_CFLAGS = -mwindows $(CFLAGS)
 
 all: stub.exe stubw.exe edicon.exe
 
-stubicon.o: stub.rc
-	windres -i $< -o $@
+stub.res: stub.rc
+	windres -i stub.rc -O coff -o stub.res
 
 stub.exe: $(OBJS) stub.o $(CONSOLE_OBJS)
 	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o $(CONSOLE_OBJS) -o $@

@@ -807,4 +807,68 @@ class TestOcran < Minitest::Test
       end
     end
   end
+
+  # Tests whether an OCRAN-built executable runs correctly from a directory
+  # with multibyte (UTF-8) characters in its name.
+  def test_multibyte_path_execution
+    with_fixture 'helloworld' do
+      exe_name = "helloworld.exe"
+      assert system("ruby", ocran, "helloworld.rb", *DefaultArgs)
+      assert File.exist?(exe_name)
+
+      multibyte_dir = "äあ💎"
+
+      pristine_env exe_name do
+        mkdir_p multibyte_dir
+        cp exe_name, multibyte_dir
+        Dir.chdir(multibyte_dir) do
+          assert system(exe_name)
+        end
+      end
+    end
+  end
+
+  # Tests building and running a Ruby script with multibyte (UTF-8) characters
+  # in its filename. Skipped unless the console code page is UTF-8 (65001),
+  # as ruby.exe misinterprets arguments under non-UTF-8 environments.
+  def test_multibyte_script_filename
+    cp = `chcp`.force_encoding(Encoding::BINARY)[/\d+/] || "unknown"
+    unless cp == "65001"
+      skip "Skipped: console code page must be UTF-8 (65001), got #{cp}"
+    end
+
+    with_fixture 'multibyte_script' do
+      script = "äあ💎.rb"
+      assert system("ruby", ocran, script, *DefaultArgs)
+      exe_name = script.sub(/\.rb$/, '.exe')
+      assert File.exist?(exe_name)
+      pristine_env exe_name do
+        assert system(exe_name)
+      end
+    end
+  end
+
+  # Tests if a multibyte-named resource file is correctly included and read
+  # at runtime after being packaged by OCRAN.
+  def test_multibyte_resource_file
+    with_fixture 'multibyte_file' do
+      assert system("ruby", ocran, "resource.rb", "äあ💎.txt", *DefaultArgs)
+      assert File.exist?("resource.exe")
+      pristine_env "resource.exe" do
+        assert system("resource.exe")
+      end
+    end
+  end
+
+  # Tests that OCRAN can handle resource files stored in a directory
+  # with multibyte (UTF-8) characters in its name.
+  def test_multibyte_resource_dir
+    with_fixture 'multibyte_dir' do
+      assert system("ruby", ocran, "resource.rb", "äあ💎/äあ💎.txt", *DefaultArgs)
+      assert File.exist?("resource.exe")
+      pristine_env "resource.exe" do
+        assert system("resource.exe")
+      end
+    end
+  end
 end
