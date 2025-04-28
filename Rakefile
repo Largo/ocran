@@ -4,13 +4,11 @@ require "hoe"
 
 Hoe.plugin :minitest
 
-spec = Hoe.spec "ocran" do
+Hoe.spec "ocran" do
   developer "Lars Christensen", "larsch@belunktum.dk"
   developer "Andi Idogawa", "andi@idogawa.com"
   license "MIT"
 end
-
-spec.urls.each { |key, url| url.chomp! }
 
 task :build_stub do
   sh "ridk exec make -C src"
