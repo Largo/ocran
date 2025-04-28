@@ -10,21 +10,25 @@ Hoe.spec "ocran" do
   license "MIT"
 end
 
+STUB_NAMES = %w[stub stubw edicon]
+STUB_DIR   = "share/ocran"
+BUILD_DIR  = "src"
+
 task :build_stub do
-  sh "ridk exec make -C src"
-  cp "src/stub.exe", "share/ocran/stub.exe"
-  cp "src/stubw.exe", "share/ocran/stubw.exe"
-  cp "src/edicon.exe", "share/ocran/edicon.exe"
+  sh "ridk exec make -C #{BUILD_DIR}"
+  STUB_NAMES.each do |name|
+    cp "#{BUILD_DIR}/#{name}.exe", "#{STUB_DIR}/#{name}.exe"
+  end
 end
 
-file "share/ocran/stub.exe" => :build_stub
-file "share/ocran/stubw.exe" => :build_stub
-file "share/ocran/edicon.exe" => :build_stub
+STUB_NAMES.each do |name|
+  file "#{STUB_DIR}/#{name}.exe" => :build_stub
+end
 
 task :clean do
   rm_f Dir["{bin,samples}/*.exe"]
-  rm_f Dir["share/ocran/{stub,stubw,edicon}.exe"]
-  sh "ridk exec make -C src clean"
+  rm_f STUB_NAMES.map { |name| "#{STUB_DIR}/#{name}.exe" }
+  sh "ridk exec make -C #{BUILD_DIR} clean"
 end
 
 task :test_single, [:test_name] do |t, args|
