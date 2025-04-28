@@ -29,10 +29,6 @@ task :clean do
   sh "ridk exec make -C src clean"
 end
 
-task :release_docs => :redocs do
-  sh "pscp -r doc/* larsch@ocran.rubyforge.org:/var/www/gforge-projects/ocran"
-end
-
 task :test_single, [:test_name] do |t, args|
   if args[:test_name].nil?
     puts "You must provide a test name. e.g., rake test_single[YourTestClassName]"
