@@ -17,6 +17,14 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo == Building stub executables ==
+
+call bundle exec rake build_stub
+if errorlevel 1 (
+  echo Failed to build stubs.
+  exit /b 1
+)
+
 echo == Setup completed ==
 
 endlocal
