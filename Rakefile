@@ -14,6 +14,9 @@ STUB_NAMES = %w[stub stubw edicon]
 STUB_DIR   = "share/ocran"
 BUILD_DIR  = "src"
 
+desc "Builds all necessary artifacts (currently stubs)"
+task :build => :build_stub
+
 task :build_stub do
   sh "ridk exec make -C #{BUILD_DIR}"
   STUB_NAMES.each do |name|

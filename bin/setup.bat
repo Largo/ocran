@@ -19,7 +19,7 @@ if errorlevel 1 (
 
 echo == Building stub executables ==
 
-call bundle exec rake build_stub
+call bundle exec rake build
 if errorlevel 1 (
   echo Failed to build stubs.
   exit /b 1
