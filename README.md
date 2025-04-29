@@ -175,6 +175,35 @@ Executable options:
 * Working Ruby installation.
 * Ruby Installation with devkit from rubyinstaller (when working with the source code only)
 
+## Development
+
+### Quick start
+
+Quickly set up the development environment and run the full test suite:
+
+    git clone https://github.com/largo/ocran.git
+    cd ocran
+    bin/setup          # install Bundler & all dev gems, generate stub for tests
+    bundle exec rake   # run the entire Minitest suite
+
+### Developer Utilities (bin/ scripts)
+
+All scripts in the `bin/` directory are designed for developers and can be executed in any standard Windows shell, including Command Prompt (CMD), PowerShell, and Git Bash.
+
+| Script        | Purpose                                                                  |
+|---------------|--------------------------------------------------------------------------|
+| `bin/setup`   | Installs Bundler and all required development gems, then builds stub.exe |
+| `bin/console` | Launches an IRB console with OCRAN preloaded                             |
+
+
+### Rake tasks (Windows compatible)
+
+| Task         | Purpose                                                                |
+|--------------|------------------------------------------------------------------------|
+| `rake build` | Compile stub.exe (requires MSVC or mingw‑w64 + DevKit)                 |
+| `rake clean` | Remove generated binaries (e.g., stub.exe); temp files are not deleted |
+| `rake test`  | Execute all unit & integration tests                                   |
+
 ## Technical details
 
 OCRAN first runs the target script in order to detect any files that
