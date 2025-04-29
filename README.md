@@ -470,7 +470,7 @@ http://ruby.morphball.net/vit-ruby-ico_en.html)
 (The MIT License)
 
 Copyright (c) 2009-2020 Lars Christensen
-Copyright (c) 2020-2024 The OCRAN Committers Team
+Copyright (c) 2020-2025 The OCRAN Committers Team
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
