@@ -26,7 +26,6 @@ STUB_NAMES.each do |name|
 end
 
 task :clean do
-  rm_f Dir["{bin,samples}/*.exe"]
   rm_f STUB_NAMES.map { |name| "#{STUB_DIR}/#{name}.exe" }
   sh "ridk exec make -C #{BUILD_DIR} clean"
 end
