@@ -7,8 +7,3 @@ gem "hoe", "~> 4.2"
 gem "minitest", "~> 5.23"
 
 gem "fiddle", "~> 1.0"
-
-group :development do
-  gem "irb"
-  gem "rdoc"
-end
