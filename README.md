@@ -169,6 +169,16 @@ Executable options:
   that your application works with rubyw.exe before trying with OCRAN.
 * Avoid absolute paths in your code and when invoking OCRAN.
 
+### Multibyte path and filename support:
+
+* OCRAN-built executables can correctly handle multibyte paths and filenames
+  (e.g., Japanese or emoji) on Windows. To use this feature, the executable
+  must be run on Windows 10 version 1903 or later.
+* When using OCRAN-built executables from the console, we recommend running
+  `chcp 65001` to switch the code page to UTF-8. This ensures proper
+  input/output of multibyte characters in Command Prompt (CMD) and
+  PowerShell.
+
 ## REQUIREMENTS:
 
 * Windows
