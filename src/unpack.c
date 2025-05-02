@@ -212,21 +212,45 @@ BOOL ProcessOpcodes(void **p)
 #if WITH_LZMA
 #define LZMA_UNPACKSIZE_SIZE 8
 #define LZMA_HEADER_SIZE (LZMA_PROPS_SIZE + LZMA_UNPACKSIZE_SIZE)
+#define LZMA_SIZET_MAX ((SizeT)-1)
 
 void *SzAlloc(const ISzAlloc *p, size_t size) { p = p; return LocalAlloc(LMEM_FIXED, size); }
 void SzFree(const ISzAlloc *p, void *address) { p = p; LocalFree(address); }
 ISzAlloc alloc = { SzAlloc, SzFree };
 
-BOOL DecompressLzma(void *unpack_data, size_t unpack_size, const void *src, size_t src_size)
+BOOL DecompressLzma(void *dest, unsigned long long dest_size, const void *src, size_t src_size)
 {
-    SizeT lzmaDecompressedSize = unpack_size;
+    if (dest == NULL) {
+        APP_ERROR("Null dest buffer");
+        return FALSE;
+    }
+
+    if (dest_size > (unsigned long long)LZMA_SIZET_MAX) {
+        APP_ERROR("Decompression size exceeds LZMA SizeT limit");
+        return FALSE;
+    }
+
+    SizeT decompressed_size = (SizeT)dest_size;
+
+    if (src_size < LZMA_HEADER_SIZE) {
+        APP_ERROR("Input data too short for LZMA header");
+        return FALSE;
+    }
+
     SizeT inSizePure = src_size - LZMA_HEADER_SIZE;
     ELzmaStatus status;
 
-    SRes res = LzmaDecode((Byte *)unpack_data, &lzmaDecompressedSize, (Byte *)src + LZMA_HEADER_SIZE, &inSizePure,
-                          (Byte *)src, LZMA_PROPS_SIZE, LZMA_FINISH_ANY, &status, &alloc);
+    SRes res = LzmaDecode((Byte *)dest, &decompressed_size, (Byte *)src + LZMA_HEADER_SIZE, &inSizePure,
+                          (Byte *)src, LZMA_PROPS_SIZE, LZMA_FINISH_END, &status, &alloc);
 
-    return (BOOL)(res == SZ_OK);
+    if (res != SZ_OK || status != LZMA_STATUS_FINISHED_WITH_MARK) {
+        APP_ERROR("LZMA decompression error: %d, status: %d", res, status);
+        return FALSE;
+    }
+
+    DEBUG("LZMA decompressed %zu bytes from %zu input bytes", (size_t)decompressed_size, inSizePure);
+
+    return TRUE;
 }
 
 BOOL ParseLzmaUnpackSize(const void *data, size_t data_len, unsigned long long *out_size)
@@ -269,12 +293,6 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
 
     if (!ParseLzmaUnpackSize(data, data_len, &unpack_size)) {
         APP_ERROR("Failed to parse LZMA header and extract unpack size");
-        return FALSE;
-    }
-
-    // Check if the unpack size exceeds the maximum size that can be processed in a 32-bit environment
-    if (unpack_size > SIZE_MAX) {
-        APP_ERROR("Decompression size exceeds maximum limit");
         return FALSE;
     }
 
