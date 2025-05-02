@@ -296,7 +296,12 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
         return FALSE;
     }
 
-    void *unpack_data = LocalAlloc(LMEM_FIXED, unpack_size);
+    if (unpack_size > (unsigned long long)SIZE_MAX) {
+        APP_ERROR("Size too large to fit in size_t");
+        return FALSE;
+    }
+
+    void *unpack_data = LocalAlloc(LMEM_FIXED, (SIZE_T)unpack_size);
     if (unpack_data == NULL) {
         APP_ERROR("Memory allocation failed during decompression (%lu)", GetLastError());
         return FALSE;
