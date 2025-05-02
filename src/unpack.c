@@ -228,16 +228,48 @@ BOOL DecompressLzma(void *unpack_data, size_t unpack_size, const void *src, size
 
     return (BOOL)(res == SZ_OK);
 }
+
+BOOL ParseLzmaUnpackSize(const void *data, size_t data_len, unsigned long long *out_size)
+{
+    if (data == NULL) {
+        APP_ERROR("Null data pointer");
+        return FALSE;
+    }
+
+    if (out_size == NULL) {
+        APP_ERROR("Null out_size pointer");
+        return FALSE;
+    }
+
+    *out_size = 0;
+
+    if (data_len < LZMA_HEADER_SIZE) {
+        APP_ERROR("LZMA header is truncated");
+        return FALSE;
+    }
+
+    const Byte *header = (const Byte *)data + LZMA_PROPS_SIZE;
+    unsigned long long size64 = 0;
+    for (int i = 0; i < LZMA_UNPACKSIZE_SIZE; i++) {
+        size64 |= (unsigned long long)header[i] << (i * 8);
+    }
+
+    *out_size = size64;
+    DEBUG("Parsed LZMA unpack size: %llu bytes", size64);
+    return TRUE;
+}
 #endif
 
 BOOL ProcessCompressedData(const void *data, size_t data_len)
 {
 #if WITH_LZMA
-    DEBUG("LzmaDecode(%ld)", data_len);
+    DEBUG("LzmaDecode(%ld)"
 
-    ULONGLONG unpack_size = 0;
-    for (int i = 0; i < LZMA_UNPACKSIZE_SIZE; i++) {
-        unpack_size += ((BYTE *)data)[LZMA_PROPS_SIZE + i] << (i * 8);
+    unsigned long long unpack_size = 0;
+
+    if (!ParseLzmaUnpackSize(data, data_len, &unpack_size)) {
+        APP_ERROR("Failed to parse LZMA header and extract unpack size");
+        return FALSE;
     }
 
     // Check if the unpack size exceeds the maximum size that can be processed in a 32-bit environment
