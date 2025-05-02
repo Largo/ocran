@@ -180,18 +180,33 @@ BOOL OpSetScript(void **p)
     return InitializeScriptInfo(args, args_size);
 }
 
-unsigned char ProcessOpcodes(void **p)
+BOOL ProcessOpcodes(void **p)
 {
     unsigned char op;
 
-    do {
+    for (;;) {
         op = GetOpcode(p);
 
-        if (op == OP_END || op >= OP_MAX || !OpcodeHandlers[op]) break;
+        if (op >= OP_MAX) {
+            APP_ERROR("Opcode out of range: %hhu", op);
+            return FALSE;
+        }
 
-    } while (OpcodeHandlers[op](p));
+        if (op == OP_END) {
+            DEBUG("Encountered OP_END");
+            return TRUE;
+        }
 
-    return op;
+        if (OpcodeHandlers[op] == NULL) {
+            APP_ERROR("No handler for opcode: %hhu", op);
+            return FALSE;
+        }
+
+        if (!OpcodeHandlers[op](p)) {
+            APP_ERROR("Handler failed for opcode: %hhu", op);
+            return FALSE;
+        }
+    }
 }
 
 #if WITH_LZMA
@@ -244,14 +259,10 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
     }
 
     void *p = unpack_data;
-    BYTE last_opcode = ProcessOpcodes(&p);
+    BOOL result = ProcessOpcodes(&p);
     LocalFree(unpack_data);
 
-    if (last_opcode != OP_END) {
-        APP_ERROR("Invalid opcode '%u'", last_opcode);
-        return FALSE;
-    }
-    return TRUE;
+    return result;
 #else
     APP_ERROR("Does not support LZMA");
     return FALSE;
@@ -261,13 +272,9 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
 BOOL ProcessUncompressedData(const void *data, size_t data_len)
 {
     void *p = (void *)data;
-    BYTE last_opcode = ProcessOpcodes(&p);
+    BOOL result = ProcessOpcodes(&p);
 
-    if (last_opcode != OP_END) {
-        APP_ERROR("Invalid opcode '%u'", last_opcode);
-        return FALSE;
-    }
-    return TRUE;
+    return result;
 }
 
 BOOL ProcessImage(const void *data, size_t data_len, BOOL compressed)
