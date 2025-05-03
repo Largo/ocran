@@ -102,47 +102,13 @@ BOOL OpCreateFile(void **p)
         return FALSE;
     }
 
-    if (!IsPathFreeOfDotElements(file_name)) {
-        APP_ERROR("File name contains prohibited relative path elements like '.' or '..'");
+    DEBUG("Create file: %s (%zu bytes)", file_name, file_size);
+
+    if (!ExportFileToInstDir(file_name, data, file_size)) {
+        APP_ERROR("Failed to export file: %s", file_name);
         return FALSE;
     }
-
-    char *path = ExpandInstDirPath(file_name);
-    if (path == NULL) {
-        APP_ERROR("Failed to expand path to installation directory");
-        return FALSE;
-    }
-
-    DEBUG("Create file: %s", path);
-
-    if (!CreateParentDirectories(path)) {
-        APP_ERROR("Failed to create parent directory");
-        LocalFree(path);
-        return FALSE;
-    }
-
-    BOOL result = FALSE;
-    HANDLE h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
-    if (h != INVALID_HANDLE_VALUE) {
-        DEBUG("Write data(%lu)", file_size);
-
-        DWORD BytesWritten;
-        if (WriteFile(h, data, (DWORD)file_size, &BytesWritten, NULL)) {
-            if (BytesWritten == (DWORD)file_size) {
-                result = TRUE;
-            } else {
-                APP_ERROR("Write size failure");
-            }
-        } else {
-            APP_ERROR("Write failure (%lu)", GetLastError());
-        }
-        CloseHandle(h);
-    } else {
-        APP_ERROR("Failed to create file (%lu)", GetLastError());
-    }
-
-    LocalFree(path);
-    return result;
+    return TRUE;
 }
 
 // Set a environment variable (OP_SETENV opcode handler)
