@@ -197,3 +197,27 @@ BOOL ChangeDirectoryToScriptDirectory(void)
 
     return changed;
 }
+
+BOOL CreateDirectoryUnderInstDir(const char *rel_path)
+{
+    if (rel_path == NULL) {
+        return FALSE;
+    }
+
+    if (*rel_path == '\0') {
+        return TRUE;
+    }
+
+    char *dir = ExpandInstDirPath(rel_path);
+    if (dir == NULL) {
+        return FALSE;
+    }
+
+    BOOL result = CreateDirectoriesRecursively(dir);
+    if (!result) {
+        APP_ERROR("Failed to create directory under installation directory (InstDir): '%s'", dir);
+    }
+
+    LocalFree(dir);
+    return result;
+}

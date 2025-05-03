@@ -109,3 +109,25 @@ char *ReplaceInstDirPlaceholder(const char *str);
  * @return BOOL Returns TRUE if the directory change was successful, otherwise FALSE.
  */
 BOOL ChangeDirectoryToScriptDirectory(void);
+
+/**
+ * CreateDirectoryUnderInstDir - Recursively create a directory under the
+ * installation directory.
+ *
+ * This function ensures that a directory exists at the specified relative
+ * path under the installation directory. An empty rel_path is treated as
+ * already existing (returns TRUE). If rel_path is NULL, ExpandInstDirPath
+ * fails, or directory creation fails, the function returns FALSE and logs
+ * an error.
+ *
+ * @param rel_path
+ *   A relative path to a directory under the installation directory.
+ *   NULL is invalid (returns FALSE). An empty string is treated as
+ *   already existing (returns TRUE).
+ *
+ * @return
+ *   TRUE if the directory already exists or was created successfully;
+ *   FALSE on error (and an error is logged).
+ */
+BOOL CreateDirectoryUnderInstDir(const char *rel_path);
+
