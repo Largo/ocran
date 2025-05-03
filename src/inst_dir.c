@@ -221,3 +221,80 @@ BOOL CreateDirectoryUnderInstDir(const char *rel_path)
     LocalFree(dir);
     return result;
 }
+
+static BOOL export_file(const char *path, const void *buf, size_t len)
+{
+    BOOL   result  = FALSE;
+    HANDLE h       = INVALID_HANDLE_VALUE;
+    DWORD  written = 0;
+
+    if (len > MAXDWORD) {
+        DEBUG("export_file: Write length %zu exceeds maximum DWORD", len);
+        goto cleanup;
+    }
+
+    h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) {
+        DEBUG("export_file: CreateFile failed, err=%u", GetLastError());
+        goto cleanup;
+    }
+
+    if (!WriteFile(h, buf, (DWORD)len, &written, NULL)) {
+        DEBUG("export_file: WriteFile failed, err=%u", GetLastError());
+        goto cleanup;
+    }
+
+    if (written != (DWORD)len) {
+        DEBUG("export_file: Write size mismatch, expected %zu, wrote %u", len, written);
+        goto cleanup;
+    }
+
+    result = TRUE;
+
+cleanup:
+    if (h != INVALID_HANDLE_VALUE) {
+        CloseHandle(h);
+    }
+    return result;
+}
+
+BOOL ExportFileToInstDir(const char *rel_path, const void *buf, size_t len)
+{
+    BOOL  result = FALSE;
+    char *path   = NULL;
+
+    if (rel_path == NULL || *rel_path == '\0') {
+        APP_ERROR("Relative path is null or empty");
+        goto cleanup;
+    }
+
+    DEBUG("ExportFileToInstDir: rel_path=\"%s\", len=%zu", rel_path, len);
+
+    if (len > 0 && buf == NULL) {
+        APP_ERROR("Buffer pointer is NULL for non-zero length");
+        goto cleanup;
+    }
+
+    path = ExpandInstDirPath(rel_path);
+    if (!path) {
+        goto cleanup;
+    }
+
+    if (!CreateParentDirectories(path)) {
+        APP_ERROR("Failed to create parent directory for %s", path);
+        goto cleanup;
+    }
+
+    if (!export_file(path, buf, len)) {
+        APP_ERROR("Failed to export file: %s", path);
+        goto cleanup;
+    }
+
+    result = TRUE;
+
+cleanup:
+    if (path) {
+        LocalFree(path);
+    }
+    return result;
+}

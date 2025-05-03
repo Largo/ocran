@@ -131,3 +131,25 @@ BOOL ChangeDirectoryToScriptDirectory(void);
  */
 BOOL CreateDirectoryUnderInstDir(const char *rel_path);
 
+/**
+ * ExportFileToInstDir - Atomically write a file under the installation dir.
+ *
+ * This function writes the given buffer as a file at the specified
+ * relative path under the installation directory. It validates rel_path
+ * and buf, expands the full path, creates any missing parent directories,
+ * and writes the data atomically. If len is zero, an empty file is
+ * created.
+ *
+ * @param rel_path
+ *   A relative file path under the installation directory. NULL or empty
+ *   string is invalid (returns FALSE).
+ * @param buf
+ *   Pointer to the data to write. Must be non-NULL if len > 0.
+ * @param len
+ *   Number of bytes to write. Zero creates an empty file. Values above
+ *   MAXDWORD cause an error.
+ *
+ * @return
+ *   TRUE on success; FALSE on failure (error logged via APP_ERROR/DEBUG).
+ */
+BOOL ExportFileToInstDir(const char *rel_path, const void *buf, size_t len);
