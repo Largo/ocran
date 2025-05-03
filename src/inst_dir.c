@@ -82,12 +82,17 @@ const char *GetInstDir()
 char *ExpandInstDirPath(const char *rel_path)
 {
     if (InstDir == NULL || *InstDir == '\0') {
-        APP_ERROR("InstDir is null or empty");
+        APP_ERROR("Failed to expand path: installation directory (InstDir) is not set");
         return NULL;
     }
 
     if (rel_path == NULL || *rel_path == '\0') {
-        APP_ERROR("rel_path is null or empty");
+        APP_ERROR("Failed to expand path: relative path argument is null or empty");
+        return NULL;
+    }
+
+    if (!IsPathFreeOfDotElements(rel_path)) {
+        APP_ERROR("Failed to expand path: relative path '%s' contains '.' or '..' elements", rel_path);
         return NULL;
     }
 

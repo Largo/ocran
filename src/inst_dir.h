@@ -51,10 +51,25 @@ void FreeInstDir(void);
 const char *GetInstDir(void);
 
 /**
- * ExpandInstDirPath - Concatenates the installation directory path with a given relative path.
+ * ExpandInstDirPath - Concatenates the installation directory path with a given
+ * relative path.
  *
- * @param rel_path A relative path to be combined with the installation directory path.
- * @return A pointer to a newly allocated string representing the full path if successful, NULL otherwise.
+ * This function guarantees that the resulting path will not escape the
+ * installation directory. It will fail and return NULL if any of the following
+ * conditions are met:
+ *   - the installation directory (InstDir) is not set or is empty
+ *   - rel_path is NULL or empty
+ *   - rel_path contains prohibited path elements such as "." or "..", including
+ *     patterns like "/./" or "/../"
+ *
+ * @param rel_path
+ *   A relative path to be combined with the installation directory path.
+ *   Must not be absolute, must not be empty, and must not contain any "." or
+ *   ".." segments (e.g., "/./", "/../", "./", "../").
+ *
+ * @return
+ *   A newly allocated string representing the full path on success; NULL on
+ *   error (and an appropriate error message is logged).
  */
 char *ExpandInstDirPath(const char *rel_path);
 
