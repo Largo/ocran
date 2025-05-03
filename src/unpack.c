@@ -337,10 +337,8 @@ BOOL ProcessUncompressedData(const void *data, size_t data_len)
 BOOL ProcessImage(const void *data, size_t data_len, BOOL compressed)
 {
     if (compressed) {
-        DEBUG("Processing compressed data segment with length %zu bytes", data_len);
         return ProcessCompressedData(data, data_len);
     } else {
-        DEBUG("Processing uncompressed data segment with length %zu bytes", data_len);
         return ProcessUncompressedData(data, data_len);
     }
 }
