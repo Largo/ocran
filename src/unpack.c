@@ -70,23 +70,13 @@ BOOL OpCreateDirectory(void **p)
         return FALSE;
     }
 
-    if (!IsPathFreeOfDotElements(dir_name)) {
-        APP_ERROR("Directory name contains prohibited relative path elements like '.' or '..'");
+    DEBUG("Create directory: %s", dir_name);
+
+    if (!CreateDirectoryUnderInstDir(dir_name)) {
+        APP_ERROR("Failed to create directory: %s", dir_name);
         return FALSE;
     }
-
-    char *dir = ExpandInstDirPath(dir_name);
-    if (dir == NULL) {
-        APP_ERROR("Failed to expand dir_name to installation directory");
-        return FALSE;
-    }
-
-    DEBUG("Create directory: %s", dir);
-
-    BOOL result = CreateDirectoriesRecursively(dir);
-
-    LocalFree(dir);
-    return result;
+    return TRUE;
 }
 
 // Create a file (OP_CREATE_FILE opcode handler)
