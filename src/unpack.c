@@ -326,6 +326,8 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
 
 BOOL ProcessUncompressedData(const void *data, size_t data_len)
 {
+    DEBUG("Uncompressed data segment size: %zu bytes", data_len);
+
     void *p = (void *)data;
     BOOL result = ProcessOpcodes(&p);
 
