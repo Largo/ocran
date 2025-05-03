@@ -287,7 +287,7 @@ BOOL ParseLzmaUnpackSize(const void *data, size_t data_len, unsigned long long *
 BOOL ProcessCompressedData(const void *data, size_t data_len)
 {
 #if WITH_LZMA
-    DEBUG("LzmaDecode(%ld)"
+    DEBUG("LZMA compressed data segment size: %zu bytes", data_len);
 
     unsigned long long unpack_size = 0;
 
