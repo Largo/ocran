@@ -131,20 +131,3 @@ BOOL ChangeDirectoryToScriptDirectory(void);
  */
 BOOL CreateDirectoryUnderInstDir(const char *rel_path);
 
-/**
- * CreateParentDirectoryUnderInstDir - Create the parent directory for a given
- * relative path under the installation directory.
- *
- * Ensures that the parent directory of rel_path exists under the installation
- * directory. Returns FALSE if rel_path is NULL or empty. Logs an error and
- * returns FALSE if path expansion or directory creation fails.
- *
- * @param rel_path
- *   A relative path under the installation directory. NULL or empty string
- *   is invalid (returns FALSE).
- *
- * @return
- *   TRUE if the parent directory already exists or was created successfully;
- *   FALSE on error (and an error is logged).
- */
-BOOL CreateParentDirectoryUnderInstDir(const char *rel_path);

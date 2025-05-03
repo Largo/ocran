@@ -221,23 +221,3 @@ BOOL CreateDirectoryUnderInstDir(const char *rel_path)
     LocalFree(dir);
     return result;
 }
-
-BOOL CreateParentDirectoryUnderInstDir(const char *rel_path)
-{
-    if (rel_path == NULL || *rel_path == '\0') {
-        return FALSE;
-    }
-
-    char *path = ExpandInstDirPath(rel_path);
-    if (path == NULL) {
-        return FALSE;
-    }
-
-    BOOL result = CreateParentDirectories(path);
-    if (!result) {
-        APP_ERROR("Failed to create parent directory under installation directory (InstDir): '%s'", path);
-    }
-
-    LocalFree(path);
-    return result;
-}
