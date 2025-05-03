@@ -94,21 +94,6 @@ char *ExpandInstDirPath(const char *rel_path)
     return JoinPath(InstDir, rel_path);
 }
 
-// Checks the existence of a file or directory within the installation directory.
-BOOL CheckInstDirPathExists(const char *rel_path)
-{
-    if (InstDir == NULL || *InstDir == '\0') {
-        APP_ERROR("InstDir is null or empty");
-        return FALSE;
-    }
-
-    char *path = ExpandInstDirPath(rel_path);
-    BOOL result = (GetFileAttributes(path) != INVALID_FILE_ATTRIBUTES);
-    LocalFree(path);
-
-    return result;
-}
-
 // Deletes the installation directory and all its contents.
 BOOL DeleteInstDirRecursively(void)
 {

@@ -59,14 +59,6 @@ const char *GetInstDir(void);
 char *ExpandInstDirPath(const char *rel_path);
 
 /**
- * CheckInstDirPathExists - Checks the existence of a file or directory within the installation directory.
- *
- * @param rel_path A relative path within the installation directory to check for existence.
- * @return TRUE if the path exists, FALSE otherwise.
- */
-BOOL CheckInstDirPathExists(const char *rel_path);
-
-/**
  * DeleteInstDirRecursively - Deletes the installation directory and all its contents recursively.
  *
  * @return TRUE on successful deletion, FALSE on failure.
