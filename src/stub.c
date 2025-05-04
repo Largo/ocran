@@ -190,7 +190,12 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     */
 
 cleanup:
-
+    /*
+       During cleanup, GUI error dialogs are suppressed to avoid blocking the user.
+       Cleanup failures are non-critical resource release issues;
+       they are logged with DEBUG output only, preventing unnecessary user interaction
+       and reducing risk of exposing internal details.
+    */
     if (mapped_file) {
         FreeMappedFile(mapped_file);
         mapped_file = NULL;
@@ -211,7 +216,7 @@ cleanup:
 
         if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
             if (!ChangeDirectoryToSafeDirectory()) {
-                FATAL("Failed to change the current directory to a safe location; "
+                DEBUG("Failed to change the current directory to a safe location; "
                       "proceeding with deletion process");
                 /*
                    The attempt to change to a safe directory failed. While this failure does not
@@ -222,7 +227,7 @@ cleanup:
             }
         }
         if (!DeleteInstDirRecursively()) {
-            FATAL("Failed to delete installation directory");
+            DEBUG("Failed to delete installation directory");
             MarkInstDirForDeletion();
         }
     }
