@@ -106,14 +106,14 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     head = (BYTE *)head + 1;
 
     /* Initialize Debug Mode if Enabled */
-    if (IS_DEBUG_MODE_ENABLED(flags)) {
+    if (IS_DEBUG_MODE(flags)) {
         InitializeDebugMode();
         DEBUG("Ocran stub running in debug mode");
     }
 
     /* Create installation directory */
     const char *inst_dir = NULL;
-    if (IS_EXTRACT_TO_EXE_DIR_ENABLED(flags)) {
+    if (IS_EXTRACT_TO_EXE_DIR(flags)) {
         inst_dir = CreateDebugExtractInstDir();
     } else {
         inst_dir = CreateTemporaryInstDir();
@@ -158,7 +158,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     DEBUG("*** Starting application script in %s", inst_dir);
 
-    if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
+    if (IS_CHDIR_BEFORE_SCRIPT(flags)) {
         DEBUG("Change directory to the script location before running the script");
         if (!ChangeDirectoryToScriptDirectory()) {
             FATAL("Failed to change directory to the script location");
@@ -211,10 +211,10 @@ cleanup:
        previously cleaned-up directories.
     */
     const char *current_inst_dir = GetInstDir();
-    if (current_inst_dir != NULL && IS_AUTO_CLEAN_INST_DIR_ENABLED(flags)) {
+    if (current_inst_dir != NULL && IS_AUTO_CLEAN_INST_DIR(flags)) {
         DEBUG("Deleting temporary installation directory: %s", current_inst_dir);
 
-        if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
+        if (IS_CHDIR_BEFORE_SCRIPT(flags)) {
             if (!ChangeDirectoryToSafeDirectory()) {
                 DEBUG("Failed to change the current directory to a safe location; "
                       "proceeding with deletion process");
