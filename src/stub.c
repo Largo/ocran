@@ -171,13 +171,23 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         FATAL("The script cannot be launched due to a configuration error");
         goto cleanup;
     }
+
+    /*
+       RunScript uses the current value of exit_code as its initial value
+       and then overwrites it with the external script’s return code.
+       Therefore, we must set the success code here.
+    */
+    exit_code = EXIT_CODE_SUCCESS;
+
     DEBUG("Run application script: %s %s %s", app_name, cmd_line, lpCmdLine);
     if (!RunScript(lpCmdLine, &exit_code)) {
+        exit_code = EXIT_CODE_FAILURE;
         FATAL("Failed to run script");
         goto cleanup;
     }
-
-    exit_code = EXIT_CODE_SUCCESS;
+    /*
+       If the script executes successfully, its return code is stored in exit_code.
+    */
 
 cleanup:
 
