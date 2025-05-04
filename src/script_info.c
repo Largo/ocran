@@ -218,15 +218,18 @@ BOOL CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_c
             if (GetExitCodeProcess(p_info.hProcess, exit_code)) {
                 result = TRUE;
             } else {
-                *exit_code = LAST_ERROR("Failed to get exit status");
+                LAST_ERROR("Failed to get exit status");
+                *exit_code = GetLastError();
             }
         } else {
-            *exit_code = LAST_ERROR("Failed to wait script process");
+            LAST_ERROR("Failed to wait script process");
+            *exit_code = GetLastError();
         }
         CloseHandle(p_info.hProcess);
         CloseHandle(p_info.hThread);
     } else {
-        *exit_code = LAST_ERROR("Failed to create process");
+        LAST_ERROR("Failed to create process");
+        *exit_code = GetLastError();
     }
 
     return result;
