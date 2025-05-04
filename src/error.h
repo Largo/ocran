@@ -38,18 +38,6 @@ void PrintFatalMessageBox(char *format, ...);
 #endif
 
 /**
- * PrintLastErrorMessage - Prints the last error message to stderr if in debug mode.
- *
- * This function prints a formatted error message and the last error code to stderr.
- * The error message starts with "ERROR: ", followed by the result of GetLastError function.
- *
- * @param format The format of the error message to be displayed. This is a printf-like
- * format string followed by additional arguments.
- */
-void PrintLastErrorMessage(char *format, ...);
-#define LAST_ERROR(...) PrintLastErrorMessage(__VA_ARGS__)
-
-/**
  * PrintAppErrorMessage - Prints an application level error message to stderr if in debug mode.
  *
  * This function prints a formatted error message to stderr. The message is

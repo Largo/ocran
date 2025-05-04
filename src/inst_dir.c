@@ -123,7 +123,7 @@ void MarkInstDirForDeletion(void)
     size_t len = inst_dir_len + suffix_len;
     char *marker = LocalAlloc(LPTR, len + 1);
     if (marker == NULL) {
-        LAST_ERROR("Failed to allocate memory for deletion marker path");
+        APP_ERROR("Failed to allocate memory for deletion marker path (%lu)", GetLastError());
         return;
     }
     memcpy(marker, InstDir, inst_dir_len);
@@ -132,7 +132,7 @@ void MarkInstDirForDeletion(void)
 
     HANDLE h = CreateFile(marker, 0, 0, NULL, CREATE_ALWAYS, 0, NULL);
     if (h == INVALID_HANDLE_VALUE) {
-        LAST_ERROR("Failed to mark for deletion");
+        APP_ERROR("Failed to mark for deletion (%lu)", GetLastError());
         return;
     }
 
@@ -158,7 +158,7 @@ char *ReplaceInstDirPlaceholder(const char *str)
     char *out = (char *)LocalAlloc(LPTR, out_len);
 
     if (out == NULL) {
-        LAST_ERROR("LocalAlloc failed");
+        APP_ERROR("LocalAlloc failed (%lu)", GetLastError());
         return NULL;
     }
 
@@ -191,7 +191,7 @@ BOOL ChangeDirectoryToScriptDirectory(void)
 
     BOOL changed = SetCurrentDirectory(script_dir);
     if (!changed) {
-        LAST_ERROR("Failed to change CWD");
+        APP_ERROR("Failed to change CWD (%lu)", GetLastError());
     }
     LocalFree(script_dir);
 

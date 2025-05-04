@@ -33,22 +33,6 @@ void PrintFatalMessageBox(char *format, ...)
     MessageBox(NULL, TextBuffer, "OCRAN", MB_OK | MB_ICONWARNING);
 }
 
-// Prints the last error message to stderr if in debug mode.
-void PrintLastErrorMessage(char *format, ...)
-{
-    DWORD err = GetLastError();
-
-    if (!debug_mode) return;
-
-    fprintf_s(stderr, "ERROR: ");
-    va_list args;
-    va_start(args, format);
-    vfprintf_s(stderr, format, args);
-    va_end(args);
-    fprintf_s(stderr, " (%lu)", err);
-    fprintf_s(stderr, "\n");
-}
-
 // Prints an application level error message to stderr if in debug mode.
 void PrintAppErrorMessage(char *format, ...)
 {

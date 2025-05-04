@@ -130,7 +130,7 @@ typedef const void *MappedFile;
  * @return A MappedFile handle that must be freed with FreeMappedFile when no
  *         longer needed. Returns NULL if the operation fails.
  *
- * On failure, the function logs an error with the LAST_ERROR macro and cleans
+ * On failure, the function logs an error and cleans
  * up any opened resources before returning NULL.
  */
 MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, const void **mapped_base);
@@ -146,8 +146,8 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
  *               obtained from OpenAndMapFile.
  * @return TRUE if all resources were successfully released; otherwise, FALSE.
  *
- * If the function fails to release any resources, it logs an error with the
- * LAST_ERROR macro for each failure. However, it attempts to free all resources
+ * If the function fails to release any resources, it logs an error
+ * for each failure. However, it attempts to free all resources
  * regardless of individual errors.
  */
 BOOL FreeMappedFile(MappedFile handle);

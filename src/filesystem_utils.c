@@ -25,7 +25,7 @@ char *JoinPath(const char *p1, const char *p2)
     size_t joined_len = p1_len + 1 + p2_len;
     char *joined_path = (char *)LocalAlloc(LPTR, joined_len + 1);
     if (joined_path == NULL) {
-        LAST_ERROR("Failed to allocate buffer for join path");
+        APP_ERROR("Failed to allocate buffer for join path (%lu)", GetLastError());
         return NULL;
     }
     memcpy(joined_path, p1, p1_len);
@@ -57,7 +57,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
     size_t dir_len = strlen(dir);
     char *path = (char *)LocalAlloc(LPTR, dir_len + 1);
     if (path == NULL) {
-        LAST_ERROR("LocalAlloc failed");
+        APP_ERROR("LocalAlloc failed (%lu)", GetLastError());
         return FALSE;
     }
     strcpy(path, dir);
@@ -81,7 +81,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
                 if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
                     continue;
                 } else {
-                    LAST_ERROR("Cannot access the directory");
+                    APP_ERROR("Cannot access the directory (%lu)", GetLastError());
                     LocalFree(path);
                     return FALSE;
                 }
@@ -96,7 +96,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
             DEBUG("CreateDirectory(%s)", path);
 
             if (!CreateDirectory(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
-                LAST_ERROR("Failed to create directory");
+                APP_ERROR("Failed to create directory (%lu)", GetLastError());
                 LocalFree(path);
                 return FALSE;
             }
@@ -121,7 +121,7 @@ BOOL CreateParentDirectories(const char *file)
 
     char *dir = (char *)LocalAlloc(LPTR, i + 1);
     if (dir == NULL) {
-        LAST_ERROR("LocalAlloc failed");
+        APP_ERROR("LocalAlloc failed (%lu)", GetLastError());
         return FALSE;
     }
 
@@ -165,7 +165,7 @@ BOOL DeleteRecursively(const char *path)
                 DeleteRecursively(subPath);
             } else {
                 if (!DeleteFile(subPath)) {
-                    LAST_ERROR("Failed to delete file");
+                    APP_ERROR("Failed to delete file (%lu)", GetLastError());
                     MoveFileEx(subPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
                 }
             }
@@ -177,7 +177,7 @@ BOOL DeleteRecursively(const char *path)
     LocalFree(findPath);
 
     if (!RemoveDirectory(path)) {
-        LAST_ERROR("Failed to delete directory");
+        APP_ERROR("Failed to delete directory (%lu)", GetLastError());
         MoveFileEx(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
         return FALSE;
     } else {
@@ -192,7 +192,7 @@ char *GenerateUniqueName(const char *prefix)
 
     char *name = (char *)LocalAlloc(LPTR, prefix_len + UID_LENGTH + 1);
     if (name == NULL) {
-        LAST_ERROR("Failed to allocate memory for unique name");
+        APP_ERROR("Failed to allocate memory for unique name (%lu)", GetLastError());
         return NULL;
     }
 
@@ -238,7 +238,7 @@ char *CreateUniqueDirectory(const char *base_path, const char *prefix)
         if (CreateDirectory(full_path, NULL)) {
             return full_path;
         } else if (GetLastError() != ERROR_ALREADY_EXISTS) {
-            LAST_ERROR("Failed to create a unique directory");
+            APP_ERROR("Failed to create a unique directory (%lu)", GetLastError());
             LocalFree(full_path);
             return NULL;
         } else {
@@ -264,33 +264,33 @@ char *GetImagePath(void)
     DWORD buffer_size = 32767;
     wchar_t *image_path_w = (wchar_t *)LocalAlloc(LPTR, buffer_size * sizeof(wchar_t));
     if (image_path_w == NULL) {
-        LAST_ERROR("Failed to allocate buffer for image path");
+        APP_ERROR("Failed to allocate buffer for image path (%lu)", GetLastError());
         return NULL;
     }
 
     DWORD copied = GetModuleFileNameW(NULL, image_path_w, buffer_size);
     if (copied == 0 || GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
-        LAST_ERROR("Failed to get image path");
+        APP_ERROR("Failed to get image path (%lu)", GetLastError());
         LocalFree(image_path_w);
         return NULL;
     }
 
     int utf8_size = WideCharToMultiByte(CP_UTF8, 0, image_path_w, -1, NULL, 0, NULL, NULL);
     if (utf8_size == 0) {
-        LAST_ERROR("Failed to calculate buffer size for UTF-8 conversion");
+        APP_ERROR("Failed to calculate buffer size for UTF-8 conversion (%lu)", GetLastError());
         LocalFree(image_path_w);
         return NULL;
     }
 
     char *image_path_utf8 = (char *)LocalAlloc(LPTR, utf8_size);
     if (image_path_utf8 == NULL) {
-        LAST_ERROR("Failed to allocate buffer for UTF-8 image path");
+        APP_ERROR("Failed to allocate buffer for UTF-8 image path (%lu)", GetLastError());
         LocalFree(image_path_w);
         return NULL;
     }
 
     if (WideCharToMultiByte(CP_UTF8, 0, image_path_w, -1, image_path_utf8, utf8_size, NULL, NULL) == 0) {
-        LAST_ERROR("Failed to convert image path to UTF-8");
+        APP_ERROR("Failed to convert image path to UTF-8 (%lu)", GetLastError());
         LocalFree(image_path_w);
         LocalFree(image_path_utf8);
         return NULL;
@@ -304,7 +304,7 @@ char *GetImagePath(void)
 char *GetImageDirectoryPath(void) {
     char *image_path = GetImagePath();
     if (image_path == NULL) {
-        LAST_ERROR("Failed to get executable name");
+        APP_ERROR("Failed to get executable name (%lu)", GetLastError());
         return NULL;
     }
 
@@ -331,12 +331,12 @@ char *GetTempDirectoryPath(void)
     char *temp_dir = (char *)LocalAlloc(LPTR, MAX_PATH);
 
     if (temp_dir == NULL) {
-        LAST_ERROR("Failed to memory allocate for get temp directory");
+        APP_ERROR("Failed to memory allocate for get temp directory (%lu)", GetLastError());
         return NULL;
     }
 
     if (!GetTempPath(MAX_PATH, temp_dir)) {
-        LAST_ERROR("Failed to get temp path");
+        APP_ERROR("Failed to get temp path (%lu)", GetLastError());
         LocalFree(temp_dir);
         return NULL;
     }
@@ -397,13 +397,13 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
 {
     HANDLE hFile = CreateFile(file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
-        LAST_ERROR("Failed to open file");
+        APP_ERROR("Failed to open file (%lu)", GetLastError());
         return NULL;
     }
 
     LARGE_INTEGER fileSize;
     if (!GetFileSizeEx(hFile, &fileSize)) {
-        LAST_ERROR("Failed to get file size");
+        APP_ERROR("Failed to get file size (%lu)", GetLastError());
         CloseHandle(hFile);
         return NULL;
     }
@@ -414,14 +414,14 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
 
     HANDLE hMapping = CreateFileMapping(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
     if (hMapping == INVALID_HANDLE_VALUE) {
-        LAST_ERROR("Failed to create file mapping");
+        APP_ERROR("Failed to create file mapping (%lu)", GetLastError());
         CloseHandle(hFile);
         return NULL;
     }
 
     LPVOID lpBaseAddress = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
     if (lpBaseAddress == NULL) {
-        LAST_ERROR("Failed to map view of file into memory");
+        APP_ERROR("Failed to map view of file into memory (%lu)", GetLastError());
         CloseHandle(hMapping);
         CloseHandle(hFile);
         return NULL;
@@ -437,7 +437,7 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
         }
         return (MappedFile)handle;
     } else {
-        LAST_ERROR("Failed to allocate memory for handle");
+        APP_ERROR("Failed to allocate memory for handle (%lu)", GetLastError());
         UnmapViewOfFile(lpBaseAddress);
         CloseHandle(hMapping);
         CloseHandle(hFile);
@@ -453,21 +453,21 @@ BOOL FreeMappedFile(MappedFile handle) {
     if (h != NULL) {
         if (h->lpBaseAddress != NULL) {
             if (!UnmapViewOfFile(h->lpBaseAddress)) {
-                LAST_ERROR("Failed to unmap view of file");
+                APP_ERROR("Failed to unmap view of file (%lu)", GetLastError());
                 success = FALSE;
             }
         }
 
         if (h->hMapping != INVALID_HANDLE_VALUE) {
             if (!CloseHandle(h->hMapping)) {
-                LAST_ERROR("Failed to close file mapping");
+                APP_ERROR("Failed to close file mapping (%lu)", GetLastError());
                 success = FALSE;
             }
         }
 
         if (h->hFile != INVALID_HANDLE_VALUE) {
             if (!CloseHandle(h->hFile)) {
-                LAST_ERROR("Failed to close file");
+                APP_ERROR("Failed to close file (%lu)", GetLastError());
                 success = FALSE;
             }
         }

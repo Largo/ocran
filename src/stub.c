@@ -60,7 +60,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
        being prematurely terminated by such signals.
     */
     if (!SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE)) {
-        LAST_ERROR("Failed to set control handler");
+        APP_ERROR("Failed to set control handler (%lu)", GetLastError());
         FATAL("Failed to initialize system controls");
         goto cleanup;
     }
@@ -167,7 +167,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     }
     DEBUG("Set the 'OCRAN_EXECUTABLE' environment variable to %s", image_path);
     if (!SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
-        LAST_ERROR("Failed to set the 'OCRAN_EXECUTABLE' environment variable");
+        APP_ERROR("Failed to set the 'OCRAN_EXECUTABLE' environment variable (%lu)", GetLastError());
         FATAL("The script cannot be launched due to a configuration error");
         goto cleanup;
     }

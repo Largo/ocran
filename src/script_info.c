@@ -16,7 +16,7 @@ static char* ConcatStr(const char *first, ...) {
     char *str = LocalAlloc(LPTR, len + 1);
 
     if (str == NULL) {
-        LAST_ERROR("Failed to allocate memory");
+        APP_ERROR("Failed to allocate memory (%lu)", GetLastError());
         return NULL;
     }
 
@@ -42,7 +42,7 @@ static char *EscapeAndQuoteCmdArg(const char* arg)
     for (size_t i = 0; i < arg_len; i++) { if (arg[i] == '\"') count++; }
     char *sanitized = (char *)LocalAlloc(LPTR, arg_len + count * 2 + 3);
     if (sanitized == NULL) {
-        LAST_ERROR("Failed to allocate memory");
+        APP_ERROR("Failed to allocate memory (%lu)", GetLastError());
         return NULL;
     }
 
@@ -67,7 +67,7 @@ static BOOL ParseArguments(const char *args, size_t args_size, size_t *out_argc,
 
     const char **local_argv = (const char **)LocalAlloc(LPTR, (local_argc + 1) * sizeof(char *));
     if (local_argv == NULL) {
-        LAST_ERROR("Failed to memory allocate for argv");
+        APP_ERROR("Failed to memory allocate for argv (%lu)", GetLastError());
         return FALSE;
     }
 
@@ -218,17 +218,17 @@ BOOL CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_c
             if (GetExitCodeProcess(p_info.hProcess, exit_code)) {
                 result = TRUE;
             } else {
-                LAST_ERROR("Failed to get exit status");
+                APP_ERROR("Failed to get exit status (%lu)", GetLastError());
                 *exit_code = GetLastError();
             }
         } else {
-            LAST_ERROR("Failed to wait script process");
+            APP_ERROR("Failed to wait script process (%lu)", GetLastError());
             *exit_code = GetLastError();
         }
         CloseHandle(p_info.hProcess);
         CloseHandle(p_info.hThread);
     } else {
-        LAST_ERROR("Failed to create process");
+        APP_ERROR("Failed to create process (%lu)", GetLastError());
         *exit_code = GetLastError();
     }
 

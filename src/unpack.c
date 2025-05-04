@@ -134,11 +134,11 @@ BOOL OpCreateFile(void **p)
                 APP_ERROR("Write size failure");
             }
         } else {
-            LAST_ERROR("Write failure");
+            APP_ERROR("Write failure (%lu)", GetLastError());
         }
         CloseHandle(h);
     } else {
-        LAST_ERROR("Failed to create file");
+        APP_ERROR("Failed to create file (%lu)", GetLastError());
     }
 
     LocalFree(path);
@@ -162,7 +162,7 @@ BOOL OpSetEnv(void **p)
     BOOL result = SetEnvironmentVariable(name, replaced_value);
     LocalFree(replaced_value);
     if (!result) {
-        LAST_ERROR("Failed to set environment variable");
+        APP_ERROR("Failed to set environment variable (%lu)", GetLastError());
     }
 
     return result;
@@ -233,7 +233,7 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
 
     void *unpack_data = LocalAlloc(LMEM_FIXED, unpack_size);
     if (unpack_data == NULL) {
-        LAST_ERROR("Memory allocation failed during decompression");
+        APP_ERROR("Memory allocation failed during decompression (%lu)", GetLastError());
         return FALSE;
     }
 
