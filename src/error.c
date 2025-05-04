@@ -3,16 +3,12 @@
 #include <stdio.h>
 #include "error.h"
 
-BOOL DebugModeEnabled = FALSE;
+static BOOL debug_mode = FALSE;
 
-// Initialize debug mode
-BOOL InitializeDebugMode()
+// Enable debug mode
+void EnableDebugMode()
 {
-    if (DebugModeEnabled) return TRUE;
-
-    DebugModeEnabled = TRUE;
-
-    return DebugModeEnabled;
+    debug_mode = TRUE;
 }
 
 // Prints a fatal error message to stderr.
@@ -42,7 +38,7 @@ void PrintLastErrorMessage(char *format, ...)
 {
     DWORD err = GetLastError();
 
-    if (!DebugModeEnabled) return;
+    if (!debug_mode) return;
 
     fprintf_s(stderr, "ERROR: ");
     va_list args;
@@ -56,7 +52,7 @@ void PrintLastErrorMessage(char *format, ...)
 // Prints an application level error message to stderr if in debug mode.
 void PrintAppErrorMessage(char *format, ...)
 {
-    if (!DebugModeEnabled) return;
+    if (!debug_mode) return;
 
     fprintf_s(stderr, "ERROR: ");
     va_list args;
@@ -69,7 +65,7 @@ void PrintAppErrorMessage(char *format, ...)
 // Prints a debug message to stderr if in debug mode.
 void PrintDebugMessage(char *format, ...)
 {
-    if (!DebugModeEnabled) return;
+    if (!debug_mode) return;
 
     fprintf_s(stderr, "DEBUG: ");
     va_list args;

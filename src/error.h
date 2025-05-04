@@ -3,13 +3,11 @@
 #define EXIT_CODE_FAILURE ((DWORD)-1)
 
 /**
- * InitializeDebugMode - Initialize debug mode
+ * EnableDebugMode - Enable debug mode
  *
  * This function enables debug mode and attaches a console for debug output.
- *
- * @return BOOL True if initialization succeeded, False otherwise.
  */
-BOOL InitializeDebugMode();
+void EnableDebugMode();
 
 /**
  * PrintFatalMessage - Prints a fatal error message to stderr.
