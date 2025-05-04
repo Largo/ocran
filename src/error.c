@@ -16,7 +16,7 @@ BOOL InitializeDebugMode()
 }
 
 // Prints a fatal error message to stderr.
-DWORD PrintFatalMessage(char *format, ...)
+void PrintFatalMessage(char *format, ...)
 {
     fprintf_s(stderr, "FATAL: ");
     va_list args;
@@ -24,12 +24,10 @@ DWORD PrintFatalMessage(char *format, ...)
     vfprintf_s(stderr, format, args);
     va_end(args);
     fprintf_s(stderr, "\n");
-
-    return EXIT_CODE_FAILURE;
 }
 
 // Displays a fatal error message via a message box.
-DWORD PrintFatalMessageBox(char *format, ...)
+void PrintFatalMessageBox(char *format, ...)
 {
     char TextBuffer[1024];
     va_list args;
@@ -37,16 +35,14 @@ DWORD PrintFatalMessageBox(char *format, ...)
     vsnprintf(TextBuffer, 1024, format, args);
     va_end(args);
     MessageBox(NULL, TextBuffer, "OCRAN", MB_OK | MB_ICONWARNING);
-
-    return EXIT_CODE_FAILURE;
 }
 
 // Prints the last error message to stderr if in debug mode.
-DWORD PrintLastErrorMessage(char *format, ...)
+void PrintLastErrorMessage(char *format, ...)
 {
     DWORD err = GetLastError();
 
-    if (!DebugModeEnabled) return err;
+    if (!DebugModeEnabled) return;
 
     fprintf_s(stderr, "ERROR: ");
     va_list args;
@@ -55,14 +51,12 @@ DWORD PrintLastErrorMessage(char *format, ...)
     va_end(args);
     fprintf_s(stderr, " (%lu)", err);
     fprintf_s(stderr, "\n");
-
-    return err;
 }
 
 // Prints an application level error message to stderr if in debug mode.
-DWORD PrintAppErrorMessage(char *format, ...)
+void PrintAppErrorMessage(char *format, ...)
 {
-    if (!DebugModeEnabled) return EXIT_CODE_FAILURE;
+    if (!DebugModeEnabled) return;
 
     fprintf_s(stderr, "ERROR: ");
     va_list args;
@@ -70,8 +64,6 @@ DWORD PrintAppErrorMessage(char *format, ...)
     vfprintf_s(stderr, format, args);
     va_end(args);
     fprintf_s(stderr, "\n");
-
-    return EXIT_CODE_FAILURE;
 }
 
 // Prints a debug message to stderr if in debug mode.

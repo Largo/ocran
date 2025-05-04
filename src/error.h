@@ -19,9 +19,8 @@ BOOL InitializeDebugMode();
  *
  * @param format The format of the error message to be displayed. This is a printf-like
  * format string followed by additional arguments.
- * @return Returns EXIT_CODE_FAILURE.
  */
-DWORD PrintFatalMessage(char *format, ...);
+void PrintFatalMessage(char *format, ...);
 
 /**
  * PrintFatalMessageBox - Displays a fatal error message via a message box.
@@ -31,9 +30,8 @@ DWORD PrintFatalMessage(char *format, ...);
  *
  * @param format The format of the error message to be displayed. This is a printf-like
  * format string followed by additional arguments.
- * @return Returns EXIT_CODE_FAILURE.
  */
-DWORD PrintFatalMessageBox(char *format, ...);
+void PrintFatalMessageBox(char *format, ...);
 
 #ifdef _CONSOLE
 #define FATAL(...) PrintFatalMessage(__VA_ARGS__)
@@ -49,9 +47,8 @@ DWORD PrintFatalMessageBox(char *format, ...);
  *
  * @param format The format of the error message to be displayed. This is a printf-like
  * format string followed by additional arguments.
- * @return Returns the last error code.
  */
-DWORD PrintLastErrorMessage(char *format, ...);
+void PrintLastErrorMessage(char *format, ...);
 #define LAST_ERROR(...) PrintLastErrorMessage(__VA_ARGS__)
 
 /**
@@ -62,9 +59,8 @@ DWORD PrintLastErrorMessage(char *format, ...);
  *
  * @param format The format of the error message to be displayed. This is a printf-like
  * format string followed by additional arguments.
- * @return Returns EXIT_CODE_FAILURE.
  */
-DWORD PrintAppErrorMessage(char *format, ...);
+void PrintAppErrorMessage(char *format, ...);
 #define APP_ERROR(...) PrintAppErrorMessage(__VA_ARGS__)
 
 /**
