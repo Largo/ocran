@@ -46,7 +46,7 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-    DWORD exit_code = EXIT_CODE_SUCCESS;
+    DWORD exit_code = EXIT_CODE_FAILURE;
     MappedFile mapped_file = NULL;
     OperationModes flags = 0;
 
@@ -61,14 +61,14 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     */
     if (!SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE)) {
         LAST_ERROR("Failed to set control handler");
-        exit_code = FATAL("Failed to initialize system controls");
+        FATAL("Failed to initialize system controls");
         goto cleanup;
     }
 
     /* Find name of image */
     char *image_path = GetImagePath();
     if (image_path == NULL) {
-        exit_code = FATAL("Failed to get executable name");
+        FATAL("Failed to get executable name");
         goto cleanup;
     }
 
@@ -77,13 +77,13 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     const void *base = NULL;
     mapped_file = OpenAndMapFile(image_path, &file_size, &base);
     if (mapped_file == NULL) {
-        exit_code = FATAL("Failed to open or map the executable file");
+        FATAL("Failed to open or map the executable file");
         goto cleanup;
     }
 
     // Check if the file size exceeds the maximum size that can be processed in a 32-bit environment
     if (file_size > SIZE_MAX) {
-        exit_code = FATAL("File size exceeds processable limit");
+        FATAL("File size exceeds processable limit");
         goto cleanup;
     }
     size_t image_size = (size_t)file_size;  // Used to determine the pointer range that can be addressed
@@ -91,7 +91,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     /* Process the image by checking the signature and locating the first opcode */
     const void *sig = FindSignature(base, image_size);
     if (sig == NULL) {
-        exit_code = FATAL("Bad signature in executable");
+        FATAL("Bad signature in executable");
         goto cleanup;
     }
 
@@ -119,7 +119,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         inst_dir = CreateTemporaryInstDir();
     }
     if (inst_dir == NULL) {
-        exit_code = FATAL("Failed to create installation directory");
+        FATAL("Failed to create installation directory");
         goto cleanup;
     }
 
@@ -127,7 +127,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     /* Unpacking process */
     if (!ProcessImage(head, tail - head, IS_DATA_COMPRESSED(flags))) {
-        exit_code = FATAL("Failed to unpack image due to invalid or corrupted data");
+        FATAL("Failed to unpack image due to invalid or corrupted data");
         goto cleanup;
     }
 
@@ -144,7 +144,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     */
     mapped_file = NULL;
     if (!release_ok) {
-        exit_code = FATAL("Failed to release mapped file resources");
+        FATAL("Failed to release mapped file resources");
         goto cleanup;
     }
 
@@ -152,7 +152,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     const char *app_name;
     char *cmd_line;
     if (!GetScriptInfo(&app_name, &cmd_line)) {
-        exit_code = FATAL("Failed to retrieve script information");
+        FATAL("Failed to retrieve script information");
         goto cleanup;
     }
 
@@ -161,21 +161,23 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     if (IS_CHDIR_BEFORE_SCRIPT_ENABLED(flags)) {
         DEBUG("Change directory to the script location before running the script");
         if (!ChangeDirectoryToScriptDirectory()) {
-            exit_code = FATAL("Failed to change directory to the script location");
+            FATAL("Failed to change directory to the script location");
             goto cleanup;
         }
     }
     DEBUG("Set the 'OCRAN_EXECUTABLE' environment variable to %s", image_path);
     if (!SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
         LAST_ERROR("Failed to set the 'OCRAN_EXECUTABLE' environment variable");
-        exit_code = FATAL("The script cannot be launched due to a configuration error");
+        FATAL("The script cannot be launched due to a configuration error");
         goto cleanup;
     }
     DEBUG("Run application script: %s %s %s", app_name, cmd_line, lpCmdLine);
     if (!RunScript(lpCmdLine, &exit_code)) {
-        exit_code = FATAL("Failed to run script");
+        FATAL("Failed to run script");
         goto cleanup;
     }
+
+    exit_code = EXIT_CODE_SUCCESS;
 
 cleanup:
 
