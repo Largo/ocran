@@ -19,7 +19,7 @@ const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 const void *FindSignature(const void *buffer, size_t size)
 {
     if (size < sizeof(Signature)) {
-        FATAL("Buffer too small to contain signature");
+        DEBUG("Buffer too small to contain signature");
         return NULL;
     }
 
@@ -27,7 +27,7 @@ const void *FindSignature(const void *buffer, size_t size)
     const void *sig = (const char *)buffer + size - sizeof(Signature);
 
     if (memcmp(sig, Signature, sizeof(Signature)) != 0) {
-        FATAL("Signature not found in executable");
+        DEBUG("Signature not found in executable");
         return NULL;
     }
 
