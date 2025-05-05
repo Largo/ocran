@@ -13,7 +13,7 @@ void EnableDebugMode()
 }
 
 // Prints a fatal error message to stderr.
-void PrintFatalMessage(char *format, ...)
+void PrintFatalMessage(const char *format, ...)
 {
     fprintf_s(stderr, "FATAL: ");
     va_list args;
@@ -24,7 +24,7 @@ void PrintFatalMessage(char *format, ...)
 }
 
 // Displays a fatal error message via a message box.
-void PrintFatalMessageBox(char *format, ...)
+void PrintFatalMessageBox(const char *format, ...)
 {
     char TextBuffer[1024];
     va_list args;
@@ -35,7 +35,7 @@ void PrintFatalMessageBox(char *format, ...)
 }
 
 // Prints an application level error message to stderr if in debug mode.
-void PrintAppErrorMessage(char *format, ...)
+void PrintAppErrorMessage(const char *format, ...)
 {
     if (!debug_mode) return;
 
@@ -48,7 +48,7 @@ void PrintAppErrorMessage(char *format, ...)
 }
 
 // Prints a debug message to stderr if in debug mode.
-void PrintDebugMessage(char *format, ...)
+void PrintDebugMessage(const char *format, ...)
 {
     if (!debug_mode) return;
 

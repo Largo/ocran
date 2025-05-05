@@ -20,7 +20,7 @@ void EnableDebugMode();
  * @param format The format of the error message to be displayed. This is a printf-like
  * format string followed by additional arguments.
  */
-void PrintFatalMessage(char *format, ...);
+void PrintFatalMessage(const char *format, ...);
 
 /**
  * PrintFatalMessageBox - Displays a fatal error message via a message box.
@@ -31,7 +31,7 @@ void PrintFatalMessage(char *format, ...);
  * @param format The format of the error message to be displayed. This is a printf-like
  * format string followed by additional arguments.
  */
-void PrintFatalMessageBox(char *format, ...);
+void PrintFatalMessageBox(const char *format, ...);
 
 #ifdef _CONSOLE
 #define FATAL(...) PrintFatalMessage(__VA_ARGS__)
@@ -48,7 +48,7 @@ void PrintFatalMessageBox(char *format, ...);
  * @param format The format of the error message to be displayed. This is a printf-like
  * format string followed by additional arguments.
  */
-void PrintAppErrorMessage(char *format, ...);
+void PrintAppErrorMessage(const char *format, ...);
 #define APP_ERROR(...) PrintAppErrorMessage(__VA_ARGS__)
 
 /**
@@ -60,5 +60,5 @@ void PrintAppErrorMessage(char *format, ...);
  * @param format The format of the debug message to be displayed. This is a printf-like
  * format string followed by additional arguments.
  */
-void PrintDebugMessage(char *format, ...);
+void PrintDebugMessage(const char *format, ...);
 #define DEBUG(...) PrintDebugMessage(__VA_ARGS__)
