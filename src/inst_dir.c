@@ -34,7 +34,7 @@ const char *CreateDebugExtractInstDir(void)
     }
 
     const char *inst_dir = CreateInstDirectory(image_dir);
-    LocalFree(image_dir);
+    free(image_dir);
     if (inst_dir == NULL) {
         APP_ERROR("Failed to create installation directory in the executable's directory");
     }
@@ -52,7 +52,7 @@ const char *CreateTemporaryInstDir(void)
     }
 
     const char *inst_dir = CreateInstDirectory(temp_dir);
-    LocalFree(temp_dir);
+    free(temp_dir);
     if (inst_dir == NULL) {
         APP_ERROR("Failed to create installation directory in the temporary directory");
     }
@@ -63,7 +63,7 @@ const char *CreateTemporaryInstDir(void)
 // Frees the allocated memory for the installation directory path.
 void FreeInstDir(void)
 {
-    LocalFree((void *)InstDir);
+    free((void *)InstDir);
     InstDir = NULL;
 }
 
@@ -121,9 +121,9 @@ void MarkInstDirForDeletion(void)
     size_t inst_dir_len = strlen(InstDir);
     size_t suffix_len = strlen(DELETION_MAKER_SUFFIX);
     size_t len = inst_dir_len + suffix_len;
-    char *marker = LocalAlloc(LPTR, len + 1);
-    if (marker == NULL) {
-        APP_ERROR("Failed to allocate memory for deletion marker path (%lu)", GetLastError());
+    char *marker = (char *)calloc(1, len + 1);
+    if (!marker) {
+        APP_ERROR("Failed to allocate memory for deletion marker path");
         return;
     }
     memcpy(marker, InstDir, inst_dir_len);
@@ -138,7 +138,7 @@ void MarkInstDirForDeletion(void)
 
     APP_ERROR("Deletion marker path is %s", marker);
     CloseHandle(h);
-    LocalFree(marker);
+    free(marker);
 }
 
 // Replaces placeholders in a string with the installation directory path.
@@ -155,10 +155,9 @@ char *ReplaceInstDirPlaceholder(const char *str)
 
     for (p = str; *p; p++) { if (*p == PLACEHOLDER) c++; }
     SIZE_T out_len = strlen(str) - c + InstDirLen * c + 1;
-    char *out = (char *)LocalAlloc(LPTR, out_len);
-
-    if (out == NULL) {
-        APP_ERROR("LocalAlloc failed (%lu)", GetLastError());
+    char *out = (char *)calloc(1, out_len);
+    if (!out) {
+        APP_ERROR("Failed to allocate memory");
         return NULL;
     }
 
@@ -193,7 +192,7 @@ bool ChangeDirectoryToScriptDirectory(void)
     if (!changed) {
         APP_ERROR("Failed to change CWD (%lu)", GetLastError());
     }
-    LocalFree(script_dir);
+    free(script_dir);
 
     return changed;
 }
@@ -218,7 +217,7 @@ bool CreateDirectoryUnderInstDir(const char *rel_path)
         APP_ERROR("Failed to create directory under installation directory (InstDir): '%s'", dir);
     }
 
-    LocalFree(dir);
+    free(dir);
     return result;
 }
 
@@ -294,7 +293,7 @@ bool ExportFileToInstDir(const char *rel_path, const void *buf, size_t len)
 
 cleanup:
     if (path) {
-        LocalFree(path);
+        free(path);
     }
     return result;
 }

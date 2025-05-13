@@ -23,9 +23,9 @@ char *JoinPath(const char *p1, const char *p2)
     if (*p2_start == PATH_SEPARATOR) { p2_start++; p2_len--; }
 
     size_t joined_len = p1_len + 1 + p2_len;
-    char *joined_path = (char *)LocalAlloc(LPTR, joined_len + 1);
-    if (joined_path == NULL) {
-        APP_ERROR("Failed to allocate buffer for join path (%lu)", GetLastError());
+    char *joined_path = (char *)calloc(1, joined_len + 1);
+    if (!joined_path) {
+        APP_ERROR("Failed to allocate buffer for join path");
         return NULL;
     }
     memcpy(joined_path, p1, p1_len);
@@ -55,9 +55,9 @@ bool CreateDirectoriesRecursively(const char *dir)
     }
 
     size_t dir_len = strlen(dir);
-    char *path = (char *)LocalAlloc(LPTR, dir_len + 1);
-    if (path == NULL) {
-        APP_ERROR("LocalAlloc failed (%lu)", GetLastError());
+    char *path = (char *)calloc(1, dir_len + 1);
+    if (!path) {
+        APP_ERROR("Failed to allocate memory");
         return false;
     }
     strcpy(path, dir);
@@ -73,7 +73,7 @@ bool CreateDirectoriesRecursively(const char *dir)
                     break;
                 } else {
                     APP_ERROR("Directory name conflicts with a file(%s)", path);
-                    LocalFree(path);
+                    free(path);
                     return false;
                 }
             } else {
@@ -82,7 +82,7 @@ bool CreateDirectoriesRecursively(const char *dir)
                     continue;
                 } else {
                     APP_ERROR("Cannot access the directory (%lu)", GetLastError());
-                    LocalFree(path);
+                    free(path);
                     return false;
                 }
             }
@@ -97,13 +97,13 @@ bool CreateDirectoriesRecursively(const char *dir)
 
             if (!CreateDirectory(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
                 APP_ERROR("Failed to create directory (%lu)", GetLastError());
-                LocalFree(path);
+                free(path);
                 return false;
             }
         }
     }
 
-    LocalFree(path);
+    free(path);
     return true;
 }
 
@@ -119,9 +119,9 @@ bool CreateParentDirectories(const char *file)
     for (; i > 0; i--) { if (file[i] == PATH_SEPARATOR) break; }
     if (i == 0) { return true; }
 
-    char *dir = (char *)LocalAlloc(LPTR, i + 1);
-    if (dir == NULL) {
-        APP_ERROR("LocalAlloc failed (%lu)", GetLastError());
+    char *dir = (char *)calloc(1, i + 1);
+    if (!dir) {
+        APP_ERROR("Failed to allocate memory");
         return false;
     }
 
@@ -129,7 +129,7 @@ bool CreateParentDirectories(const char *file)
     dir[i] = '\0';
     bool result = CreateDirectoriesRecursively(dir);
 
-    LocalFree(dir);
+    free(dir);
     return result;
 }
 
@@ -170,11 +170,11 @@ bool DeleteRecursively(const char *path)
                 }
             }
 
-            LocalFree(subPath);
+            free(subPath);
         } while (FindNextFile(handle, &findData));
         FindClose(handle);
     }
-    LocalFree(findPath);
+    free(findPath);
 
     if (!RemoveDirectory(path)) {
         APP_ERROR("Failed to delete directory (%lu)", GetLastError());
@@ -190,9 +190,9 @@ char *GenerateUniqueName(const char *prefix)
     size_t prefix_len = 0;
     if (prefix != NULL) { prefix_len = strlen(prefix); }
 
-    char *name = (char *)LocalAlloc(LPTR, prefix_len + UID_LENGTH + 1);
-    if (name == NULL) {
-        APP_ERROR("Failed to allocate memory for unique name (%lu)", GetLastError());
+    char *name = (char *)calloc(1, prefix_len + UID_LENGTH + 1);
+    if (!name) {
+        APP_ERROR("Failed to allocate memory for unique name");
         return NULL;
     }
 
@@ -229,7 +229,7 @@ char *CreateUniqueDirectory(const char *base_path, const char *prefix)
         }
 
         char *full_path = JoinPath(base_path, temp_name);
-        LocalFree(temp_name);
+        free(temp_name);
         if (full_path == NULL) {
             APP_ERROR("Failed to construct a unique directory path");
             return NULL;
@@ -239,10 +239,10 @@ char *CreateUniqueDirectory(const char *base_path, const char *prefix)
             return full_path;
         } else if (GetLastError() != ERROR_ALREADY_EXISTS) {
             APP_ERROR("Failed to create a unique directory (%lu)", GetLastError());
-            LocalFree(full_path);
+            free(full_path);
             return NULL;
         } else {
-            LocalFree(full_path);
+            free(full_path);
         }
 
         Sleep(10); // To avoid sequential generation and prevent name duplication.
@@ -262,41 +262,41 @@ char *GetImagePath(void)
        https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
     */
     DWORD buffer_size = 32767;
-    wchar_t *image_path_w = (wchar_t *)LocalAlloc(LPTR, buffer_size * sizeof(wchar_t));
-    if (image_path_w == NULL) {
-        APP_ERROR("Failed to allocate buffer for image path (%lu)", GetLastError());
+    wchar_t *image_path_w = (wchar_t *)calloc(1, buffer_size * sizeof(wchar_t));
+    if (!image_path_w) {
+        APP_ERROR("Failed to allocate buffer for image path");
         return NULL;
     }
 
     DWORD copied = GetModuleFileNameW(NULL, image_path_w, buffer_size);
     if (copied == 0 || GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
         APP_ERROR("Failed to get image path (%lu)", GetLastError());
-        LocalFree(image_path_w);
+        free(image_path_w);
         return NULL;
     }
 
     int utf8_size = WideCharToMultiByte(CP_UTF8, 0, image_path_w, -1, NULL, 0, NULL, NULL);
     if (utf8_size == 0) {
         APP_ERROR("Failed to calculate buffer size for UTF-8 conversion (%lu)", GetLastError());
-        LocalFree(image_path_w);
+        free(image_path_w);
         return NULL;
     }
 
-    char *image_path_utf8 = (char *)LocalAlloc(LPTR, utf8_size);
-    if (image_path_utf8 == NULL) {
-        APP_ERROR("Failed to allocate buffer for UTF-8 image path (%lu)", GetLastError());
-        LocalFree(image_path_w);
+    char *image_path_utf8 = (char *)calloc(1, utf8_size);
+    if (!image_path_utf8) {
+        APP_ERROR("Failed to allocate buffer for UTF-8 image path");
+        free(image_path_w);
         return NULL;
     }
 
     if (WideCharToMultiByte(CP_UTF8, 0, image_path_w, -1, image_path_utf8, utf8_size, NULL, NULL) == 0) {
         APP_ERROR("Failed to convert image path to UTF-8 (%lu)", GetLastError());
-        LocalFree(image_path_w);
-        LocalFree(image_path_utf8);
+        free(image_path_w);
+        free(image_path_utf8);
         return NULL;
     }
 
-    LocalFree(image_path_w);
+    free(image_path_w);
     return image_path_utf8;
 }
 
@@ -318,7 +318,7 @@ char *GetImageDirectoryPath(void) {
 
     if (i == 0) {
         APP_ERROR("Executable path does not contain a directory");
-        LocalFree(image_path);
+        free(image_path);
         return NULL;
     }
 
@@ -328,16 +328,15 @@ char *GetImageDirectoryPath(void) {
 // Retrieves the path to the temporary directory for the current user.
 char *GetTempDirectoryPath(void)
 {
-    char *temp_dir = (char *)LocalAlloc(LPTR, MAX_PATH);
-
-    if (temp_dir == NULL) {
-        APP_ERROR("Failed to memory allocate for get temp directory (%lu)", GetLastError());
+    char *temp_dir = (char *)calloc(1, MAX_PATH);
+    if (!temp_dir) {
+        APP_ERROR("Failed to memory allocate for get temp directory");
         return NULL;
     }
 
     if (!GetTempPath(MAX_PATH, temp_dir)) {
         APP_ERROR("Failed to get temp path (%lu)", GetLastError());
-        LocalFree(temp_dir);
+        free(temp_dir);
         return NULL;
     }
 
@@ -370,14 +369,14 @@ bool ChangeDirectoryToSafeDirectory(void)
 {
     char *working_dir = GetTempDirectoryPath();
     bool changed = working_dir && SetCurrentDirectory(working_dir);
-    LocalFree(working_dir);
+    free(working_dir);
 
     if (changed) return true;
 
     DEBUG("Failed to change to temporary directory. Trying executable's directory");
     working_dir = GetImageDirectoryPath();
     changed = working_dir && SetCurrentDirectory(working_dir);
-    LocalFree(working_dir);
+    free(working_dir);
 
     if (!changed) {
         APP_ERROR("Failed to change to executable's directory");
@@ -427,7 +426,7 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
         return NULL;
     }
 
-    MappedFileHandle *handle = (MappedFileHandle *)LocalAlloc(LPTR, sizeof(MappedFileHandle));
+    MappedFileHandle *handle = (MappedFileHandle *)calloc(1, sizeof(MappedFileHandle));
     if (handle) {
         handle->hFile = hFile;
         handle->hMapping = hMapping;
@@ -437,7 +436,7 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
         }
         return (MappedFile)handle;
     } else {
-        APP_ERROR("Failed to allocate memory for handle (%lu)", GetLastError());
+        APP_ERROR("Failed to allocate memory for handle");
         UnmapViewOfFile(lpBaseAddress);
         CloseHandle(hMapping);
         CloseHandle(hFile);
@@ -472,7 +471,7 @@ bool FreeMappedFile(MappedFile handle) {
             }
         }
 
-        LocalFree(h);
+        free(h);
     }
 
     return success;

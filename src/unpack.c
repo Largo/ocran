@@ -116,7 +116,7 @@ bool OpSetEnv(void **p)
     DEBUG("SetEnv(%s, %s)", name, replaced_value);
 
     bool result = SetEnvironmentVariable(name, replaced_value);
-    LocalFree(replaced_value);
+    free(replaced_value);
     if (!result) {
         APP_ERROR("Failed to set environment variable (%lu)", GetLastError());
     }
@@ -170,8 +170,8 @@ bool ProcessOpcodes(void **p)
 #define LZMA_HEADER_SIZE (LZMA_PROPS_SIZE + LZMA_UNPACKSIZE_SIZE)
 #define LZMA_SIZET_MAX ((SizeT)-1)
 
-void *SzAlloc(const ISzAlloc *p, size_t size) { p = p; return LocalAlloc(LMEM_FIXED, size); }
-void SzFree(const ISzAlloc *p, void *address) { p = p; LocalFree(address); }
+void *SzAlloc(const ISzAlloc *p, size_t size) { p = p; return malloc(size); }
+void SzFree(const ISzAlloc *p, void *address) { p = p; free(address); }
 ISzAlloc alloc = { SzAlloc, SzFree };
 
 bool DecompressLzma(void *dest, unsigned long long dest_size, const void *src, size_t src_size)
@@ -257,21 +257,21 @@ bool ProcessCompressedData(const void *data, size_t data_len)
         return false;
     }
 
-    void *unpack_data = LocalAlloc(LMEM_FIXED, (SIZE_T)unpack_size);
-    if (unpack_data == NULL) {
-        APP_ERROR("Memory allocation failed during decompression (%lu)", GetLastError());
+    void *unpack_data = malloc(unpack_size);
+    if (!unpack_data) {
+        APP_ERROR("Memory allocation failed during decompression");
         return false;
     }
 
     if (!DecompressLzma(unpack_data, unpack_size, data, data_len)) {
         APP_ERROR("LZMA decompression failed");
-        LocalFree(unpack_data);
+        free(unpack_data);
         return false;
     }
 
     void *p = unpack_data;
     bool result = ProcessOpcodes(&p);
-    LocalFree(unpack_data);
+    free(unpack_data);
 
     return result;
 #else

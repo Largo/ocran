@@ -13,10 +13,9 @@ static char* ConcatStr(const char *first, ...) {
     }
     va_end(args);
 
-    char *str = LocalAlloc(LPTR, len + 1);
-
-    if (str == NULL) {
-        APP_ERROR("Failed to allocate memory (%lu)", GetLastError());
+    char *str = (char *)calloc(1, len + 1);
+    if (!str) {
+        APP_ERROR("Failed to allocate memory");
         return NULL;
     }
 
@@ -40,9 +39,9 @@ static char *EscapeAndQuoteCmdArg(const char* arg)
     size_t arg_len = strlen(arg);
     size_t count = 0;
     for (size_t i = 0; i < arg_len; i++) { if (arg[i] == '\"') count++; }
-    char *sanitized = (char *)LocalAlloc(LPTR, arg_len + count * 2 + 3);
-    if (sanitized == NULL) {
-        APP_ERROR("Failed to allocate memory (%lu)", GetLastError());
+    char *sanitized = (char *)calloc(1, arg_len + count * 2 + 3);
+    if (!sanitized) {
+        APP_ERROR("Failed to allocate memory");
         return NULL;
     }
 
@@ -65,9 +64,9 @@ static bool ParseArguments(const char *args, size_t args_size, size_t *out_argc,
         local_argc++;
     }
 
-    const char **local_argv = (const char **)LocalAlloc(LPTR, (local_argc + 1) * sizeof(char *));
-    if (local_argv == NULL) {
-        APP_ERROR("Failed to memory allocate for argv (%lu)", GetLastError());
+    const char **local_argv = (const char **)calloc(1, (local_argc + 1) * sizeof(char *));
+    if (!local_argv) {
+        APP_ERROR("Failed to memory allocate for argv");
         return false;
     }
 
@@ -108,15 +107,15 @@ static char *BuildCommandLine(size_t argc, const char *argv[])
         }
 
         char *sanitized = EscapeAndQuoteCmdArg(str);
-        LocalFree(str);
+        free(str);
         if (sanitized == NULL) {
             APP_ERROR("Failed to sanitize arg at arg index %d", i);
             goto cleanup;
         }
         char *base = command_line;
         command_line = CONCAT_STR3(base, " ", sanitized);
-        LocalFree(base);
-        LocalFree(sanitized);
+        free(base);
+        free(sanitized);
         if (command_line == NULL) {
             APP_ERROR("Failed to build command line after adding arg at arg index %d", i);
             goto cleanup;
@@ -126,7 +125,7 @@ static char *BuildCommandLine(size_t argc, const char *argv[])
     return command_line;
 
 cleanup:
-    LocalFree(command_line);
+    free(command_line);
 
     return NULL;
 }
@@ -175,7 +174,7 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     char *application_name = ExpandInstDirPath(argv[0]);
     if (application_name == NULL) {
         APP_ERROR("Failed to expand application name to installation directory");
-        LocalFree(argv);
+        free(argv);
         return false;
     }
 
@@ -183,11 +182,11 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     char *command_line = BuildCommandLine(argc, argv);
     if (command_line == NULL) {
         APP_ERROR("Failed to build command line");
-        LocalFree(argv);
+        free(argv);
         return false;
     }
 
-    LocalFree(argv);
+    free(argv);
 
     Script_ApplicationName = application_name;
     Script_CommandLine = command_line;
@@ -197,10 +196,10 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
 
 void FreeScriptInfo(void)
 {
-    LocalFree((char *)Script_ApplicationName);
+    free((char *)Script_ApplicationName);
     Script_ApplicationName = NULL;
 
-    LocalFree(Script_CommandLine);
+    free(Script_CommandLine);
     Script_CommandLine = NULL;
 }
 
@@ -250,6 +249,6 @@ bool RunScript(const char *extra_args, DWORD *exit_code)
 
     bool result = CreateAndWaitForProcess(Script_ApplicationName, cmd_line, exit_code);
 
-    LocalFree(cmd_line);
+    free(cmd_line);
     return result;
 }
