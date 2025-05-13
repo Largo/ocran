@@ -2,14 +2,15 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include "error.h"
 
-static BOOL debug_mode = FALSE;
+static bool debug_mode = false;
 
 // Enable debug mode
 void EnableDebugMode()
 {
-    debug_mode = TRUE;
+    debug_mode = true;
 }
 
 // Prints a fatal error message to stderr.

@@ -58,7 +58,7 @@ static char *EscapeAndQuoteCmdArg(const char* arg)
     return sanitized;
 }
 
-static BOOL ParseArguments(const char *args, size_t args_size, size_t *out_argc, const char ***out_argv)
+static bool ParseArguments(const char *args, size_t args_size, size_t *out_argc, const char ***out_argv)
 {
     size_t local_argc = 0;
     for (const char *s = args; s < (args + args_size); s += strlen(s) + 1) {
@@ -68,7 +68,7 @@ static BOOL ParseArguments(const char *args, size_t args_size, size_t *out_argc,
     const char **local_argv = (const char **)LocalAlloc(LPTR, (local_argc + 1) * sizeof(char *));
     if (local_argv == NULL) {
         APP_ERROR("Failed to memory allocate for argv (%lu)", GetLastError());
-        return FALSE;
+        return false;
     }
 
     const char *s = args;
@@ -80,7 +80,7 @@ static BOOL ParseArguments(const char *args, size_t args_size, size_t *out_argc,
 
     *out_argc = local_argc;
     *out_argv = local_argv;
-    return TRUE;
+    return true;
 }
 
 static char *BuildCommandLine(size_t argc, const char *argv[])
@@ -136,39 +136,39 @@ static char *Script_CommandLine = NULL;
 
 #define HAS_SCRIPT_INFO (Script_ApplicationName && Script_CommandLine)
 
-BOOL GetScriptInfo(const char **app_name, char **cmd_line)
+bool GetScriptInfo(const char **app_name, char **cmd_line)
 {
     if (HAS_SCRIPT_INFO) {
         *app_name = Script_ApplicationName;
         *cmd_line = Script_CommandLine;
-        return TRUE;
+        return true;
     } else {
-        return FALSE;
+        return false;
     }
 }
 
-BOOL InitializeScriptInfo(const char *args, size_t args_size)
+bool InitializeScriptInfo(const char *args, size_t args_size)
 {
     if (HAS_SCRIPT_INFO) {
         APP_ERROR("Script info is already set");
-        return FALSE;
+        return false;
     }
 
     size_t argc;
     const char **argv = NULL;
     if (!ParseArguments(args, args_size, &argc, &argv)) {
         APP_ERROR("Failed to parse arguments");
-        return FALSE;
+        return false;
     }
 
     if (!IsPathFreeOfDotElements(argv[0])) {
         APP_ERROR("Application name contains prohibited relative path elements like '.' or '..'");
-        return FALSE;
+        return false;
     }
 
     if (!IsPathFreeOfDotElements(argv[1])) {
         APP_ERROR("Script name contains prohibited relative path elements like '.' or '..'");
-        return FALSE;
+        return false;
     }
 
     // Set Script_ApplicationName
@@ -176,7 +176,7 @@ BOOL InitializeScriptInfo(const char *args, size_t args_size)
     if (application_name == NULL) {
         APP_ERROR("Failed to expand application name to installation directory");
         LocalFree(argv);
-        return FALSE;
+        return false;
     }
 
     // Set Script_CommandLine
@@ -184,7 +184,7 @@ BOOL InitializeScriptInfo(const char *args, size_t args_size)
     if (command_line == NULL) {
         APP_ERROR("Failed to build command line");
         LocalFree(argv);
-        return FALSE;
+        return false;
     }
 
     LocalFree(argv);
@@ -192,7 +192,7 @@ BOOL InitializeScriptInfo(const char *args, size_t args_size)
     Script_ApplicationName = application_name;
     Script_CommandLine = command_line;
 
-    return TRUE;
+    return true;
 }
 
 void FreeScriptInfo(void)
@@ -204,19 +204,19 @@ void FreeScriptInfo(void)
     Script_CommandLine = NULL;
 }
 
-BOOL CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_code)
+bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_code)
 {
     PROCESS_INFORMATION p_info;
     ZeroMemory(&p_info, sizeof(p_info));
     STARTUPINFO s_info;
     ZeroMemory(&s_info, sizeof(s_info));
     s_info.cb = sizeof(s_info);
-    BOOL result = FALSE;
+    bool result = false;
 
     if (CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &s_info, &p_info)) {
         if (WaitForSingleObject(p_info.hProcess, INFINITE) != WAIT_FAILED) {
             if (GetExitCodeProcess(p_info.hProcess, exit_code)) {
-                result = TRUE;
+                result = true;
             } else {
                 APP_ERROR("Failed to get exit status (%lu)", GetLastError());
                 *exit_code = GetLastError();
@@ -235,20 +235,20 @@ BOOL CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_c
     return result;
 }
 
-BOOL RunScript(const char *extra_args, DWORD *exit_code)
+bool RunScript(const char *extra_args, DWORD *exit_code)
 {
     if (!HAS_SCRIPT_INFO) {
         APP_ERROR("Script info is not initialized");
-        return FALSE;
+        return false;
     }
 
     char *cmd_line = CONCAT_STR3(Script_CommandLine, " ", extra_args);
     if (cmd_line == NULL) {
         APP_ERROR("Failed to build command line for script execution");
-        return FALSE;
+        return false;
     }
 
-    BOOL result = CreateAndWaitForProcess(Script_ApplicationName, cmd_line, exit_code);
+    bool result = CreateAndWaitForProcess(Script_ApplicationName, cmd_line, exit_code);
 
     LocalFree(cmd_line);
     return result;

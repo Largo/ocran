@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <stdbool.h>
 
 /**
  * CreateInstDirectory - Creates an installation directory with a unique name in the specified target directory.
@@ -76,9 +77,9 @@ char *ExpandInstDirPath(const char *rel_path);
 /**
  * DeleteInstDirRecursively - Deletes the installation directory and all its contents recursively.
  *
- * @return TRUE on successful deletion, FALSE on failure.
+ * @return true on successful deletion, false on failure.
  */
-BOOL DeleteInstDirRecursively(void);
+bool DeleteInstDirRecursively(void);
 
 // Suffix for the deletion marker file.
 #define DELETION_MAKER_SUFFIX ".ocran-delete-me"
@@ -106,9 +107,9 @@ char *ReplaceInstDirPlaceholder(const char *str);
  * where the script is located. This is typically used to ensure that relative paths
  * in script operations resolve correctly.
  *
- * @return BOOL Returns TRUE if the directory change was successful, otherwise FALSE.
+ * @return bool Returns true if the directory change was successful, otherwise false.
  */
-BOOL ChangeDirectoryToScriptDirectory(void);
+bool ChangeDirectoryToScriptDirectory(void);
 
 /**
  * CreateDirectoryUnderInstDir - Recursively create a directory under the
@@ -116,20 +117,20 @@ BOOL ChangeDirectoryToScriptDirectory(void);
  *
  * This function ensures that a directory exists at the specified relative
  * path under the installation directory. An empty rel_path is treated as
- * already existing (returns TRUE). If rel_path is NULL, ExpandInstDirPath
- * fails, or directory creation fails, the function returns FALSE and logs
+ * already existing (returns true). If rel_path is NULL, ExpandInstDirPath
+ * fails, or directory creation fails, the function returns false and logs
  * an error.
  *
  * @param rel_path
  *   A relative path to a directory under the installation directory.
- *   NULL is invalid (returns FALSE). An empty string is treated as
- *   already existing (returns TRUE).
+ *   NULL is invalid (returns false). An empty string is treated as
+ *   already existing (returns true).
  *
  * @return
- *   TRUE if the directory already exists or was created successfully;
- *   FALSE on error (and an error is logged).
+ *   true if the directory already exists or was created successfully;
+ *   false on error (and an error is logged).
  */
-BOOL CreateDirectoryUnderInstDir(const char *rel_path);
+bool CreateDirectoryUnderInstDir(const char *rel_path);
 
 /**
  * ExportFileToInstDir - Atomically write a file under the installation dir.
@@ -142,7 +143,7 @@ BOOL CreateDirectoryUnderInstDir(const char *rel_path);
  *
  * @param rel_path
  *   A relative file path under the installation directory. NULL or empty
- *   string is invalid (returns FALSE).
+ *   string is invalid (returns false).
  * @param buf
  *   Pointer to the data to write. Must be non-NULL if len > 0.
  * @param len
@@ -150,6 +151,6 @@ BOOL CreateDirectoryUnderInstDir(const char *rel_path);
  *   MAXDWORD cause an error.
  *
  * @return
- *   TRUE on success; FALSE on failure (error logged via APP_ERROR/DEBUG).
+ *   true on success; false on failure (error logged via APP_ERROR/DEBUG).
  */
-BOOL ExportFileToInstDir(const char *rel_path, const void *buf, size_t len);
+bool ExportFileToInstDir(const char *rel_path, const void *buf, size_t len);

@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "error.h"
 #include "filesystem_utils.h"
 #include "inst_dir.h"
@@ -136,7 +137,7 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
        system resources as the memory map is only used for file extraction and
        is now redundant.
     */
-    BOOL release_ok = FreeMappedFile(mapped_file);
+    bool release_ok = FreeMappedFile(mapped_file);
     /*
        Set the pointer to NULL after calling FreeMappedFile to avoid reuse.
        FreeMappedFile always releases the resource, regardless of the success

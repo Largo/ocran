@@ -44,12 +44,12 @@ unsigned char GetOpcode(void **p)
     return op;
 }
 
-BOOL OpCreateDirectory(void **p);
-BOOL OpCreateFile(void **p);
-BOOL OpSetEnv(void **p);
-BOOL OpSetScript(void **p);
+bool OpCreateDirectory(void **p);
+bool OpCreateFile(void **p);
+bool OpSetEnv(void **p);
+bool OpSetScript(void **p);
 
-typedef BOOL (*POpcodeHandler)(void **);
+typedef bool (*POpcodeHandler)(void **);
 
 POpcodeHandler OpcodeHandlers[OP_MAX] =
 {
@@ -61,26 +61,26 @@ POpcodeHandler OpcodeHandlers[OP_MAX] =
 };
 
 // Create a directory (OP_CREATE_DIRECTORY opcode handler)
-BOOL OpCreateDirectory(void **p)
+bool OpCreateDirectory(void **p)
 {
     const char *dir_name = GetString(p);
 
     if (dir_name == NULL || *dir_name == '\0') {
         APP_ERROR("dir_name is NULL or empty");
-        return FALSE;
+        return false;
     }
 
     DEBUG("Create directory: %s", dir_name);
 
     if (!CreateDirectoryUnderInstDir(dir_name)) {
         APP_ERROR("Failed to create directory: %s", dir_name);
-        return FALSE;
+        return false;
     }
-    return TRUE;
+    return true;
 }
 
 // Create a file (OP_CREATE_FILE opcode handler)
-BOOL OpCreateFile(void **p)
+bool OpCreateFile(void **p)
 {
     const char *file_name = GetString(p);
     size_t file_size = GetInteger(p);
@@ -89,20 +89,20 @@ BOOL OpCreateFile(void **p)
 
     if (file_name == NULL || *file_name == '\0') {
         APP_ERROR("file_name is null or empty");
-        return FALSE;
+        return false;
     }
 
     DEBUG("Create file: %s (%zu bytes)", file_name, file_size);
 
     if (!ExportFileToInstDir(file_name, data, file_size)) {
         APP_ERROR("Failed to export file: %s", file_name);
-        return FALSE;
+        return false;
     }
-    return TRUE;
+    return true;
 }
 
 // Set a environment variable (OP_SETENV opcode handler)
-BOOL OpSetEnv(void **p)
+bool OpSetEnv(void **p)
 {
     const char *name = GetString(p);
     const char *value = GetString(p);
@@ -110,12 +110,12 @@ BOOL OpSetEnv(void **p)
     char *replaced_value = ReplaceInstDirPlaceholder(value);
     if (replaced_value == NULL) {
         APP_ERROR("Failed to replace the value placeholder");
-        return FALSE;
+        return false;
     }
 
     DEBUG("SetEnv(%s, %s)", name, replaced_value);
 
-    BOOL result = SetEnvironmentVariable(name, replaced_value);
+    bool result = SetEnvironmentVariable(name, replaced_value);
     LocalFree(replaced_value);
     if (!result) {
         APP_ERROR("Failed to set environment variable (%lu)", GetLastError());
@@ -125,7 +125,7 @@ BOOL OpSetEnv(void **p)
 }
 
 // Set a application script info (OP_SET_SCRIPT opcode handler)
-BOOL OpSetScript(void **p)
+bool OpSetScript(void **p)
 {
     size_t args_size = GetInteger(p);
     const char *args = *p;
@@ -136,7 +136,7 @@ BOOL OpSetScript(void **p)
     return InitializeScriptInfo(args, args_size);
 }
 
-BOOL ProcessOpcodes(void **p)
+bool ProcessOpcodes(void **p)
 {
     unsigned char op;
 
@@ -145,22 +145,22 @@ BOOL ProcessOpcodes(void **p)
 
         if (op >= OP_MAX) {
             APP_ERROR("Opcode out of range: %hhu", op);
-            return FALSE;
+            return false;
         }
 
         if (op == OP_END) {
             DEBUG("Encountered OP_END");
-            return TRUE;
+            return true;
         }
 
         if (OpcodeHandlers[op] == NULL) {
             APP_ERROR("No handler for opcode: %hhu", op);
-            return FALSE;
+            return false;
         }
 
         if (!OpcodeHandlers[op](p)) {
             APP_ERROR("Handler failed for opcode: %hhu", op);
-            return FALSE;
+            return false;
         }
     }
 }
@@ -174,23 +174,23 @@ void *SzAlloc(const ISzAlloc *p, size_t size) { p = p; return LocalAlloc(LMEM_FI
 void SzFree(const ISzAlloc *p, void *address) { p = p; LocalFree(address); }
 ISzAlloc alloc = { SzAlloc, SzFree };
 
-BOOL DecompressLzma(void *dest, unsigned long long dest_size, const void *src, size_t src_size)
+bool DecompressLzma(void *dest, unsigned long long dest_size, const void *src, size_t src_size)
 {
     if (dest == NULL) {
         APP_ERROR("Null dest buffer");
-        return FALSE;
+        return false;
     }
 
     if (dest_size > (unsigned long long)LZMA_SIZET_MAX) {
         APP_ERROR("Decompression size exceeds LZMA SizeT limit");
-        return FALSE;
+        return false;
     }
 
     SizeT decompressed_size = (SizeT)dest_size;
 
     if (src_size < LZMA_HEADER_SIZE) {
         APP_ERROR("Input data too short for LZMA header");
-        return FALSE;
+        return false;
     }
 
     SizeT inSizePure = src_size - LZMA_HEADER_SIZE;
@@ -201,31 +201,31 @@ BOOL DecompressLzma(void *dest, unsigned long long dest_size, const void *src, s
 
     if (res != SZ_OK || status != LZMA_STATUS_FINISHED_WITH_MARK) {
         APP_ERROR("LZMA decompression error: %d, status: %d", res, status);
-        return FALSE;
+        return false;
     }
 
     DEBUG("LZMA decompressed %zu bytes from %zu input bytes", (size_t)decompressed_size, inSizePure);
 
-    return TRUE;
+    return true;
 }
 
-BOOL ParseLzmaUnpackSize(const void *data, size_t data_len, unsigned long long *out_size)
+bool ParseLzmaUnpackSize(const void *data, size_t data_len, unsigned long long *out_size)
 {
     if (data == NULL) {
         APP_ERROR("Null data pointer");
-        return FALSE;
+        return false;
     }
 
     if (out_size == NULL) {
         APP_ERROR("Null out_size pointer");
-        return FALSE;
+        return false;
     }
 
     *out_size = 0;
 
     if (data_len < LZMA_HEADER_SIZE) {
         APP_ERROR("LZMA header is truncated");
-        return FALSE;
+        return false;
     }
 
     const Byte *header = (const Byte *)data + LZMA_PROPS_SIZE;
@@ -236,11 +236,11 @@ BOOL ParseLzmaUnpackSize(const void *data, size_t data_len, unsigned long long *
 
     *out_size = size64;
     DEBUG("Parsed LZMA unpack size: %llu bytes", size64);
-    return TRUE;
+    return true;
 }
 #endif
 
-BOOL ProcessCompressedData(const void *data, size_t data_len)
+bool ProcessCompressedData(const void *data, size_t data_len)
 {
 #if WITH_LZMA
     DEBUG("LZMA compressed data segment size: %zu bytes", data_len);
@@ -249,48 +249,48 @@ BOOL ProcessCompressedData(const void *data, size_t data_len)
 
     if (!ParseLzmaUnpackSize(data, data_len, &unpack_size)) {
         APP_ERROR("Failed to parse LZMA header and extract unpack size");
-        return FALSE;
+        return false;
     }
 
     if (unpack_size > (unsigned long long)SIZE_MAX) {
         APP_ERROR("Size too large to fit in size_t");
-        return FALSE;
+        return false;
     }
 
     void *unpack_data = LocalAlloc(LMEM_FIXED, (SIZE_T)unpack_size);
     if (unpack_data == NULL) {
         APP_ERROR("Memory allocation failed during decompression (%lu)", GetLastError());
-        return FALSE;
+        return false;
     }
 
     if (!DecompressLzma(unpack_data, unpack_size, data, data_len)) {
         APP_ERROR("LZMA decompression failed");
         LocalFree(unpack_data);
-        return FALSE;
+        return false;
     }
 
     void *p = unpack_data;
-    BOOL result = ProcessOpcodes(&p);
+    bool result = ProcessOpcodes(&p);
     LocalFree(unpack_data);
 
     return result;
 #else
     APP_ERROR("Does not support LZMA");
-    return FALSE;
+    return false;
 #endif
 }
 
-BOOL ProcessUncompressedData(const void *data, size_t data_len)
+bool ProcessUncompressedData(const void *data, size_t data_len)
 {
     DEBUG("Uncompressed data segment size: %zu bytes", data_len);
 
     void *p = (void *)data;
-    BOOL result = ProcessOpcodes(&p);
+    bool result = ProcessOpcodes(&p);
 
     return result;
 }
 
-BOOL ProcessImage(const void *data, size_t data_len, BOOL compressed)
+bool ProcessImage(const void *data, size_t data_len, bool compressed)
 {
     if (compressed) {
         return ProcessCompressedData(data, data_len);

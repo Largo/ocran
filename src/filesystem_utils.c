@@ -37,20 +37,20 @@ char *JoinPath(const char *p1, const char *p2)
 }
 
 // Recursively creates a directory and all its parent directories.
-BOOL CreateDirectoriesRecursively(const char *dir)
+bool CreateDirectoriesRecursively(const char *dir)
 {
     if (dir == NULL || *dir == '\0') {
         APP_ERROR("dir is null or empty");
-        return FALSE;
+        return false;
     }
 
     DWORD dir_attr = GetFileAttributes(dir);
     if (dir_attr != INVALID_FILE_ATTRIBUTES) {
         if (dir_attr & FILE_ATTRIBUTE_DIRECTORY) {
-            return TRUE;
+            return true;
         } else {
             APP_ERROR("Directory name conflicts with a file(%s)", dir);
-            return FALSE;
+            return false;
         }
     }
 
@@ -58,7 +58,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
     char *path = (char *)LocalAlloc(LPTR, dir_len + 1);
     if (path == NULL) {
         APP_ERROR("LocalAlloc failed (%lu)", GetLastError());
-        return FALSE;
+        return false;
     }
     strcpy(path, dir);
 
@@ -74,7 +74,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
                 } else {
                     APP_ERROR("Directory name conflicts with a file(%s)", path);
                     LocalFree(path);
-                    return FALSE;
+                    return false;
                 }
             } else {
                 DWORD error = GetLastError();
@@ -83,7 +83,7 @@ BOOL CreateDirectoriesRecursively(const char *dir)
                 } else {
                     APP_ERROR("Cannot access the directory (%lu)", GetLastError());
                     LocalFree(path);
-                    return FALSE;
+                    return false;
                 }
             }
         }
@@ -98,53 +98,53 @@ BOOL CreateDirectoriesRecursively(const char *dir)
             if (!CreateDirectory(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
                 APP_ERROR("Failed to create directory (%lu)", GetLastError());
                 LocalFree(path);
-                return FALSE;
+                return false;
             }
         }
     }
 
     LocalFree(path);
-    return TRUE;
+    return true;
 }
 
 // Creates all necessary parent directories for a given file path.
-BOOL CreateParentDirectories(const char *file)
+bool CreateParentDirectories(const char *file)
 {
     if (file == NULL || *file == '\0') {
         APP_ERROR("file is null or empty");
-        return FALSE;
+        return false;
     }
 
     size_t i = strlen(file);
     for (; i > 0; i--) { if (file[i] == PATH_SEPARATOR) break; }
-    if (i == 0) { return TRUE; }
+    if (i == 0) { return true; }
 
     char *dir = (char *)LocalAlloc(LPTR, i + 1);
     if (dir == NULL) {
         APP_ERROR("LocalAlloc failed (%lu)", GetLastError());
-        return FALSE;
+        return false;
     }
 
     strncpy(dir, file, i);
     dir[i] = '\0';
-    BOOL result = CreateDirectoriesRecursively(dir);
+    bool result = CreateDirectoriesRecursively(dir);
 
     LocalFree(dir);
     return result;
 }
 
 // Deletes a directory and all its contents recursively.
-BOOL DeleteRecursively(const char *path)
+bool DeleteRecursively(const char *path)
 {
     if (path == NULL || *path == '\0') {
         APP_ERROR("path is null or empty");
-        return FALSE;
+        return false;
     }
 
     char *findPath = JoinPath(path, "*");
     if (findPath == NULL) {
         APP_ERROR("Failed to build find path for deletion");
-        return FALSE;
+        return false;
     }
 
     WIN32_FIND_DATA findData;
@@ -179,9 +179,9 @@ BOOL DeleteRecursively(const char *path)
     if (!RemoveDirectory(path)) {
         APP_ERROR("Failed to delete directory (%lu)", GetLastError());
         MoveFileEx(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
-        return FALSE;
+        return false;
     } else {
-        return TRUE;
+        return true;
     }
 }
 
@@ -345,34 +345,34 @@ char *GetTempDirectoryPath(void)
 }
 
 // Checks if the given path string is free of relative path elements.
-BOOL IsPathFreeOfDotElements(const char *str)
+bool IsPathFreeOfDotElements(const char *str)
 {
     const char *pos = str;
     if ((pos[0] == '.' && (pos[1] == PATH_SEPARATOR || pos[1] == '\0')) ||
         (pos[0] == '.' && pos[1] == '.' && (pos[2] == PATH_SEPARATOR || pos[2] == '\0'))) {
-        return FALSE; // Path starts with './' or '../'
+        return false; // Path starts with './' or '../'
     }
 
     while ((pos = strstr(pos, ".")) != NULL) {
         if ((pos == str || *(pos - 1) == PATH_SEPARATOR) &&
             (pos[1] == PATH_SEPARATOR || pos[1] == '\0' ||
             (pos[1] == '.' && (pos[2] == PATH_SEPARATOR || pos[2] == '\0')))) {
-            return FALSE; // Found '/./', '/../', or 'dir/.' in the path
+            return false; // Found '/./', '/../', or 'dir/.' in the path
         }
         pos++;
     }
 
-    return TRUE;
+    return true;
 }
 
 // Moves the application to a safe directory.
-BOOL ChangeDirectoryToSafeDirectory(void)
+bool ChangeDirectoryToSafeDirectory(void)
 {
     char *working_dir = GetTempDirectoryPath();
-    BOOL changed = working_dir && SetCurrentDirectory(working_dir);
+    bool changed = working_dir && SetCurrentDirectory(working_dir);
     LocalFree(working_dir);
 
-    if (changed) return TRUE;
+    if (changed) return true;
 
     DEBUG("Failed to change to temporary directory. Trying executable's directory");
     working_dir = GetImageDirectoryPath();
@@ -446,29 +446,29 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
 }
 
 // Frees a MappedFile handle and its associated resources.
-BOOL FreeMappedFile(MappedFile handle) {
+bool FreeMappedFile(MappedFile handle) {
     MappedFileHandle *h = (MappedFileHandle *)handle;
-    BOOL success = TRUE;
+    bool success = true;
 
     if (h != NULL) {
         if (h->lpBaseAddress != NULL) {
             if (!UnmapViewOfFile(h->lpBaseAddress)) {
                 APP_ERROR("Failed to unmap view of file (%lu)", GetLastError());
-                success = FALSE;
+                success = false;
             }
         }
 
         if (h->hMapping != INVALID_HANDLE_VALUE) {
             if (!CloseHandle(h->hMapping)) {
                 APP_ERROR("Failed to close file mapping (%lu)", GetLastError());
-                success = FALSE;
+                success = false;
             }
         }
 
         if (h->hFile != INVALID_HANDLE_VALUE) {
             if (!CloseHandle(h->hFile)) {
                 APP_ERROR("Failed to close file (%lu)", GetLastError());
-                success = FALSE;
+                success = false;
             }
         }
 

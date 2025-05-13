@@ -100,11 +100,11 @@ char *ExpandInstDirPath(const char *rel_path)
 }
 
 // Deletes the installation directory and all its contents.
-BOOL DeleteInstDirRecursively(void)
+bool DeleteInstDirRecursively(void)
 {
     if (InstDir == NULL || *InstDir == '\0') {
         APP_ERROR("InstDir is null or empty");
-        return FALSE;
+        return false;
     }
 
     return DeleteRecursively(InstDir);
@@ -146,7 +146,7 @@ char *ReplaceInstDirPlaceholder(const char *str)
 {
     if (InstDir == NULL || *InstDir == '\0') {
         APP_ERROR("InstDir is null or empty");
-        return FALSE;
+        return false;
     }
 
     int InstDirLen = strlen(InstDir);
@@ -179,17 +179,17 @@ char *ReplaceInstDirPlaceholder(const char *str)
 }
 
 // Changes the working directory to the directory where the script is located.
-BOOL ChangeDirectoryToScriptDirectory(void)
+bool ChangeDirectoryToScriptDirectory(void)
 {
     char *script_dir = ExpandInstDirPath("src");
     if (script_dir == NULL) {
         APP_ERROR("Failed to build path for CWD");
-        return FALSE;
+        return false;
     }
 
     DEBUG("Changing CWD to unpacked directory %s", script_dir);
 
-    BOOL changed = SetCurrentDirectory(script_dir);
+    bool changed = SetCurrentDirectory(script_dir);
     if (!changed) {
         APP_ERROR("Failed to change CWD (%lu)", GetLastError());
     }
@@ -198,22 +198,22 @@ BOOL ChangeDirectoryToScriptDirectory(void)
     return changed;
 }
 
-BOOL CreateDirectoryUnderInstDir(const char *rel_path)
+bool CreateDirectoryUnderInstDir(const char *rel_path)
 {
     if (rel_path == NULL) {
-        return FALSE;
+        return false;
     }
 
     if (*rel_path == '\0') {
-        return TRUE;
+        return true;
     }
 
     char *dir = ExpandInstDirPath(rel_path);
     if (dir == NULL) {
-        return FALSE;
+        return false;
     }
 
-    BOOL result = CreateDirectoriesRecursively(dir);
+    bool result = CreateDirectoriesRecursively(dir);
     if (!result) {
         APP_ERROR("Failed to create directory under installation directory (InstDir): '%s'", dir);
     }
@@ -222,9 +222,9 @@ BOOL CreateDirectoryUnderInstDir(const char *rel_path)
     return result;
 }
 
-static BOOL export_file(const char *path, const void *buf, size_t len)
+static bool export_file(const char *path, const void *buf, size_t len)
 {
-    BOOL   result  = FALSE;
+    bool   result  = false;
     HANDLE h       = INVALID_HANDLE_VALUE;
     DWORD  written = 0;
 
@@ -249,7 +249,7 @@ static BOOL export_file(const char *path, const void *buf, size_t len)
         goto cleanup;
     }
 
-    result = TRUE;
+    result = true;
 
 cleanup:
     if (h != INVALID_HANDLE_VALUE) {
@@ -258,9 +258,9 @@ cleanup:
     return result;
 }
 
-BOOL ExportFileToInstDir(const char *rel_path, const void *buf, size_t len)
+bool ExportFileToInstDir(const char *rel_path, const void *buf, size_t len)
 {
-    BOOL  result = FALSE;
+    bool  result = false;
     char *path   = NULL;
 
     if (rel_path == NULL || *rel_path == '\0') {
@@ -290,7 +290,7 @@ BOOL ExportFileToInstDir(const char *rel_path, const void *buf, size_t len)
         goto cleanup;
     }
 
-    result = TRUE;
+    result = true;
 
 cleanup:
     if (path) {

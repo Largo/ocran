@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <stdbool.h>
 
 #ifdef _WIN32
 #define PATH_SEPARATOR '\\'
@@ -20,28 +21,28 @@ char *JoinPath(const char *p1, const char *p2);
  * CreateDirectoriesRecursively - Creates a directory and all its parent directories if they do not exist.
  *
  * @param dir The path of the directory to create.
- * @return TRUE if the directory was successfully created or already exists.
- *         FALSE if the directory could not be created due to an error.
+ * @return true if the directory was successfully created or already exists.
+ *         false if the directory could not be created due to an error.
  */
-BOOL CreateDirectoriesRecursively(const char *dir);
+bool CreateDirectoriesRecursively(const char *dir);
 
 /**
  * CreateParentDirectories - Creates all parent directories of the specified file path.
  *
  * @param file The path of the file whose parent directories need to be created.
- * @return TRUE if the parent directories were successfully created or already exist.
- *         FALSE if the directories could not be created due to an error.
+ * @return true if the parent directories were successfully created or already exist.
+ *         false if the directories could not be created due to an error.
  */
-BOOL CreateParentDirectories(const char *file);
+bool CreateParentDirectories(const char *file);
 
 /**
  * DeleteRecursively - Deletes a directory and all its contents recursively.
  *
  * @param path The path of the directory to delete.
- * @return TRUE if the directory and its contents were successfully deleted.
- *         FALSE if the directory could not be fully deleted due to an error.
+ * @return true if the directory and its contents were successfully deleted.
+ *         false if the directory could not be fully deleted due to an error.
  */
-BOOL DeleteRecursively(const char *path);
+bool DeleteRecursively(const char *path);
 
 // Defines the length of the unique identifier used in the directory name.
 #define UID_LENGTH 12
@@ -94,9 +95,9 @@ char *GetTempDirectoryPath(void);
  * locations, especially when dealing with file system navigation.
  *
  * @param str The path string to be checked.
- * @return TRUE if the path does not contain relative path elements, otherwise FALSE.
+ * @return true if the path does not contain relative path elements, otherwise false.
  */
-BOOL IsPathFreeOfDotElements(const char *str);
+bool IsPathFreeOfDotElements(const char *str);
 
 /**
  * ChangeDirectoryToSafeDirectory - Change the current working directory to a predefined safe directory.
@@ -106,9 +107,9 @@ BOOL IsPathFreeOfDotElements(const char *str);
  * This is particularly useful during cleanup operations or when the application needs to
  * ensure it operates in a controlled environment.
  *
- * @return BOOL Returns TRUE if the directory change was successful, otherwise FALSE.
+ * @return bool Returns true if the directory change was successful, otherwise false.
  */
-BOOL ChangeDirectoryToSafeDirectory(void);
+bool ChangeDirectoryToSafeDirectory(void);
 
 typedef const void *MappedFile;
 
@@ -144,10 +145,10 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
  *
  * @param handle The MappedFile handle to free. This handle should have been
  *               obtained from OpenAndMapFile.
- * @return TRUE if all resources were successfully released; otherwise, FALSE.
+ * @return true if all resources were successfully released; otherwise, false.
  *
  * If the function fails to release any resources, it logs an error
  * for each failure. However, it attempts to free all resources
  * regardless of individual errors.
  */
-BOOL FreeMappedFile(MappedFile handle);
+bool FreeMappedFile(MappedFile handle);
