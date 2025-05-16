@@ -23,7 +23,7 @@ char *JoinPath(const char *p1, const char *p2)
     if (*p2_start == PATH_SEPARATOR) { p2_start++; p2_len--; }
 
     size_t joined_len = p1_len + 1 + p2_len;
-    char *joined_path = (char *)calloc(1, joined_len + 1);
+    char *joined_path = calloc(1, joined_len + 1);
     if (!joined_path) {
         APP_ERROR("Failed to allocate buffer for join path");
         return NULL;
@@ -55,7 +55,7 @@ bool CreateDirectoriesRecursively(const char *dir)
     }
 
     size_t dir_len = strlen(dir);
-    char *path = (char *)calloc(1, dir_len + 1);
+    char *path = calloc(1, dir_len + 1);
     if (!path) {
         APP_ERROR("Failed to allocate memory");
         return false;
@@ -119,7 +119,7 @@ bool CreateParentDirectories(const char *file)
     for (; i > 0; i--) { if (file[i] == PATH_SEPARATOR) break; }
     if (i == 0) { return true; }
 
-    char *dir = (char *)calloc(1, i + 1);
+    char *dir = calloc(1, i + 1);
     if (!dir) {
         APP_ERROR("Failed to allocate memory");
         return false;
@@ -190,7 +190,7 @@ char *GenerateUniqueName(const char *prefix)
     size_t prefix_len = 0;
     if (prefix != NULL) { prefix_len = strlen(prefix); }
 
-    char *name = (char *)calloc(1, prefix_len + UID_LENGTH + 1);
+    char *name = calloc(1, prefix_len + UID_LENGTH + 1);
     if (!name) {
         APP_ERROR("Failed to allocate memory for unique name");
         return NULL;
@@ -262,7 +262,7 @@ char *GetImagePath(void)
        https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
     */
     DWORD buffer_size = 32767;
-    wchar_t *image_path_w = (wchar_t *)calloc(1, buffer_size * sizeof(wchar_t));
+    wchar_t *image_path_w = calloc(buffer_size, sizeof(*image_path_w));
     if (!image_path_w) {
         APP_ERROR("Failed to allocate buffer for image path");
         return NULL;
@@ -282,7 +282,7 @@ char *GetImagePath(void)
         return NULL;
     }
 
-    char *image_path_utf8 = (char *)calloc(1, utf8_size);
+    char *image_path_utf8 = calloc(1, utf8_size);
     if (!image_path_utf8) {
         APP_ERROR("Failed to allocate buffer for UTF-8 image path");
         free(image_path_w);
@@ -328,7 +328,7 @@ char *GetImageDirectoryPath(void) {
 // Retrieves the path to the temporary directory for the current user.
 char *GetTempDirectoryPath(void)
 {
-    char *temp_dir = (char *)calloc(1, MAX_PATH);
+    char *temp_dir = calloc(1, MAX_PATH);
     if (!temp_dir) {
         APP_ERROR("Failed to memory allocate for get temp directory");
         return NULL;
@@ -426,7 +426,7 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
         return NULL;
     }
 
-    MappedFileHandle *handle = (MappedFileHandle *)calloc(1, sizeof(MappedFileHandle));
+    MappedFileHandle *handle = calloc(1, sizeof(*handle));
     if (handle) {
         handle->hFile = hFile;
         handle->hMapping = hMapping;

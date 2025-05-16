@@ -121,7 +121,7 @@ void MarkInstDirForDeletion(void)
     size_t inst_dir_len = strlen(InstDir);
     size_t suffix_len = strlen(DELETION_MAKER_SUFFIX);
     size_t len = inst_dir_len + suffix_len;
-    char *marker = (char *)calloc(1, len + 1);
+    char *marker = calloc(1, len + 1);
     if (!marker) {
         APP_ERROR("Failed to allocate memory for deletion marker path");
         return;
@@ -155,7 +155,7 @@ char *ReplaceInstDirPlaceholder(const char *str)
 
     for (p = str; *p; p++) { if (*p == PLACEHOLDER) c++; }
     SIZE_T out_len = strlen(str) - c + InstDirLen * c + 1;
-    char *out = (char *)calloc(1, out_len);
+    char *out = calloc(1, out_len);
     if (!out) {
         APP_ERROR("Failed to allocate memory");
         return NULL;

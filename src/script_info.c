@@ -13,7 +13,7 @@ static char* ConcatStr(const char *first, ...) {
     }
     va_end(args);
 
-    char *str = (char *)calloc(1, len + 1);
+    char *str = calloc(1, len + 1);
     if (!str) {
         APP_ERROR("Failed to allocate memory");
         return NULL;
@@ -39,7 +39,7 @@ static char *EscapeAndQuoteCmdArg(const char* arg)
     size_t arg_len = strlen(arg);
     size_t count = 0;
     for (size_t i = 0; i < arg_len; i++) { if (arg[i] == '\"') count++; }
-    char *sanitized = (char *)calloc(1, arg_len + count * 2 + 3);
+    char *sanitized = calloc(1, arg_len + count * 2 + 3);
     if (!sanitized) {
         APP_ERROR("Failed to allocate memory");
         return NULL;
@@ -64,7 +64,7 @@ static bool ParseArguments(const char *args, size_t args_size, size_t *out_argc,
         local_argc++;
     }
 
-    const char **local_argv = (const char **)calloc(1, (local_argc + 1) * sizeof(char *));
+    const char **local_argv = calloc(local_argc + 1, sizeof(local_argv[0]));
     if (!local_argv) {
         APP_ERROR("Failed to memory allocate for argv");
         return false;
