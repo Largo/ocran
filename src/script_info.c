@@ -43,6 +43,100 @@ static char *EscapeAndQuoteCmdArg(const char* arg)
     return sanitized;
 }
 
+static char *argv_to_command_line(int argc, char *argv[])
+{
+    if (argc < 0) {
+        APP_ERROR("Invalid argument count %d", argc);
+        return NULL;
+    }
+
+    char **quoted = calloc((size_t)argc, sizeof(*quoted));
+    if (!quoted) {
+        APP_ERROR("Memory allocation failed in argv_to_command_line (quoted array)");
+        return NULL;
+    }
+
+    size_t total_len = 0;
+    for (int i = 0; i < argc; i++) {
+        quoted[i] = EscapeAndQuoteCmdArg(argv[i]);
+        if (!quoted[i]) {
+            APP_ERROR("Failed to quote arg at index %d", i);
+            goto cleanup;
+        }
+        total_len += strlen(quoted[i]);
+    }
+    total_len += (size_t)(argc > 0 ? argc - 1 : 0);
+
+    char *command_line = calloc(total_len + 1, sizeof(*command_line));
+    if (!command_line) {
+        APP_ERROR("Memory allocation failed in argv_to_command_line (command_line)");
+        goto cleanup;
+    }
+
+    char *p = command_line;
+    for (int i = 0; i < argc; i++) {
+        if (i > 0) *p++ = ' ';
+
+        size_t len = strlen(quoted[i]);
+        memcpy(p, quoted[i], len);
+        p += len;
+    }
+    *p = '\0';
+
+    for (int i = 0; i < argc; i++) free(quoted[i]);
+    free(quoted);
+    return command_line;
+
+cleanup:
+    for (int j = 0; j < argc; j++) free(quoted[j]);
+    free(quoted);
+    return NULL;
+}
+
+static char **transform_argv(int argc, const char *argv[])
+{
+    if (argc <= 0) {
+        APP_ERROR("No arguments to transform");
+        return NULL;
+    }
+
+    char **out_argv = calloc((size_t)argc + 1, sizeof(*out_argv));
+    if (!out_argv) {
+        APP_ERROR("Memory allocation failed in transform_argv");
+        return NULL;
+    }
+
+    for (int i = 0; i < argc; i++) {
+        char *str;
+        switch (i) {
+            case 0:
+                str = strdup(argv[0]);
+                break;
+
+            case 1:
+                str = ExpandInstDirPath(argv[1]);
+                break;
+
+            default:
+                str = ReplaceInstDirPlaceholder(argv[i]);
+                break;
+        }
+        if (!str) {
+            APP_ERROR("Failed to transform argv[%d]", i);
+            goto cleanup;
+        }
+        out_argv[i] = str;
+    }
+
+    out_argv[argc] = NULL;
+    return out_argv;
+
+cleanup:
+    for (int j = 0; j < argc; j++) free(out_argv[j]);
+    free(out_argv);
+    return NULL;
+}
+
 static bool ParseArguments(const char *args, size_t args_size, size_t *out_argc, const char ***out_argv)
 {
     size_t local_argc = 0;
@@ -66,54 +160,6 @@ static bool ParseArguments(const char *args, size_t args_size, size_t *out_argc,
     *out_argc = local_argc;
     *out_argv = local_argv;
     return true;
-}
-
-static char *BuildCommandLine(size_t argc, const char *argv[])
-{
-    char *command_line = EscapeAndQuoteCmdArg(argv[0]);
-    if (command_line == NULL) {
-        APP_ERROR("Failed to initialize command line with first arg");
-        return NULL;
-    }
-
-    for (size_t i = 1; i < argc; i++) {
-        char *str;
-        if (i == 1) {
-            str = ExpandInstDirPath(argv[1]);
-            if (str == NULL) {
-                APP_ERROR("Failed to expand script name to installation directory at arg index 1");
-                goto cleanup;
-            }
-        } else {
-            str = ReplaceInstDirPlaceholder(argv[i]);
-            if (str == NULL) {
-                APP_ERROR("Failed to replace arg placeholder at arg index %d", i);
-                goto cleanup;
-            }
-        }
-
-        char *sanitized = EscapeAndQuoteCmdArg(str);
-        free(str);
-        if (sanitized == NULL) {
-            APP_ERROR("Failed to sanitize arg at arg index %d", i);
-            goto cleanup;
-        }
-        char *base = command_line;
-        command_line = concat_with_space(base, sanitized);
-        free(base);
-        free(sanitized);
-        if (command_line == NULL) {
-            APP_ERROR("Failed to build command line after adding arg at arg index %d", i);
-            goto cleanup;
-        }
-    }
-
-    return command_line;
-
-cleanup:
-    free(command_line);
-
-    return NULL;
 }
 
 static const char *Script_ApplicationName = NULL;
@@ -165,13 +211,27 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     }
 
     // Set Script_CommandLine
-    char *command_line = BuildCommandLine(argc, argv);
+    char **temp = transform_argv((int)argc, argv);
+    if (!temp) {
+        APP_ERROR("Failed to transform argv");
+        free(argv);
+    }
+
+    char *command_line = argv_to_command_line((int)argc, temp);
     if (command_line == NULL) {
         APP_ERROR("Failed to build command line");
+        if (temp) {
+            for (int i = 0; i < argc; i++) free(temp[i]);
+        }
+        free(temp);
         free(argv);
         return false;
     }
 
+    if (temp) {
+        for (int i = 0; i < argc; i++) free(temp[i]);
+    }
+    free(temp);
     free(argv);
 
     Script_ApplicationName = application_name;
