@@ -1,38 +1,24 @@
 #include <windows.h>
 #include <string.h>
+#include <stdio.h>
 #include "error.h"
 #include "filesystem_utils.h"
 #include "inst_dir.h"
 
-static char* ConcatStr(const char *first, ...) {
-    va_list args;
-    va_start(args, first);
-    size_t len = 0;
-    for (const char* s = first; s; s = va_arg(args, const char*)) {
-        len += strlen(s);
-    }
-    va_end(args);
-
-    char *str = calloc(1, len + 1);
-    if (!str) {
-        APP_ERROR("Failed to allocate memory");
+// concat_with_space - join two strings with a single space between
+static char *concat_with_space(const char *a, const char *b)
+{
+    size_t len = strlen(a) + 1 + strlen(b) + 1;
+    char *out = calloc(len, sizeof(*out));
+    if (!out) {
+        APP_ERROR("Memory allocation failed in concat_with_space");
         return NULL;
     }
 
-    va_start(args, first);
-    char *p = str;
-    for (const char *s = first; s; s = va_arg(args, const char*)) {
-        size_t l = strlen(s);
-        memcpy(p, s, l);
-        p += l;
-    }
-    str[len] = '\0';
-    va_end(args);
+    snprintf(out, len, "%s %s", a, b);
 
-    return str;
+    return out;
 }
-
-#define CONCAT_STR3(s1, s2, s3) ConcatStr(s1, s2, s3, NULL)
 
 static char *EscapeAndQuoteCmdArg(const char* arg)
 {
@@ -113,7 +99,7 @@ static char *BuildCommandLine(size_t argc, const char *argv[])
             goto cleanup;
         }
         char *base = command_line;
-        command_line = CONCAT_STR3(base, " ", sanitized);
+        command_line = concat_with_space(base, sanitized);
         free(base);
         free(sanitized);
         if (command_line == NULL) {
@@ -241,7 +227,7 @@ bool RunScript(const char *extra_args, DWORD *exit_code)
         return false;
     }
 
-    char *cmd_line = CONCAT_STR3(Script_CommandLine, " ", extra_args);
+    char *cmd_line = concat_with_space(Script_CommandLine, extra_args);
     if (cmd_line == NULL) {
         APP_ERROR("Failed to build command line for script execution");
         return false;
