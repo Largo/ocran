@@ -253,34 +253,39 @@ void FreeScriptInfo(void)
     Script_CommandLine = NULL;
 }
 
-bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_code)
+static bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_code)
 {
-    PROCESS_INFORMATION p_info;
-    ZeroMemory(&p_info, sizeof(p_info));
-    STARTUPINFO s_info;
-    ZeroMemory(&s_info, sizeof(s_info));
-    s_info.cb = sizeof(s_info);
+    PROCESS_INFORMATION pi = { 0 };
+    STARTUPINFO         si = { .cb = sizeof(si) };
     bool result = false;
 
-    if (CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &s_info, &p_info)) {
-        if (WaitForSingleObject(p_info.hProcess, INFINITE) != WAIT_FAILED) {
-            if (GetExitCodeProcess(p_info.hProcess, exit_code)) {
-                result = true;
-            } else {
-                APP_ERROR("Failed to get exit status (%lu)", GetLastError());
-                *exit_code = GetLastError();
-            }
-        } else {
-            APP_ERROR("Failed to wait script process (%lu)", GetLastError());
-            *exit_code = GetLastError();
-        }
-        CloseHandle(p_info.hProcess);
-        CloseHandle(p_info.hThread);
-    } else {
+    if (!CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
         APP_ERROR("Failed to create process (%lu)", GetLastError());
         *exit_code = GetLastError();
+        goto cleanup;
     }
 
+    if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) {
+        APP_ERROR("Failed to wait script process (%lu)", GetLastError());
+        *exit_code = GetLastError();
+        goto cleanup;
+    }
+
+    if (!GetExitCodeProcess(pi.hProcess, exit_code)) {
+        APP_ERROR("Failed to get exit status (%lu)", GetLastError());
+        *exit_code = GetLastError();
+        goto cleanup;
+    }
+
+    result = true;
+
+cleanup:
+    if (pi.hProcess && pi.hProcess != INVALID_HANDLE_VALUE) {
+        CloseHandle(pi.hProcess);
+    }
+    if (pi.hThread && pi.hThread != INVALID_HANDLE_VALUE) {
+        CloseHandle(pi.hThread);
+    }
     return result;
 }
 
