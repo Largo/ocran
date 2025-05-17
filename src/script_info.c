@@ -162,7 +162,7 @@ static bool ParseArguments(const char *args, size_t args_size, size_t *out_argc,
     return true;
 }
 
-static const char *Script_ApplicationName = NULL;
+static char *Script_ApplicationName = NULL;
 static char *Script_CommandLine = NULL;
 
 #define HAS_SCRIPT_INFO (Script_ApplicationName && Script_CommandLine)
@@ -246,7 +246,7 @@ cleanup:
 
 void FreeScriptInfo(void)
 {
-    free((char *)Script_ApplicationName);
+    free(Script_ApplicationName);
     Script_ApplicationName = NULL;
 
     free(Script_CommandLine);
