@@ -185,59 +185,63 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
         return false;
     }
 
+    char *application_name = NULL;
+    char *command_line = NULL;
     size_t argc;
     const char **argv = NULL;
+    char **t_arg = NULL;
+    bool result = false;
+
     if (!ParseArguments(args, args_size, &argc, &argv)) {
         APP_ERROR("Failed to parse arguments");
-        return false;
+        goto cleanup;
     }
 
     if (!IsPathFreeOfDotElements(argv[0])) {
         APP_ERROR("Application name contains prohibited relative path elements like '.' or '..'");
-        return false;
+        goto cleanup;
     }
 
     if (!IsPathFreeOfDotElements(argv[1])) {
         APP_ERROR("Script name contains prohibited relative path elements like '.' or '..'");
-        return false;
+        goto cleanup;
     }
 
     // Set Script_ApplicationName
-    char *application_name = ExpandInstDirPath(argv[0]);
-    if (application_name == NULL) {
+    application_name = ExpandInstDirPath(argv[0]);
+    if (!application_name) {
         APP_ERROR("Failed to expand application name to installation directory");
-        free(argv);
-        return false;
+        goto cleanup;
     }
 
     // Set Script_CommandLine
-    char **temp = transform_argv((int)argc, argv);
-    if (!temp) {
+    t_arg = transform_argv((int)argc, argv);
+    if (!t_arg) {
         APP_ERROR("Failed to transform argv");
-        free(argv);
+        goto cleanup;
     }
 
-    char *command_line = argv_to_command_line((int)argc, temp);
-    if (command_line == NULL) {
+    command_line = argv_to_command_line((int)argc, t_arg);
+    if (!command_line) {
         APP_ERROR("Failed to build command line");
-        if (temp) {
-            for (int i = 0; i < argc; i++) free(temp[i]);
-        }
-        free(temp);
-        free(argv);
-        return false;
+        goto cleanup;
     }
-
-    if (temp) {
-        for (int i = 0; i < argc; i++) free(temp[i]);
-    }
-    free(temp);
-    free(argv);
 
     Script_ApplicationName = application_name;
     Script_CommandLine = command_line;
+    result = true;
 
-    return true;
+cleanup:
+    if (!result) {
+        free(application_name);
+        free(command_line);
+    }
+    free(argv);
+    if (t_arg) {
+        for (int i = 0; i < argc; i++) free(t_arg[i]);
+    }
+    free(t_arg);
+    return result;
 }
 
 void FreeScriptInfo(void)
