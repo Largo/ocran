@@ -253,7 +253,7 @@ void FreeScriptInfo(void)
     Script_CommandLine = NULL;
 }
 
-static bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD *exit_code)
+static bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, int *exit_code)
 {
     PROCESS_INFORMATION pi = { 0 };
     STARTUPINFO         si = { .cb = sizeof(si) };
@@ -261,19 +261,19 @@ static bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, DWORD 
 
     if (!CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
         APP_ERROR("Failed to create process (%lu)", GetLastError());
-        *exit_code = GetLastError();
+        *exit_code = (int)GetLastError();
         goto cleanup;
     }
 
     if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) {
         APP_ERROR("Failed to wait script process (%lu)", GetLastError());
-        *exit_code = GetLastError();
+        *exit_code = (int)GetLastError();
         goto cleanup;
     }
 
-    if (!GetExitCodeProcess(pi.hProcess, exit_code)) {
+    if (!GetExitCodeProcess(pi.hProcess, (LPDWORD)exit_code)) {
         APP_ERROR("Failed to get exit status (%lu)", GetLastError());
-        *exit_code = GetLastError();
+        *exit_code = (int)GetLastError();
         goto cleanup;
     }
 
@@ -289,7 +289,7 @@ cleanup:
     return result;
 }
 
-bool RunScript(const char *extra_args, DWORD *exit_code)
+bool RunScript(const char *extra_args, int *exit_code)
 {
     if (!HAS_SCRIPT_INFO) {
         APP_ERROR("Script info is not initialized");

@@ -47,7 +47,7 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-    DWORD exit_code = EXIT_CODE_FAILURE;
+    int exit_code = EXIT_CODE_FAILURE;
     MappedFile mapped_file = NULL;
     OperationModes flags = 0;
 

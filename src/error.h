@@ -1,8 +1,8 @@
 #include <stdarg.h>
 
 // Exit code definitions
-#define EXIT_CODE_SUCCESS ((DWORD)0)
-#define EXIT_CODE_FAILURE ((DWORD)-1)
+#define EXIT_CODE_SUCCESS (0)
+#define EXIT_CODE_FAILURE (-1)
 
 /**
  * EnableDebugMode - Enable debug mode
