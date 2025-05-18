@@ -289,21 +289,37 @@ cleanup:
     return result;
 }
 
-bool RunScript(const char *extra_args, int *exit_code)
+bool RunScript(int argc, char *argv[], int *exit_code)
 {
     if (!HAS_SCRIPT_INFO) {
         APP_ERROR("Script info is not initialized");
         return false;
     }
 
-    char *cmd_line = concat_with_space(Script_CommandLine, extra_args);
-    if (cmd_line == NULL) {
-        APP_ERROR("Failed to build command line for script execution");
-        return false;
+    char *extra_args = NULL;
+    char *cmd_line = NULL;
+    bool result = false;
+
+    if (argc > 1) {
+        extra_args = argv_to_command_line(argc - 1, argv + 1);
+    } else {
+        extra_args = calloc(1, 1);
+    }
+    if (!extra_args) {
+        APP_ERROR("Failed to build extra_args");
+        goto cleanup;
     }
 
-    bool result = CreateAndWaitForProcess(Script_ApplicationName, cmd_line, exit_code);
+    cmd_line = concat_with_space(Script_CommandLine, extra_args);
+    if (!cmd_line) {
+        APP_ERROR("Failed to build command line for script execution");
+        goto cleanup;
+    }
 
+    result = CreateAndWaitForProcess(Script_ApplicationName, cmd_line, exit_code);
+
+cleanup:
+    free(extra_args);
     free(cmd_line);
     return result;
 }
