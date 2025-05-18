@@ -45,7 +45,8 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
    return TRUE;
 }
 
-int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+
+int main(int argc, char *argv[])
 {
     int exit_code = EXIT_CODE_FAILURE;
     MappedFile mapped_file = NULL;
@@ -180,8 +181,8 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     */
     exit_code = EXIT_CODE_SUCCESS;
 
-    DEBUG("Run application script: %s %s %s", app_name, cmd_line, lpCmdLine);
-    if (!RunScript(lpCmdLine, &exit_code)) {
+    DEBUG("Run application script: %s %s %s", app_name, cmd_line);
+    if (!RunScript(argc, argv, &exit_code)) {
         exit_code = EXIT_CODE_FAILURE;
         FATAL("Failed to run script");
         goto cleanup;
