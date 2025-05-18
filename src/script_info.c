@@ -137,29 +137,43 @@ cleanup:
     return NULL;
 }
 
-static bool ParseArguments(const char *args, size_t args_size, size_t *out_argc, const char ***out_argv)
+/**
+ * Splits the NULL-delimited strings in buffer and stores pointers in array.
+ *
+ * @param buffer      Pointer to data containing NULL-delimited strings.
+ * @param buffer_size Size in bytes of buffer.
+ * @param array       Array to receive string pointers. If NULL, only counting
+ *                    is performed.
+ * @param array_count Number of elements array can hold (excluding the NULL
+ *                    terminator). Caller must allocate with
+ *                    calloc(array_count + 1, sizeof(*array)).
+ * @return            Number of strings in buffer (excluding the NULL
+ *                    terminator).
+ */
+static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
+                                     const char **array, size_t array_count)
 {
-    size_t local_argc = 0;
-    for (const char *s = args; s < (args + args_size); s += strlen(s) + 1) {
-        local_argc++;
+    size_t needed   = 0;
+    size_t stored   = 0;
+    const char *p   = buffer;
+    const char *end = buffer + buffer_size;
+
+    while (p < end) {
+        const char *nul = memchr(p, '\0', (size_t)(end - p));
+        if (!nul) {
+            break;
+        }
+        if (array && stored < array_count) {
+            array[stored++] = p;
+        }
+        needed++;
+        p = nul + 1;
     }
 
-    const char **local_argv = calloc(local_argc + 1, sizeof(local_argv[0]));
-    if (!local_argv) {
-        APP_ERROR("Failed to memory allocate for argv");
-        return false;
+    if (array && array_count > 0) {
+        array[stored] = NULL;
     }
-
-    const char *s = args;
-    for (size_t i = 0; i < local_argc; i++) {
-        local_argv[i] = s;
-        s += strlen(s) + 1;
-    }
-    local_argv[local_argc] = NULL;
-
-    *out_argc = local_argc;
-    *out_argv = local_argv;
-    return true;
+    return needed;
 }
 
 static char *Script_ApplicationName = NULL;
@@ -192,8 +206,17 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     char **t_arg = NULL;
     bool result = false;
 
-    if (!ParseArguments(args, args_size, &argc, &argv)) {
-        APP_ERROR("Failed to parse arguments");
+    argc = split_strings_to_array(args, args_size, NULL, 0);
+
+    argv = calloc(argc + 1, sizeof(*argv));
+    if (!argv) {
+        APP_ERROR("Memory allocation failed for argv");
+        goto cleanup;
+    }
+
+    size_t needed = split_strings_to_array(args, args_size, argv, argc);
+    if (needed != argc) {
+        APP_ERROR("Argument count mismatch");
         goto cleanup;
     }
 
