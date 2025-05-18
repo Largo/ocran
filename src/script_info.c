@@ -261,19 +261,16 @@ static bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, int *e
 
     if (!CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
         APP_ERROR("Failed to create process (%lu)", GetLastError());
-        *exit_code = (int)GetLastError();
         goto cleanup;
     }
 
     if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) {
         APP_ERROR("Failed to wait script process (%lu)", GetLastError());
-        *exit_code = (int)GetLastError();
         goto cleanup;
     }
 
     if (!GetExitCodeProcess(pi.hProcess, (LPDWORD)exit_code)) {
         APP_ERROR("Failed to get exit status (%lu)", GetLastError());
-        *exit_code = (int)GetLastError();
         goto cleanup;
     }
 
