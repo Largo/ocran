@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
     */
     exit_code = EXIT_CODE_SUCCESS;
 
-    DEBUG("Run application script: %s %s %s", app_name, cmd_line);
+    DEBUG("Run application script: %s %s", app_name, cmd_line);
     if (!RunScript(argc, argv, &exit_code)) {
         exit_code = EXIT_CODE_FAILURE;
         FATAL("Failed to run script");
