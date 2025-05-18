@@ -208,6 +208,11 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
 
     argc = split_strings_to_array(args, args_size, NULL, 0);
 
+    if (argc < 2) {
+        APP_ERROR("Insufficient arguments expected at least application and script name");
+        goto cleanup;
+    }
+
     argv = calloc(argc + 1, sizeof(*argv));
     if (!argv) {
         APP_ERROR("Memory allocation failed for argv");
