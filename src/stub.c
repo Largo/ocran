@@ -223,7 +223,6 @@ cleanup:
         }
         if (!DeleteInstDirRecursively()) {
             DEBUG("Failed to delete installation directory");
-            MarkInstDirForDeletion();
         }
     }
 

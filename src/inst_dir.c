@@ -110,37 +110,6 @@ bool DeleteInstDirRecursively(void)
     return DeleteRecursively(InstDir);
 }
 
-// Creates a marker file indicating the directory is to be deleted.
-void MarkInstDirForDeletion(void)
-{
-    if (InstDir == NULL || *InstDir == '\0') {
-        APP_ERROR("InstDir is null or empty");
-        return;
-    }
-
-    size_t inst_dir_len = strlen(InstDir);
-    size_t suffix_len = strlen(DELETION_MAKER_SUFFIX);
-    size_t len = inst_dir_len + suffix_len;
-    char *marker = calloc(1, len + 1);
-    if (!marker) {
-        APP_ERROR("Failed to allocate memory for deletion marker path");
-        return;
-    }
-    memcpy(marker, InstDir, inst_dir_len);
-    memcpy(marker + inst_dir_len, DELETION_MAKER_SUFFIX, suffix_len);
-    marker[len] = '\0';
-
-    HANDLE h = CreateFile(marker, 0, 0, NULL, CREATE_ALWAYS, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE) {
-        APP_ERROR("Failed to mark for deletion (%lu)", GetLastError());
-        return;
-    }
-
-    APP_ERROR("Deletion marker path is %s", marker);
-    CloseHandle(h);
-    free(marker);
-}
-
 // Replaces placeholders in a string with the installation directory path.
 char *ReplaceInstDirPlaceholder(const char *str)
 {

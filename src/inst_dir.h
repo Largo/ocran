@@ -81,14 +81,6 @@ char *ExpandInstDirPath(const char *rel_path);
  */
 bool DeleteInstDirRecursively(void);
 
-// Suffix for the deletion marker file.
-#define DELETION_MAKER_SUFFIX ".ocran-delete-me"
-
-/**
- * MarkInstDirForDeletion - Creates a marker file indicating the directory is to be deleted.
- */
-void MarkInstDirForDeletion(void);
-
 // Placeholder character used in paths.
 #define PLACEHOLDER '|'
 

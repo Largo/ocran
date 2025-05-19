@@ -1,6 +1,7 @@
 === 1.3.18
 - Suppress user notifications during stub cleanup and log errors to DEBUG output
 - Fixes issue where two MessageBox dialogs appeared in GUI mode when a signature was not found.
+- No longer create a marker file when the stub fails to delete the installation directory during cleanup.
 
 === 1.3.17
 - Modified `rake test` to no longer build stubs during test execution. Use `rake build_stub` when stub generation is necessary.
