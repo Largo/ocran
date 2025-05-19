@@ -151,13 +151,6 @@ int main(int argc, char *argv[])
     }
 
     /* Launching the script, provided there are no errors in file extraction from the image */
-    const char *app_name;
-    char *cmd_line;
-    if (!GetScriptInfo(&app_name, &cmd_line)) {
-        FATAL("Failed to retrieve script information");
-        goto cleanup;
-    }
-
     DEBUG("*** Starting application script in %s", inst_dir);
 
     if (IS_CHDIR_BEFORE_SCRIPT(flags)) {
@@ -181,7 +174,7 @@ int main(int argc, char *argv[])
     */
     exit_code = EXIT_CODE_SUCCESS;
 
-    DEBUG("Run application script: %s %s", app_name, cmd_line);
+    DEBUG("Run application script");
     if (!RunScript(argc, argv, &exit_code)) {
         exit_code = EXIT_CODE_FAILURE;
         FATAL("Failed to run script");

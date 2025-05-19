@@ -287,6 +287,9 @@ static bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, int *e
     STARTUPINFO         si = { .cb = sizeof(si) };
     bool result = false;
 
+    DEBUG("ApplicationName=%s", app_name);
+    DEBUG("CommandLine=%s", cmd_line);
+
     if (!CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
         APP_ERROR("Failed to create process (%lu)", GetLastError());
         goto cleanup;
