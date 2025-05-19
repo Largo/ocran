@@ -4,7 +4,7 @@
 #include "inst_dir.h"
 
 // Static variable to hold the installation directory path.
-static const char *InstDir = NULL;
+static char *InstDir = NULL;
 
 // Creates an installation directory with a unique name in the specified target directory.
 const char *CreateInstDirectory(const char *target_dir)
@@ -14,7 +14,7 @@ const char *CreateInstDirectory(const char *target_dir)
         return NULL;
     }
 
-    const char *inst_dir = CreateUniqueDirectory(target_dir, "ocran");
+    char *inst_dir = CreateUniqueDirectory(target_dir, "ocran");
     if (inst_dir == NULL) {
         APP_ERROR("Failed to create a unique installation directory within the specified target directory");
         return NULL;
@@ -63,7 +63,7 @@ const char *CreateTemporaryInstDir(void)
 // Frees the allocated memory for the installation directory path.
 void FreeInstDir(void)
 {
-    free((void *)InstDir);
+    free(InstDir);
     InstDir = NULL;
 }
 
