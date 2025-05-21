@@ -16,11 +16,11 @@ char *JoinPath(const char *p1, const char *p2)
     }
 
     size_t p1_len = strlen(p1);
-    if (p1[p1_len - 1] == PATH_SEPARATOR) { p1_len--; }
+    if (is_path_separator(p1[p1_len - 1])) { p1_len--; }
 
     size_t p2_len = strlen(p2);
     const char *p2_start = p2;
-    if (*p2_start == PATH_SEPARATOR) { p2_start++; p2_len--; }
+    if (is_path_separator(*p2_start)) { p2_start++; p2_len--; }
 
     size_t joined_len = p1_len + 1 + p2_len;
     char *joined_path = calloc(1, joined_len + 1);
@@ -65,7 +65,7 @@ bool CreateDirectoriesRecursively(const char *dir)
     char *end = path + dir_len;
     char *p = end;
     for (; p >= path; p--) {
-        if (*p == PATH_SEPARATOR) {
+        if (is_path_separator(*p)) {
             *p = '\0';
             DWORD path_attr = GetFileAttributes(path);
             if (path_attr != INVALID_FILE_ATTRIBUTES) {
@@ -116,7 +116,7 @@ bool CreateParentDirectories(const char *file)
     }
 
     size_t i = strlen(file);
-    for (; i > 0; i--) { if (file[i] == PATH_SEPARATOR) break; }
+    for (; i > 0; i--) { if (is_path_separator(file[i])) break; }
     if (i == 0) { return true; }
 
     char *dir = calloc(1, i + 1);
@@ -310,7 +310,7 @@ char *GetImageDirectoryPath(void) {
 
     size_t i = strlen(image_path);
     for (; i > 0; i--) {
-        if (image_path[i - 1] == PATH_SEPARATOR) {
+        if (is_path_separator(image_path[i - 1])) {
             image_path[i - 1] = '\0';
             break;
         }

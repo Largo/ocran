@@ -8,6 +8,14 @@
 #define PATH_SEPARATOR '/'
 #endif
 
+static inline bool is_path_separator(char c) {
+#ifdef _WIN32
+    return c == '\\' || c == '/';
+#else
+    return c == '/';
+#endif
+}
+
 /**
  * JoinPath - Combines two file path components into a single path.
  *
