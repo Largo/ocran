@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef _WIN32
 #define PATH_SEPARATOR '\\'
@@ -152,3 +153,53 @@ MappedFile OpenAndMapFile(const char *file_path, unsigned long long *file_size, 
  * regardless of individual errors.
  */
 bool FreeMappedFile(MappedFile handle);
+
+/**
+ * @brief Opaque handle to a memory-mapped file region.
+ *
+ * The contents of this structure are private; users must
+ * obtain and destroy instances via the API functions below.
+ */
+typedef struct MemoryMap MemoryMap;
+
+/**
+ * @brief Creates a memory map for the entire contents of a file.
+ *
+ * Opens @p path in read-only mode and maps its full length
+ * into memory.  The returned pointer must later be passed to
+ * DestroyMemoryMap() to unmap and free resources.
+ *
+ * @param path        Path to an existing file to map; must not be NULL.
+ * @return            Pointer to a new MemoryMap on success, or NULL on failure.
+ */
+MemoryMap *CreateMemoryMap(const char *path);
+
+/**
+ * @brief Unmaps and destroys a MemoryMap object.
+ *
+ * Releases the mapped view and frees all associated resources.
+ * After this call, @p map is no longer valid.  Passing NULL
+ * will log an error but otherwise do nothing.
+ *
+ * @param map         MemoryMap instance to destroy.
+ */
+void DestroyMemoryMap(MemoryMap *map);
+
+/**
+ * @brief Returns the base address of the mapped view.
+ *
+ * @param map         A valid MemoryMap returned by CreateMemoryMap.
+ *                    Must not be NULL.
+ * @return            Base address of the mapping, or NULL if @p map is NULL.
+ */
+void *GetMemoryMapBase(const MemoryMap *map);
+
+/**
+ * @brief Returns the size of the mapped region in bytes.
+ *
+ * @param map         A valid MemoryMap returned by CreateMemoryMap.
+ *                    Must not be NULL.
+ * @return            Size in bytes of the mapping, or 0 if @p map is NULL.
+ *                    Note: 0 may also be a valid size for an empty file.
+ */
+size_t GetMemoryMapSize(const MemoryMap *map);

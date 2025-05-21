@@ -476,3 +476,181 @@ bool FreeMappedFile(MappedFile handle) {
 
     return success;
 }
+
+struct MemoryMap {
+    void   *base;       // Base address of the mapping
+    size_t  size;       // Length of the mapping
+};
+
+MemoryMap *CreateMemoryMap(const char *path)
+{
+    if (!path) {
+        APP_ERROR("CreateMemoryMap: path is NULL");
+        return NULL;
+    }
+
+    MemoryMap *map = malloc(sizeof(*map));
+    if (!map) {
+        APP_ERROR("CreateMemoryMap: Memory allocation failed for map");
+        return NULL;
+    }
+
+    HANDLE hFile = INVALID_HANDLE_VALUE;
+    HANDLE hMapping = NULL;  // section object handle for mapping
+    LPVOID base = NULL;
+
+    /*
+     * Open the target file for memory mapping:
+     *   - Read-only access; write and delete operations are denied.
+     *   - Allows other processes to open the file for read-only access.
+     *   - Fails if the file does not exist.
+     *   - Sets the file’s attribute to read-only.
+     *   - Hints OS to optimize for sequential access after initial random read.
+     */
+
+    hFile = CreateFile(
+        path,                           // path to existing file
+        GENERIC_READ,                   // read-only access
+        FILE_SHARE_READ,                // share read, deny write/delete
+        NULL,                           // default security
+        OPEN_EXISTING,                  // open only if file exists
+        FILE_ATTRIBUTE_READONLY         // read-only attribute
+      | FILE_FLAG_SEQUENTIAL_SCAN,      // then optimize for sequential access
+        NULL                            // no template file
+    );
+    if (hFile == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
+        APP_ERROR(
+            "CreateMemoryMap: CreateFile(\"%s\") failed, Error=%lu",
+            path, err
+        );
+
+        goto cleanup;
+    }
+
+    LARGE_INTEGER fileSize;
+    if (!GetFileSizeEx(hFile, &fileSize)) {
+        DWORD err = GetLastError();
+        APP_ERROR(
+            "CreateMemoryMap: GetFileSizeEx failed, Error=%lu",
+            err
+        );
+
+        goto cleanup;
+    }
+    
+    /*
+     * Verify that the file size obtained at runtime does not exceed the
+     * maximum value representable by size_t on this platform. This check
+     * prevents an overflow when casting the 64-bit file size to size_t,
+     * which may be 32 bits on some environments.
+     */
+
+    if (fileSize.QuadPart < 0
+        || (ULONGLONG)fileSize.QuadPart > (ULONGLONG)SIZE_MAX) {
+        APP_ERROR(
+            "CreateMemoryMap: file too large (%lld bytes)",
+            fileSize.QuadPart
+        );
+
+        goto cleanup;
+    }
+
+    map->size = (size_t)fileSize.QuadPart;
+
+    hMapping = CreateFileMapping(
+        hFile,              // read-only file handle
+        NULL,               // default security attributes
+        PAGE_READONLY,      // read-only mapping protection
+        0,                  // max size high 32-bit (0 = full file)
+        0,                  // max size low 32-bit  (0 = full file)
+        NULL                // unnamed mapping (private)
+    );
+    if (!hMapping) {
+        DWORD err = GetLastError();
+        APP_ERROR(
+            "CreateMemoryMap: CreateFileMapping(hFile) failed, Error=%lu",
+            err
+        );
+
+        goto cleanup;
+    }
+
+    CloseHandle(hFile);
+    hFile = INVALID_HANDLE_VALUE;
+
+    base = MapViewOfFile(
+        hMapping,           // handle returned by CreateFileMapping
+        FILE_MAP_READ,      // read-only access to mapped view
+        0,                  // file offset high 32 bits (start at 0)
+        0,                  // file offset low 32 bits  (start at 0)
+        0                   // number of bytes to map (0 = entire file)
+    );
+    if (!base) {
+        DWORD err = GetLastError();
+        APP_ERROR(
+            "CreateMemoryMap: MapViewOfFile(hMapping) failed, Error=%lu",
+            err
+        );
+
+        goto cleanup;
+    }
+
+    CloseHandle(hMapping);
+    hMapping = NULL;
+
+    map->base = base;
+    return map;
+
+cleanup:
+    if (base) {
+        UnmapViewOfFile(base);
+    }
+    if (hMapping) {
+        CloseHandle(hMapping);
+    }
+    if (hFile != INVALID_HANDLE_VALUE) {
+        CloseHandle(hFile);
+    }
+    free(map);
+    return NULL;
+}
+
+void DestroyMemoryMap(MemoryMap *map)
+{
+    if (!map) {
+        APP_ERROR("DestroyMemoryMap: map is NULL");
+        return;
+    }
+
+    if (map->base) {
+        if (!UnmapViewOfFile(map->base)) {
+            DWORD err = GetLastError();
+            APP_ERROR(
+                "DestroyMemoryMap: UnmapViewOfFile failed, Error=%lu",
+                err
+            );
+        }
+        map->base = NULL;
+    }
+
+    free(map);
+}
+
+void *GetMemoryMapBase(const MemoryMap *map)
+{
+    if (!map) {
+        APP_ERROR("GetMemoryMapBase: map is NULL");
+        return NULL;
+    }
+    return map->base;
+}
+
+size_t GetMemoryMapSize(const MemoryMap *map)
+{
+    if (!map) {
+        APP_ERROR("GetMemoryMapSize: map is NULL");
+        return 0;
+    }
+    return map->size;
+}

@@ -49,7 +49,7 @@ BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 int main(int argc, char *argv[])
 {
     int exit_code = EXIT_CODE_FAILURE;
-    MappedFile mapped_file = NULL;
+    MemoryMap *map = NULL;
     OperationModes flags = 0;
 
     /*
@@ -75,20 +75,14 @@ int main(int argc, char *argv[])
     }
 
     /* Open and map the image (executable) into memory */
-    unsigned long long file_size = 0;
-    const void *base = NULL;
-    mapped_file = OpenAndMapFile(image_path, &file_size, &base);
-    if (mapped_file == NULL) {
-        FATAL("Failed to open or map the executable file");
+    map = CreateMemoryMap(image_path);
+    if (!map) {
+        FATAL("Failed to map the executable file");
         goto cleanup;
     }
 
-    // Check if the file size exceeds the maximum size that can be processed in a 32-bit environment
-    if (file_size > SIZE_MAX) {
-        FATAL("File size exceeds processable limit");
-        goto cleanup;
-    }
-    size_t image_size = (size_t)file_size;  // Used to determine the pointer range that can be addressed
+    void * base = GetMemoryMapBase(map);
+    size_t image_size = GetMemoryMapSize(map);
 
     /* Process the image by checking the signature and locating the first opcode */
     const void *sig = FindSignature(base, image_size);
@@ -133,22 +127,11 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    /*
-       After successful unpacking, mapped_file is no longer needed. Freeing up
-       system resources as the memory map is only used for file extraction and
-       is now redundant.
-    */
-    bool release_ok = FreeMappedFile(mapped_file);
-    /*
-       Set the pointer to NULL after calling FreeMappedFile to avoid reuse.
-       FreeMappedFile always releases the resource, regardless of the success
-       of the underlying release operations.
-    */
-    mapped_file = NULL;
-    if (!release_ok) {
-        FATAL("Failed to release mapped file resources");
-        goto cleanup;
-    }
+    // Memory map no longer needed after unpacking; free its resources.
+    DestroyMemoryMap(map);
+
+    // Prevent accidental use of the freed map.
+    map = NULL;
 
     /* Launching the script, provided there are no errors in file extraction from the image */
     DEBUG("*** Starting application script in %s", inst_dir);
@@ -191,9 +174,10 @@ cleanup:
        they are logged with DEBUG output only, preventing unnecessary user interaction
        and reducing risk of exposing internal details.
     */
-    if (mapped_file) {
-        FreeMappedFile(mapped_file);
-        mapped_file = NULL;
+
+    if (map) {
+        DestroyMemoryMap(map);
+        map = NULL;
     }
 
     FreeScriptInfo();
