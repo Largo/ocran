@@ -225,12 +225,12 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
         goto cleanup;
     }
 
-    if (!IsPathFreeOfDotElements(argv[0])) {
+    if (!IsCleanRelativePath(argv[0])) {
         APP_ERROR("Application name contains prohibited relative path elements like '.' or '..'");
         goto cleanup;
     }
 
-    if (!IsPathFreeOfDotElements(argv[1])) {
+    if (!IsCleanRelativePath(argv[1])) {
         APP_ERROR("Script name contains prohibited relative path elements like '.' or '..'");
         goto cleanup;
     }

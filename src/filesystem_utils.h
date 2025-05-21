@@ -17,6 +17,22 @@ static inline bool is_path_separator(char c) {
 }
 
 /**
+ * @brief   Check if a path is a “clean” relative path.
+ *
+ * A clean relative path satisfies all of the following:
+ *   - Non-NULL, non-empty (`path != NULL && *path != '\0'`)
+ *   - Does not start with a path separator (`'/'` or `'\'`)
+ *   - On Windows, does not use a drive-letter specifier (e.g. `"C:\"`)
+ *   - Contains no empty segments (no `"//"` or `"\\"`)
+ *   - Contains no `"."` or `".."` segments
+ *
+ * @param   path  A null-terminated string representing the path to validate.
+ * @return  true  if the input meets all clean-relative-path criteria;  
+ *          false otherwise.
+ */
+bool IsCleanRelativePath(const char *path);
+
+/**
  * JoinPath - Combines two file path components into a single path.
  *
  * @param p1 The first path component.
@@ -95,18 +111,6 @@ char *GetImageDirectoryPath(void);
  */
 char *GetTempDirectoryPath(void);
 
-/**
- * Checks if the given path string is free of relative path elements.
- *
- * This function examines the string to ensure that it does not contain
- * relative path elements, specifically '.' and '..' segments.
- * It's useful for validating paths that should not refer to any relative
- * locations, especially when dealing with file system navigation.
- *
- * @param str The path string to be checked.
- * @return true if the path does not contain relative path elements, otherwise false.
- */
-bool IsPathFreeOfDotElements(const char *str);
 
 /**
  * ChangeDirectoryToSafeDirectory - Change the current working directory to a predefined safe directory.

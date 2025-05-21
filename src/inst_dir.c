@@ -91,7 +91,7 @@ char *ExpandInstDirPath(const char *rel_path)
         return NULL;
     }
 
-    if (!IsPathFreeOfDotElements(rel_path)) {
+    if (!IsCleanRelativePath(rel_path)) {
         APP_ERROR("Failed to expand path: relative path '%s' contains '.' or '..' elements", rel_path);
         return NULL;
     }

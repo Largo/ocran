@@ -1,6 +1,63 @@
 #include <windows.h>
+#include <stdbool.h>
 #include "error.h"
 #include "filesystem_utils.h"
+
+/*
+ * Returns true if `path` is a “clean” relative path:
+ * - not empty
+ * - does not start with a path separator
+ * - on Windows, no drive-letter spec (e.g. "C:\")
+ * - no empty segments ("//")
+ * - no "." or ".." segments
+ */
+bool IsCleanRelativePath(const char *path)
+{
+    if (!path || !*path) {
+        return false;
+    }  
+
+#ifdef _WIN32
+    /* Forbid Windows drive specification (e.g. "C:\") */
+    if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
+        && path[1] == ':'
+        && is_path_separator(path[2])) {
+        return false;
+    }
+#endif
+
+    /* Forbid absolute path (leading '/' or '\') */
+    if (is_path_separator(*path)) {
+        return false;
+    }
+
+    /* Validate each path segment */
+    const char *p = path;
+    while (*p) {
+        const char *start = p;
+
+        /* Advance until next separator or end-of-string */
+        while (*p && !is_path_separator(*p)) {
+            p++;
+        }
+
+        size_t len = p - start;
+
+        /* Reject empty, "." or ".." segments */
+        if (len == 0
+            || (len == 1 && start[0] == '.')
+            || (len == 2 && start[0] == '.' && start[1] == '.')) {
+            return false;
+        }
+
+        /* Skip over the separator */
+        if (*p) {
+            p++;
+        }
+    }
+
+    return true;
+}
 
 // Combines two file path components into a single path, handling path separators.
 char *JoinPath(const char *p1, const char *p2)
@@ -341,27 +398,6 @@ char *GetTempDirectoryPath(void)
     }
 
     return temp_dir;
-}
-
-// Checks if the given path string is free of relative path elements.
-bool IsPathFreeOfDotElements(const char *str)
-{
-    const char *pos = str;
-    if ((pos[0] == '.' && (pos[1] == PATH_SEPARATOR || pos[1] == '\0')) ||
-        (pos[0] == '.' && pos[1] == '.' && (pos[2] == PATH_SEPARATOR || pos[2] == '\0'))) {
-        return false; // Path starts with './' or '../'
-    }
-
-    while ((pos = strstr(pos, ".")) != NULL) {
-        if ((pos == str || *(pos - 1) == PATH_SEPARATOR) &&
-            (pos[1] == PATH_SEPARATOR || pos[1] == '\0' ||
-            (pos[1] == '.' && (pos[2] == PATH_SEPARATOR || pos[2] == '\0')))) {
-            return false; // Found '/./', '/../', or 'dir/.' in the path
-        }
-        pos++;
-    }
-
-    return true;
 }
 
 // Moves the application to a safe directory.
