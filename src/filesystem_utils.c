@@ -93,6 +93,74 @@ char *JoinPath(const char *p1, const char *p2)
     return joined_path;
 }
 
+/**
+ * Converts a NULL-terminated UTF-16 string to a malloc-allocated UTF-8 string.
+ *
+ * @param utf16 Pointer to a NULL-terminated UTF-16 (wchar_t*) input string.
+ * @return malloc-allocated UTF-8 string on success (caller must free()),
+ *         or NULL on failure (error logged via APP_ERROR).
+ */
+static char *utf16_to_utf8(const wchar_t *utf16)
+{
+    char *utf8 = NULL;
+
+    if (!utf16) {
+        APP_ERROR("utf16 is NULL");
+
+        goto cleanup;
+    }
+
+    int utf8_size = WideCharToMultiByte(
+        CP_UTF8,
+        WC_ERR_INVALID_CHARS,
+        utf16, -1, NULL, 0, NULL, NULL
+    );
+    if (utf8_size == 0) {
+        DWORD err = GetLastError();
+        APP_ERROR(
+            "Failed to calculate buffer size for UTF-8 conversion, Error=%lu",
+            err
+        );
+
+        goto cleanup;
+    }
+
+    utf8 = malloc((size_t)utf8_size);
+    if (!utf8) {
+        APP_ERROR("Memory allocation failed for utf8");
+        
+        goto cleanup;
+    }
+    utf8[utf8_size - 1] = '\0';
+
+    int written = WideCharToMultiByte(
+        CP_UTF8,
+        WC_ERR_INVALID_CHARS,
+        utf16, -1, utf8, utf8_size, NULL, NULL
+    );
+    if (written == 0) {
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to convert UTF-16 to UTF-8, Error=%lu", err);
+
+        goto cleanup;
+    } else if (written != utf8_size) {
+        APP_ERROR(
+            "Unexpected UTF-8 length: expected=%d, written=%d",
+             utf8_size, written
+        );
+
+        goto cleanup;
+    }
+
+    return utf8;
+
+cleanup:
+    if (utf8) {
+        free(utf8);
+    }
+    return NULL;
+}
+
 // Recursively creates a directory and all its parent directories.
 bool CreateDirectoriesRecursively(const char *dir)
 {
@@ -332,24 +400,10 @@ char *GetImagePath(void)
         return NULL;
     }
 
-    int utf8_size = WideCharToMultiByte(CP_UTF8, 0, image_path_w, -1, NULL, 0, NULL, NULL);
-    if (utf8_size == 0) {
-        APP_ERROR("Failed to calculate buffer size for UTF-8 conversion (%lu)", GetLastError());
-        free(image_path_w);
-        return NULL;
-    }
-
-    char *image_path_utf8 = calloc(1, utf8_size);
+    char *image_path_utf8 = utf16_to_utf8(image_path_w);
     if (!image_path_utf8) {
-        APP_ERROR("Failed to allocate buffer for UTF-8 image path");
+        APP_ERROR("Failed to convert image path to UTF-8");
         free(image_path_w);
-        return NULL;
-    }
-
-    if (WideCharToMultiByte(CP_UTF8, 0, image_path_w, -1, image_path_utf8, utf8_size, NULL, NULL) == 0) {
-        APP_ERROR("Failed to convert image path to UTF-8 (%lu)", GetLastError());
-        free(image_path_w);
-        free(image_path_utf8);
         return NULL;
     }
 
