@@ -164,8 +164,8 @@ cleanup:
 // Recursively creates a directory and all its parent directories.
 bool CreateDirectoriesRecursively(const char *dir)
 {
-    if (dir == NULL || *dir == '\0') {
-        APP_ERROR("dir is null or empty");
+    if (!dir || !*dir) {
+        APP_ERROR("dir is NULL or empty");
         return false;
     }
 
@@ -179,57 +179,67 @@ bool CreateDirectoriesRecursively(const char *dir)
         }
     }
 
-    size_t dir_len = strlen(dir);
-    char *path = calloc(1, dir_len + 1);
-    if (!path) {
-        APP_ERROR("Failed to allocate memory");
-        return false;
-    }
-    strcpy(path, dir);
+    bool result = false;
 
-    char *end = path + dir_len;
+    size_t path_len = strlen(dir);
+    char *path = malloc(path_len + 1);
+    if (!path) {
+        APP_ERROR("Memory allocation failed for path");
+        
+        goto cleanup;
+    }
+    memcpy(path, dir, path_len);
+    path[path_len] = '\0';
+
+    char *end = path + path_len;
     char *p = end;
     for (; p >= path; p--) {
-        if (is_path_separator(*p)) {
-            *p = '\0';
-            DWORD path_attr = GetFileAttributes(path);
-            if (path_attr != INVALID_FILE_ATTRIBUTES) {
-                if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
-                    break;
-                } else {
-                    APP_ERROR("Directory name conflicts with a file(%s)", path);
-                    free(path);
-                    return false;
-                }
+        if (!is_path_separator(*p)) continue;
+
+        *p = '\0';
+        DWORD path_attr = GetFileAttributes(path);
+        if (path_attr != INVALID_FILE_ATTRIBUTES) {
+            if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
+                break;
             } else {
-                DWORD error = GetLastError();
-                if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
-                    continue;
-                } else {
-                    APP_ERROR("Cannot access the directory (%lu)", GetLastError());
-                    free(path);
-                    return false;
-                }
+                APP_ERROR("Directory name conflicts with a file(%s)", path);
+
+                goto cleanup;
+            }
+        } else {
+            DWORD err = GetLastError();
+            if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) {
+                continue;
+            } else {
+                APP_ERROR("Cannot access the directory, Error=%lu", err);
+
+                goto cleanup;
             }
         }
     }
 
     for (; p < end; p++) {
-        if (*p == '\0') {
-            *p = PATH_SEPARATOR;
+        if (*p) continue;
 
-            DEBUG("CreateDirectory(%s)", path);
+        *p = PATH_SEPARATOR;
 
-            if (!CreateDirectory(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
-                APP_ERROR("Failed to create directory (%lu)", GetLastError());
-                free(path);
-                return false;
-            }
+        DEBUG("CreateDirectory(%s)", path);
+
+        if (!CreateDirectory(path, NULL)) {
+            DWORD err = GetLastError();
+            APP_ERROR("Failed to create directory, Error=%lu", err);
+
+            goto cleanup;
         }
     }
 
-    free(path);
-    return true;
+    result = true;
+
+cleanup:
+    if (path) {
+        free(path);
+    }
+    return result;
 }
 
 // Creates all necessary parent directories for a given file path.
