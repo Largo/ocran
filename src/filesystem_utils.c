@@ -312,11 +312,12 @@ bool DeleteRecursively(const char *path)
     HANDLE handle = FindFirstFile(findPath, &findData);
     if (handle != INVALID_HANDLE_VALUE) {
         do {
-            if ((strcmp(findData.cFileName, ".") == 0) || (strcmp(findData.cFileName, "..") == 0)) {
+            const char *name = findData.cFileName;
+            if ( name[0]=='.' && (!name[1] || (name[1]=='.' && !name[2])) ) {
                 continue;
             }
 
-            char *subPath = JoinPath(path, findData.cFileName);
+            char *subPath = JoinPath(path, name);
             if (subPath == NULL) {
                 APP_ERROR("Failed to build delete file path");
                 break;
