@@ -93,6 +93,38 @@ char *JoinPath(const char *p1, const char *p2)
     return joined_path;
 }
 
+char *GetParentPath(const char *path)
+{
+    if (!path) {
+        APP_ERROR("path is NULL");
+        return NULL;
+    }
+
+    size_t len = strlen(path);
+    size_t i   = len;
+
+    /* Skip any trailing separators */
+    while (i > 0 && is_path_separator(path[i])) {
+        i--;
+    }
+
+    /* Skip the last segment’s characters */
+    while (i > 0 && !is_path_separator(path[i])) {
+        i--;
+    }
+
+    /* i==0 ⇒ empty parent */
+
+    char *out = malloc(i + 1);
+    if (!out) {
+        APP_ERROR("Memory allocation failed for parent path");
+        return NULL;
+    }
+    memcpy(out, path, i);
+    out[i] = '\0';
+    return out;
+}
+
 /**
  * Converts a NULL-terminated UTF-16 string to a malloc-allocated UTF-8 string.
  *
@@ -250,18 +282,12 @@ bool CreateParentDirectories(const char *file)
         return false;
     }
 
-    size_t i = strlen(file);
-    for (; i > 0; i--) { if (is_path_separator(file[i])) break; }
-    if (i == 0) { return true; }
-
-    char *dir = calloc(1, i + 1);
+    char *dir = GetParentPath(file);
     if (!dir) {
-        APP_ERROR("Failed to allocate memory");
+        APP_ERROR("Failed to get parent path");
         return false;
     }
 
-    strncpy(dir, file, i);
-    dir[i] = '\0';
     bool result = CreateDirectoriesRecursively(dir);
 
     free(dir);
@@ -429,21 +455,20 @@ char *GetImageDirectoryPath(void) {
         return NULL;
     }
 
-    size_t i = strlen(image_path);
-    for (; i > 0; i--) {
-        if (is_path_separator(image_path[i - 1])) {
-            image_path[i - 1] = '\0';
-            break;
-        }
+    char *image_dir = GetParentPath(image_path);
+    if (!image_dir) {
+        APP_ERROR("Failed to get parent path");
+        free(image_path);
+        return NULL;
     }
-
-    if (i == 0) {
+    if (image_dir[0] == '\0') {
         APP_ERROR("Executable path does not contain a directory");
+        free(image_dir);
         free(image_path);
         return NULL;
     }
 
-    return image_path;
+    return image_dir;
 }
 
 // Retrieves the path to the temporary directory for the current user.

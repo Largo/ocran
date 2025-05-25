@@ -43,6 +43,17 @@ bool IsCleanRelativePath(const char *path);
 char *JoinPath(const char *p1, const char *p2);
 
 /**
+ * @brief  Returns a newly allocated string containing the parent
+ *         directory for a given path.
+ * @param  path  Input path (must be non-NULL).
+ * @return
+ *   - NULL       if path is NULL or on allocation failure.
+ *   - ""         if path is empty or has no parent segment.
+ *   - otherwise  malloc’d NUL-terminated parent path (caller must free).
+ */
+char *GetParentPath(const char *path);
+
+/**
  * CreateDirectoriesRecursively - Creates a directory and all its parent directories if they do not exist.
  *
  * @param dir The path of the directory to create.
