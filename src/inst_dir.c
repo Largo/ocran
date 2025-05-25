@@ -190,42 +190,6 @@ bool CreateDirectoryUnderInstDir(const char *rel_path)
     return result;
 }
 
-static bool export_file(const char *path, const void *buf, size_t len)
-{
-    bool   result  = false;
-    HANDLE h       = INVALID_HANDLE_VALUE;
-    DWORD  written = 0;
-
-    if (len > MAXDWORD) {
-        DEBUG("export_file: Write length %zu exceeds maximum DWORD", len);
-        goto cleanup;
-    }
-
-    h = CreateFile(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) {
-        DEBUG("export_file: CreateFile failed, err=%u", GetLastError());
-        goto cleanup;
-    }
-
-    if (!WriteFile(h, buf, (DWORD)len, &written, NULL)) {
-        DEBUG("export_file: WriteFile failed, err=%u", GetLastError());
-        goto cleanup;
-    }
-
-    if (written != (DWORD)len) {
-        DEBUG("export_file: Write size mismatch, expected %zu, wrote %u", len, written);
-        goto cleanup;
-    }
-
-    result = true;
-
-cleanup:
-    if (h != INVALID_HANDLE_VALUE) {
-        CloseHandle(h);
-    }
-    return result;
-}
-
 bool ExportFileToInstDir(const char *rel_path, const void *buf, size_t len)
 {
     bool  result = false;
@@ -248,12 +212,7 @@ bool ExportFileToInstDir(const char *rel_path, const void *buf, size_t len)
         goto cleanup;
     }
 
-    if (!CreateParentDirectories(path)) {
-        APP_ERROR("Failed to create parent directory for %s", path);
-        goto cleanup;
-    }
-
-    if (!export_file(path, buf, len)) {
+    if (!ExportFile(path, buf, len)) {
         APP_ERROR("Failed to export file: %s", path);
         goto cleanup;
     }

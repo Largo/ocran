@@ -136,6 +136,17 @@ char *GetTempDirectoryPath(void);
 bool ChangeDirectoryToSafeDirectory(void);
 
 /**
+ * @brief Writes the contents of a buffer to the specified file path.
+ *        Creates any missing parent directories and overwrites existing files.
+ *
+ * @param path        Output file path (absolute or relative).
+ * @param buffer      Pointer to the data buffer to write.
+ * @param buffer_size Size of the data buffer in bytes.
+ * @return            true if the write succeeded, false otherwise.
+ */
+bool ExportFile(const char *path, const void *buffer, size_t buffer_size);
+
+/**
  * @brief Opaque handle to a memory-mapped file region.
  *
  * The contents of this structure are private; users must

@@ -510,6 +510,68 @@ bool ChangeDirectoryToSafeDirectory(void)
     return changed;
 }
 
+bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
+{
+    bool   result  = false;
+    HANDLE hFile   = INVALID_HANDLE_VALUE;
+    DWORD  written = 0;
+
+    if (buffer_size > MAXDWORD) {
+        APP_ERROR(
+            "ExportFile: Write length %zu exceeds maximum DWORD",
+            buffer_size
+        );
+
+        goto cleanup;
+    }
+
+    if (!CreateParentDirectories(path)) {
+        APP_ERROR("ExportFile: Failed to create parent directory for %s", path);
+        
+        goto cleanup;
+    }
+
+    hFile = CreateFile(
+        path,                       // file path
+        GENERIC_WRITE,              // write-only access (like O_WRONLY)
+        0,                          // no sharing (exclusive)
+        NULL,                       // default security
+        CREATE_ALWAYS,              // create or overwrite (O_CREAT|O_TRUNC)
+        FILE_ATTRIBUTE_NORMAL,      // normal file (no special flags)
+        NULL                        // no template file
+    );
+    if (hFile == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
+        APP_ERROR("ExportFile: CreateFile failed, Error=%u", err);
+
+        goto cleanup;
+    }
+
+    if (!WriteFile(hFile, buffer, (DWORD)buffer_size, &written, NULL)) {
+        DWORD err = GetLastError();
+        APP_ERROR("ExportFile: WriteFile failed, Error=%u", err);
+
+        goto cleanup;
+    }
+
+    if (written != (DWORD)buffer_size) {
+        APP_ERROR(
+            "ExportFile: Write size mismatch, expected %zu, wrote %u",
+            buffer_size, written
+        );
+        
+        goto cleanup;
+    }
+
+    result = true;
+
+cleanup:
+    if (hFile != INVALID_HANDLE_VALUE) {
+        CloseHandle(hFile);
+    }
+    return result;
+}
+
 struct MemoryMap {
     void   *base;       // Base address of the mapping
     size_t  size;       // Length of the mapping
