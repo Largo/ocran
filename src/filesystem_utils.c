@@ -274,26 +274,6 @@ cleanup:
     return result;
 }
 
-// Creates all necessary parent directories for a given file path.
-bool CreateParentDirectories(const char *file)
-{
-    if (file == NULL || *file == '\0') {
-        APP_ERROR("file is null or empty");
-        return false;
-    }
-
-    char *dir = GetParentPath(file);
-    if (!dir) {
-        APP_ERROR("Failed to get parent path");
-        return false;
-    }
-
-    bool result = CreateDirectoriesRecursively(dir);
-
-    free(dir);
-    return result;
-}
-
 // Deletes a directory and all its contents recursively.
 bool DeleteRecursively(const char *path)
 {
@@ -533,6 +513,7 @@ bool ChangeDirectoryToSafeDirectory(void)
 bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
 {
     bool   result  = false;
+    char  *parent  = NULL;
     HANDLE hFile   = INVALID_HANDLE_VALUE;
     DWORD  written = 0;
 
@@ -545,7 +526,14 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
         goto cleanup;
     }
 
-    if (!CreateParentDirectories(path)) {
+    parent = GetParentPath(path);
+    if (!parent) {
+        APP_ERROR("Failed to get parent path");
+
+        goto cleanup;
+    }
+
+    if (!CreateDirectoriesRecursively(parent)) {
         APP_ERROR("ExportFile: Failed to create parent directory for %s", path);
         
         goto cleanup;
@@ -586,6 +574,9 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
     result = true;
 
 cleanup:
+    if (parent) {
+        free(parent);
+    }
     if (hFile != INVALID_HANDLE_VALUE) {
         CloseHandle(hFile);
     }

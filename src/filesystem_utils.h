@@ -63,15 +63,6 @@ char *GetParentPath(const char *path);
 bool CreateDirectoriesRecursively(const char *dir);
 
 /**
- * CreateParentDirectories - Creates all parent directories of the specified file path.
- *
- * @param file The path of the file whose parent directories need to be created.
- * @return true if the parent directories were successfully created or already exist.
- *         false if the directories could not be created due to an error.
- */
-bool CreateParentDirectories(const char *file);
-
-/**
  * DeleteRecursively - Deletes a directory and all its contents recursively.
  *
  * @param path The path of the directory to delete.
