@@ -349,28 +349,30 @@ bool DeleteRecursively(const char *path)
 
 char *GenerateUniqueName(const char *prefix)
 {
-    size_t prefix_len = 0;
-    if (prefix != NULL) { prefix_len = strlen(prefix); }
-
-    char *name = calloc(1, prefix_len + UID_LENGTH + 1);
-    if (!name) {
-        APP_ERROR("Failed to allocate memory for unique name");
+    if (!prefix) {
+        APP_ERROR("prefix is NULL");
         return NULL;
     }
+
+    size_t prefix_len = strlen(prefix);
+    char *name = malloc(prefix_len + UID_LENGTH + 1);
+    if (!name) {
+        APP_ERROR("Memory allocation failed for unique name");
+        return NULL;
+    }
+    memcpy(name, prefix, prefix_len);
 
     LARGE_INTEGER time;
     // This function always succeeds on Windows XP and later
     QueryPerformanceCounter(&time);
     unsigned long long timestamp = time.QuadPart;
     char hex[] = "0123456789ABCDEF";
-    char t[UID_LENGTH + 1];
+    char *t = name + prefix_len;
     for (int i = 0; i < UID_LENGTH; i++) {
         t[i] = hex[(timestamp >> (4 * (UID_LENGTH - 1 - i))) & 0xF];
     }
     t[UID_LENGTH] = '\0';
 
-    strcpy(name, prefix);
-    strcat(name, t);
     return name;
 }
 
