@@ -6,6 +6,16 @@
 // Static variable to hold the installation directory path.
 static char *InstDir = NULL;
 
+/**
+ * @brief Checks whether the installation directory is configured.
+ *
+ * @return true if InstDir is non-NULL and not empty; false otherwise.
+ */
+static inline bool IsInstDirSet(void)
+{
+    return InstDir != NULL && InstDir[0] != '\0';
+}
+
 // Creates an installation directory with a unique name in the specified target directory.
 const char *CreateInstDirectory(const char *target_dir)
 {
@@ -70,8 +80,8 @@ void FreeInstDir(void)
 // Returns the path to the installation directory.
 const char *GetInstDir()
 {
-    if (InstDir == NULL || *InstDir == '\0') {
-        APP_ERROR("Installation directory is not set or is empty");
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
         return NULL;
     }
 
@@ -81,8 +91,8 @@ const char *GetInstDir()
 // Concatenates the installation directory path with a relative path.
 char *ExpandInstDirPath(const char *rel_path)
 {
-    if (InstDir == NULL || *InstDir == '\0') {
-        APP_ERROR("Failed to expand path: installation directory (InstDir) is not set");
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
         return NULL;
     }
 
@@ -102,8 +112,8 @@ char *ExpandInstDirPath(const char *rel_path)
 // Deletes the installation directory and all its contents.
 bool DeleteInstDirRecursively(void)
 {
-    if (InstDir == NULL || *InstDir == '\0') {
-        APP_ERROR("InstDir is null or empty");
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
         return false;
     }
 
@@ -113,9 +123,9 @@ bool DeleteInstDirRecursively(void)
 // Replaces placeholders in a string with the installation directory path.
 char *ReplaceInstDirPlaceholder(const char *str)
 {
-    if (InstDir == NULL || *InstDir == '\0') {
-        APP_ERROR("InstDir is null or empty");
-        return false;
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
+        return NULL;
     }
 
     int InstDirLen = strlen(InstDir);
@@ -149,6 +159,11 @@ char *ReplaceInstDirPlaceholder(const char *str)
 // Changes the working directory to the directory where the script is located.
 bool ChangeDirectoryToScriptDirectory(void)
 {
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
+        return false;
+    }
+
     char *script_dir = ExpandInstDirPath("src");
     if (script_dir == NULL) {
         APP_ERROR("Failed to build path for CWD");
@@ -168,6 +183,11 @@ bool ChangeDirectoryToScriptDirectory(void)
 
 bool CreateDirectoryUnderInstDir(const char *rel_path)
 {
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
+        return false;
+    }
+
     if (rel_path == NULL) {
         return false;
     }
@@ -194,6 +214,11 @@ bool ExportFileToInstDir(const char *rel_path, const void *buf, size_t len)
 {
     bool  result = false;
     char *path   = NULL;
+
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
+        goto cleanup;
+    }
 
     if (rel_path == NULL || *rel_path == '\0') {
         APP_ERROR("Relative path is null or empty");
