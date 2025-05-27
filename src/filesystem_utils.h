@@ -83,7 +83,7 @@ bool DeleteRecursively(const char *path);
 // Defines the length of the unique identifier used in the directory name.
 #define UID_LENGTH 12
 // Defines the maximum number of attempts to create a unique directory.
-#define MAX_RETRY_CREATE_UNIQUE_DIR (unsigned int)20
+#define MAX_RETRY_CREATE_UNIQUE_DIR 20U
 
 /**
  * CreateUniqueDirectory - Creates a unique directory within a base path, using a specified prefix for the directory name.
