@@ -379,40 +379,44 @@ char *GenerateUniqueName(const char *prefix)
 // Generates a unique directory within a specified base path using a prefix.
 char *CreateUniqueDirectory(const char *base_path, const char *prefix)
 {
-    if (base_path == NULL) {
-        APP_ERROR("base path is null");
+    if (!base_path) {
+        APP_ERROR("base_path is NULL");
         return NULL;
     }
 
-    unsigned int retry_limit = MAX_RETRY_CREATE_UNIQUE_DIR;
-    for (unsigned int retry = 0; retry < retry_limit; retry++) {
+    size_t retry_limit = MAX_RETRY_CREATE_UNIQUE_DIR;
+    for (size_t retry = 0; retry < retry_limit; retry++) {
         char *temp_name = GenerateUniqueName(prefix);
-        if (temp_name == NULL) {
+        if (!temp_name) {
             APP_ERROR("Failed to generate a unique name");
             return NULL;
         }
 
         char *full_path = JoinPath(base_path, temp_name);
         free(temp_name);
-        if (full_path == NULL) {
+        if (!full_path) {
             APP_ERROR("Failed to construct a unique directory path");
             return NULL;
         }
 
         if (CreateDirectory(full_path, NULL)) {
             return full_path;
-        } else if (GetLastError() != ERROR_ALREADY_EXISTS) {
-            APP_ERROR("Failed to create a unique directory (%lu)", GetLastError());
-            free(full_path);
+        }
+        DWORD err = GetLastError();
+        free(full_path);
+        if (err != ERROR_ALREADY_EXISTS) {
+            APP_ERROR("Failed to create a unique directory, Error=%lu", err);
             return NULL;
-        } else {
-            free(full_path);
         }
 
-        Sleep(10); // To avoid sequential generation and prevent name duplication.
+        /* To avoid sequential generation and prevent name duplication. */
+        Sleep(10); 
     }
 
-    APP_ERROR("Failed to create a unique directory after %u retries", retry_limit);
+    APP_ERROR(
+        "Failed to create a unique directory after %u retries",
+        retry_limit
+    );
     return NULL;
 }
 
