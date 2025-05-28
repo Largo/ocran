@@ -96,17 +96,21 @@ char *ExpandInstDirPath(const char *rel_path)
         return NULL;
     }
 
-    if (rel_path == NULL || *rel_path == '\0') {
-        APP_ERROR("Failed to expand path: relative path argument is null or empty");
+    if (!rel_path || !*rel_path) {
+        APP_ERROR("relative path is NULL or empty");
         return NULL;
     }
 
     if (!IsCleanRelativePath(rel_path)) {
-        APP_ERROR("Failed to expand path: relative path '%s' contains '.' or '..' elements", rel_path);
+        APP_ERROR("invalid relative path '%s'", rel_path);
         return NULL;
     }
 
-    return JoinPath(InstDir, rel_path);
+    char *full_path = JoinPath(InstDir, rel_path);
+    if (!full_path) {
+        APP_ERROR("Failed to build full path");
+    }
+    return full_path;
 }
 
 // Deletes the installation directory and all its contents.
