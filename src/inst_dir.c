@@ -192,22 +192,28 @@ bool CreateDirectoryUnderInstDir(const char *rel_path)
         return false;
     }
 
-    if (rel_path == NULL) {
+    if (!rel_path) {
+        APP_ERROR("relative path is NULL");
         return false;
     }
 
-    if (*rel_path == '\0') {
+    /* Treat empty string as a no-op and return success */
+    if (rel_path[0] == '\0') {
         return true;
     }
 
     char *dir = ExpandInstDirPath(rel_path);
-    if (dir == NULL) {
+    if (!dir) {
+        APP_ERROR("Failed to build full path");
         return false;
     }
 
     bool result = CreateDirectoriesRecursively(dir);
     if (!result) {
-        APP_ERROR("Failed to create directory under installation directory (InstDir): '%s'", dir);
+        APP_ERROR(
+            "Failed to create directory under installation directory: '%s'",
+            dir
+        );
     }
 
     free(dir);
