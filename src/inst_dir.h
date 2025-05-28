@@ -75,11 +75,12 @@ const char *GetInstDir(void);
 char *ExpandInstDirPath(const char *rel_path);
 
 /**
- * DeleteInstDirRecursively - Deletes the installation directory and all its contents recursively.
+ * DeleteInstDir - Deletes the installation directory and its contents.
  *
- * @return true on successful deletion, false on failure.
+ * @return true if the directory and its contents were deleted successfully,
+ *         false otherwise.
  */
-bool DeleteInstDirRecursively(void);
+bool DeleteInstDir(void);
 
 // Placeholder character used in paths.
 #define PLACEHOLDER '|'

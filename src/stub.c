@@ -205,7 +205,7 @@ cleanup:
                 */
             }
         }
-        if (!DeleteInstDirRecursively()) {
+        if (!DeleteInstDir()) {
             DEBUG("Failed to delete installation directory");
         }
     }

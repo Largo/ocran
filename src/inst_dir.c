@@ -114,7 +114,7 @@ char *ExpandInstDirPath(const char *rel_path)
 }
 
 // Deletes the installation directory and all its contents.
-bool DeleteInstDirRecursively(void)
+bool DeleteInstDir(void)
 {
     if (!IsInstDirSet()) {
         APP_ERROR("Installation directory has not been set");
