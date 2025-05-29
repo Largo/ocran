@@ -1,70 +1,54 @@
-SRCS = lzma/LzmaDec.c
-OBJS = $(SRCS:.c=.o) stub.res
-CONSOLE_OBJS = error_console.o filesystem_utils_console.o inst_dir_console.o script_info_console.o unpack_console.o
-WINDOW_OBJS = error_window.o filesystem_utils_window.o inst_dir_window.o script_info_window.o unpack_window.o
-CC = gcc
-BINDIR = $(CURDIR)/../share/ocran
+CC              := gcc
+EXEEXT          := .exe
 
-CFLAGS = -Wall -O2 -DWITH_LZMA -Ilzma -s
-STUB_CFLAGS = -D_CONSOLE $(CFLAGS)
-STUBW_CFLAGS = -mwindows $(CFLAGS)
-# -D_MBCS
+CFLAGS          := -Wall -O2 -DWITH_LZMA -Ilzma
+STUB_CFLAGS     := $(CFLAGS) -D_CONSOLE
+STUBW_CFLAGS    := $(CFLAGS)
+LDFLAGS         := -s
+GUI_LDFLAGS     := -mwindows
 
-all: stub.exe stubw.exe edicon.exe
+BINDIR          := $(CURDIR)/../share/ocran
+PROG_NAMES      := stub stubw edicon
+BINARIES        := $(addsuffix $(EXEEXT), $(PROG_NAMES))
+
+LZMA_SRCS       := lzma/LzmaDec.c
+LZMA_OBJS       := $(LZMA_SRCS:.c=.o)
+
+COMMON_SRCS     := filesystem_utils.c inst_dir.c script_info.c unpack.c
+COMMON_OBJS     := $(COMMON_SRCS:.c=.o) $(LZMA_OBJS) stub.res
+
+VARIANT_SRCS    := stub.c error.c
+CONSOLE_OBJS    := $(VARIANT_SRCS:.c=_console.o)
+WINDOW_OBJS     := $(VARIANT_SRCS:.c=_window.o)
+
+.PHONY: all clean install
+all: $(BINARIES)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+%_console.o: %.c
+	$(CC) $(STUB_CFLAGS) -c $< -o $@ 
+
+%_window.o: %.c
+	$(CC) $(STUBW_CFLAGS) -c $< -o $@ 
 
 stub.res: stub.rc
 	windres -i stub.rc -O coff -o stub.res
 
-stub.exe: $(OBJS) stub.o $(CONSOLE_OBJS)
-	$(CC) $(STUB_CFLAGS) $(OBJS) stub.o $(CONSOLE_OBJS) -o $@
+stub$(EXEEXT): $(COMMON_OBJS) $(CONSOLE_OBJS)
+	$(CC) $(LDFLAGS) $^ -o $@
 
-stubw.exe: $(OBJS) stubw.o $(WINDOW_OBJS)
-	$(CC) $(STUBW_CFLAGS) $(OBJS) stubw.o $(WINDOW_OBJS) -o $@
+stubw$(EXEEXT): $(COMMON_OBJS) $(WINDOW_OBJS)
+	$(CC) $(LDFLAGS) $(GUI_LDFLAGS) $^ -o $@
 
-edicon.exe: edicon.o
-	$(CC) $(CFLAGS) edicon.o -o edicon
-
-error_console.o: error.c error.h
-	$(CC) $(STUB_CFLAGS) -o $@ -c $<
-
-error_window.o: error.c error.h
-	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
-
-stub.o: stub.c stub.h
-	$(CC) $(STUB_CFLAGS) -o $@ -c $<
-
-stubw.o: stub.c stub.h
-	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
-
-unpack_console.o: unpack.c unpack.h
-	$(CC) $(STUB_CFLAGS) -o $@ -c $<
-
-unpack_window.o: unpack.c unpack.h
-	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
-
-filesystem_utils_console.o: filesystem_utils.c filesystem_utils.h
-	$(CC) $(STUB_CFLAGS) -o $@ -c $<
-
-filesystem_utils_window.o: filesystem_utils.c filesystem_utils.h
-	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
-
-inst_dir_console.o: inst_dir.c inst_dir.h
-	$(CC) $(STUB_CFLAGS) -o $@ -c $<
-
-inst_dir_window.o: inst_dir.c inst_dir.h
-	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
-
-script_info_console.o: script_info.c script_info.h
-	$(CC) $(STUB_CFLAGS) -o $@ -c $<
-
-script_info_window.o: script_info.c script_info.h
-	$(CC) $(STUBW_CFLAGS) -o $@ -c $<
+edicon$(EXEEXT): edicon.o
+	$(CC) $(LDFLAGS) $^ -o $@
 
 clean:
-	rm -f $(OBJS) stub.exe stubw.exe edicon.exe edicon.o stubw.o stub.o \
-	$(CONSOLE_OBJS) $(WINDOW_OBJS)
+	rm -f $(BINARIES) $(COMMON_OBJS) $(CONSOLE_OBJS) $(WINDOW_OBJS) \
+	      edicon.o
 
-install: stub.exe stubw.exe edicon.exe
-	cp -f stub.exe $(BINDIR)/stub.exe
-	cp -f stubw.exe $(BINDIR)/stubw.exe
-	cp -f edicon.exe $(BINDIR)/edicon.exe
+install: $(BINARIES)
+	mkdir -p $(BINDIR)
+	cp -f $(BINARIES) $(BINDIR)/
