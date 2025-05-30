@@ -94,6 +94,20 @@ bool DeleteInstDir(void);
 char *ReplaceInstDirPlaceholder(const char *str);
 
 /**
+ * @brief   Retrieve the working directory to use when spawning the
+ *           script process.
+ *
+ * This function builds and returns a null-terminated string representing
+ * the filesystem path that the stub will switch to before launching the
+ * child process running the Ruby script. The caller is responsible for
+ * freeing the returned string with free() when it is no longer needed.
+ *
+ * @return  Pointer to a null-terminated path string on success,
+ *          or NULL on failure.
+ */
+char *GetScriptWorkingDirectoryPath(void);
+
+/**
  * ChangeDirectoryToScriptDirectory - Change the current working directory to the script's directory.
  *
  * This function attempts to change the process's current working directory to the directory

@@ -160,6 +160,21 @@ char *ReplaceInstDirPlaceholder(const char *str)
     return out;
 }
 
+char *GetScriptWorkingDirectoryPath(void)
+{
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
+        return NULL;
+    }
+
+    char *working_dir = ExpandInstDirPath("src");
+    if (!working_dir) {
+        APP_ERROR("Failed to build path for working directory");
+        return NULL;
+    }
+    return working_dir;
+}
+
 // Changes the working directory to the directory where the script is located.
 bool ChangeDirectoryToScriptDirectory(void)
 {
@@ -168,7 +183,7 @@ bool ChangeDirectoryToScriptDirectory(void)
         return false;
     }
 
-    char *script_dir = ExpandInstDirPath("src");
+    char *script_dir = GetScriptWorkingDirectoryPath();
     if (script_dir == NULL) {
         APP_ERROR("Failed to build path for CWD");
         return false;
