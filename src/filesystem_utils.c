@@ -507,12 +507,17 @@ bool ChangeWorkingDirectory(const char* path)
     return true;
 }
 
+#ifdef _WIN32
+#define FALLBACK_DIRECTORY_PATH "\\"
+#else
+#define FALLBACK_DIRECTORY_PATH "/"
+#endif
+
 // Moves the application to a safe directory.
 bool ChangeDirectoryToSafeDirectory(void)
 {
     bool changed = false;
     char *working_dir = NULL;
-    char *fallback_working_dir = NULL;
 
     working_dir = GetTempDirectoryPath();
     if (!working_dir) {
@@ -526,26 +531,19 @@ bool ChangeDirectoryToSafeDirectory(void)
         goto cleanup;
     }
 
-    DEBUG("Failed to change to temporary directory. Trying executable's directory");
+    DEBUG("Failed to change to temporary directory. Trying fallback directory");
 
-    fallback_working_dir = GetImageDirectoryPath();
-    if (!fallback_working_dir) {
-        APP_ERROR("GetImageDirectoryPath failed");
-        
-        goto cleanup;
-    }
-
-    changed = ChangeWorkingDirectory(fallback_working_dir);
+    changed = ChangeWorkingDirectory(FALLBACK_DIRECTORY_PATH);
     if (!changed) {
-        APP_ERROR("Failed to change to executable's directory");
+        APP_ERROR(
+            "Failed to change to fallback directory \"%s\"",
+            FALLBACK_DIRECTORY_PATH
+        );
     }
 
 cleanup:
     if (working_dir) {
         free(working_dir);
-    }
-    if (fallback_working_dir) {
-        free(fallback_working_dir);
     }
     return changed;
 }
