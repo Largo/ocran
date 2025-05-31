@@ -124,18 +124,6 @@ char *GetTempDirectoryPath(void);
 bool ChangeWorkingDirectory(const char* path);
 
 /**
- * ChangeDirectoryToSafeDirectory - Change the current working directory to a predefined safe directory.
- *
- * This function is used to switch the current working directory to a safe location, typically
- * used to prevent any operations that could interfere with user data or system operations.
- * This is particularly useful during cleanup operations or when the application needs to
- * ensure it operates in a controlled environment.
- *
- * @return bool Returns true if the directory change was successful, otherwise false.
- */
-bool ChangeDirectoryToSafeDirectory(void);
-
-/**
  * @brief Writes the contents of a buffer to the specified file path.
  *        Creates any missing parent directories and overwrites existing files.
  *

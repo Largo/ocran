@@ -200,6 +200,47 @@ bool ChangeDirectoryToScriptDirectory(void)
     return changed;
 }
 
+#ifdef _WIN32
+#define FALLBACK_DIRECTORY_PATH "\\"
+#else
+#define FALLBACK_DIRECTORY_PATH "/"
+#endif
+
+// Moves the application to a safe directory.
+bool ChangeDirectoryToSafeDirectory(void)
+{
+    bool changed = false;
+    char *working_dir = NULL;
+
+    working_dir = GetTempDirectoryPath();
+    if (!working_dir) {
+        APP_ERROR("GetTempDirectoryPath failed");
+        
+        goto cleanup;
+    }
+
+    changed = ChangeWorkingDirectory(working_dir);
+    if (changed) {
+        goto cleanup;
+    }
+
+    DEBUG("Failed to change to temporary directory. Trying fallback directory");
+
+    changed = ChangeWorkingDirectory(FALLBACK_DIRECTORY_PATH);
+    if (!changed) {
+        APP_ERROR(
+            "Failed to change to fallback directory \"%s\"",
+            FALLBACK_DIRECTORY_PATH
+        );
+    }
+
+cleanup:
+    if (working_dir) {
+        free(working_dir);
+    }
+    return changed;
+}
+
 bool CreateDirectoryUnderInstDir(const char *rel_path)
 {
     if (!IsInstDirSet()) {
