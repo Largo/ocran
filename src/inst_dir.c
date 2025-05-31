@@ -209,13 +209,18 @@ bool ChangeDirectoryToScriptDirectory(void)
 // Moves the application to a safe directory.
 bool ChangeDirectoryToSafeDirectory(void)
 {
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
+        return false;
+    }
+
     bool changed = false;
     char *working_dir = NULL;
 
-    working_dir = GetTempDirectoryPath();
+    working_dir = GetParentPath(InstDir);
     if (!working_dir) {
-        APP_ERROR("GetTempDirectoryPath failed");
-        
+        APP_ERROR("Failed to get parent path");
+
         goto cleanup;
     }
 
@@ -224,7 +229,7 @@ bool ChangeDirectoryToSafeDirectory(void)
         goto cleanup;
     }
 
-    DEBUG("Failed to change to temporary directory. Trying fallback directory");
+    DEBUG("Failed to change to safe directory. Trying fallback directory");
 
     changed = ChangeWorkingDirectory(FALLBACK_DIRECTORY_PATH);
     if (!changed) {
