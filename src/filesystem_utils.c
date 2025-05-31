@@ -510,21 +510,43 @@ bool ChangeWorkingDirectory(const char* path)
 // Moves the application to a safe directory.
 bool ChangeDirectoryToSafeDirectory(void)
 {
-    char *working_dir = GetTempDirectoryPath();
-    bool changed = working_dir && ChangeWorkingDirectory(working_dir);
-    free(working_dir);
+    bool changed = false;
+    char *working_dir = NULL;
+    char *fallback_working_dir = NULL;
 
-    if (changed) return true;
+    working_dir = GetTempDirectoryPath();
+    if (!working_dir) {
+        APP_ERROR("GetTempDirectoryPath failed");
+        
+        goto cleanup;
+    }
+
+    changed = ChangeWorkingDirectory(working_dir);
+    if (changed) {
+        goto cleanup;
+    }
 
     DEBUG("Failed to change to temporary directory. Trying executable's directory");
-    working_dir = GetImageDirectoryPath();
-    changed = working_dir && ChangeWorkingDirectory(working_dir);
-    free(working_dir);
 
+    fallback_working_dir = GetImageDirectoryPath();
+    if (!fallback_working_dir) {
+        APP_ERROR("GetImageDirectoryPath failed");
+        
+        goto cleanup;
+    }
+
+    changed = ChangeWorkingDirectory(fallback_working_dir);
     if (!changed) {
         APP_ERROR("Failed to change to executable's directory");
     }
 
+cleanup:
+    if (working_dir) {
+        free(working_dir);
+    }
+    if (fallback_working_dir) {
+        free(fallback_working_dir);
+    }
     return changed;
 }
 
