@@ -191,7 +191,7 @@ bool ChangeDirectoryToScriptDirectory(void)
 
     DEBUG("Changing CWD to unpacked directory %s", script_dir);
 
-    bool changed = SetCurrentDirectory(script_dir);
+    bool changed = ChangeWorkingDirectory(script_dir);
     if (!changed) {
         APP_ERROR("Failed to change CWD (%lu)", GetLastError());
     }

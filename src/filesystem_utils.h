@@ -113,6 +113,15 @@ char *GetImageDirectoryPath(void);
  */
 char *GetTempDirectoryPath(void);
 
+/**
+ * @brief Changes the current working directory to the specified path.
+ * 
+ * @param path The path to set as the current working directory.
+ *             Must be a valid directory path.
+ * @return true if the operation succeeds, false otherwise.
+ *         Logs an error message if the operation fails.
+ */
+bool ChangeWorkingDirectory(const char* path);
 
 /**
  * ChangeDirectoryToSafeDirectory - Change the current working directory to a predefined safe directory.

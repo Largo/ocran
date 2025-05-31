@@ -489,18 +489,36 @@ char *GetTempDirectoryPath(void)
     return temp_dir;
 }
 
+bool ChangeWorkingDirectory(const char* path)
+{
+    if (!path || !*path) {
+        APP_ERROR("path is NULL or empty");
+        return false;
+    }
+
+    if (!SetCurrentDirectory(path)) {
+        DWORD err = GetLastError();
+        APP_ERROR(
+            "Failed to change working dir to \"%s\", Error=%lu",
+            path, err
+        );
+        return false;
+    }
+    return true;
+}
+
 // Moves the application to a safe directory.
 bool ChangeDirectoryToSafeDirectory(void)
 {
     char *working_dir = GetTempDirectoryPath();
-    bool changed = working_dir && SetCurrentDirectory(working_dir);
+    bool changed = working_dir && ChangeWorkingDirectory(working_dir);
     free(working_dir);
 
     if (changed) return true;
 
     DEBUG("Failed to change to temporary directory. Trying executable's directory");
     working_dir = GetImageDirectoryPath();
-    changed = working_dir && SetCurrentDirectory(working_dir);
+    changed = working_dir && ChangeWorkingDirectory(working_dir);
     free(working_dir);
 
     if (!changed) {
