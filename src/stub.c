@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
     int exit_code = EXIT_CODE_FAILURE;
     MemoryMap *map = NULL;
     OperationModes flags = 0;
+    const char *extract_dir = NULL;
 
     /*
        Initialize signal and control handling so the parent process remains
@@ -93,19 +94,18 @@ int main(int argc, char *argv[])
         DEBUG("Ocran stub running in debug mode");
     }
 
-    /* Create installation directory */
-    const char *inst_dir = NULL;
+    /* Create extraction directory */
     if (IS_EXTRACT_TO_EXE_DIR(flags)) {
-        inst_dir = CreateDebugExtractInstDir();
+        extract_dir = CreateDebugExtractInstDir();
     } else {
-        inst_dir = CreateTemporaryInstDir();
+        extract_dir = CreateTemporaryInstDir();
     }
-    if (inst_dir == NULL) {
-        FATAL("Failed to create installation directory");
+    if (!extract_dir) {
+        FATAL("Failed to create extraction directory");
         goto cleanup;
     }
 
-    DEBUG("Created installation directory: %s", inst_dir);
+    DEBUG("Created extraction directory: %s", extract_dir);
 
     /* Unpacking process */
     if (!ProcessImage(head, tail - head, IS_DATA_COMPRESSED(flags))) {
@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
     map = NULL;
 
     /* Launching the script, provided there are no errors in file extraction from the image */
-    DEBUG("*** Starting application script in %s", inst_dir);
+    DEBUG("*** Starting application script in %s", extract_dir);
 
     if (IS_CHDIR_BEFORE_SCRIPT(flags)) {
         DEBUG("Change directory to the script location before running the script");
@@ -182,19 +182,20 @@ cleanup:
         }
     }
     /*
-       If auto‐cleanup is enabled, get the install directory and delete it.
+       If auto‐cleanup is enabled, get the extraction directory and delete it.
        GetInstDir() returns NULL if no valid directory remains.
     */
     if (IS_AUTO_CLEAN_INST_DIR(flags)) {
         const char *current_inst_dir = GetInstDir();
         if (current_inst_dir) {
-            DEBUG("Deleting temporary installation directory: %s", current_inst_dir);
+            DEBUG("Deleting temporary extraction directory: %s", current_inst_dir);
             if (!DeleteInstDir()) {
-                DEBUG("Failed to delete installation directory");
+                DEBUG("Failed to delete extraction directory");
             }
         }
     }
 
     FreeInstDir();
+    extract_dir = NULL;
     return exit_code;
 }
