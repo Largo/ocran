@@ -182,16 +182,12 @@ cleanup:
         }
     }
     /*
-       If auto‐cleanup is enabled, get the extraction directory and delete it.
-       GetInstDir() returns NULL if no valid directory remains.
+       If auto-cleanup is enabled, delete the extraction directory.
     */
     if (IS_AUTO_CLEAN_INST_DIR(flags)) {
-        const char *current_inst_dir = GetInstDir();
-        if (current_inst_dir) {
-            DEBUG("Deleting temporary extraction directory: %s", current_inst_dir);
-            if (!DeleteInstDir()) {
-                DEBUG("Failed to delete extraction directory");
-            }
+        DEBUG("Deleting extraction directory: %s", extract_dir);
+        if (!DeleteInstDir()) {
+            DEBUG("Failed to delete extraction directory");
         }
     }
 
