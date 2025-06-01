@@ -183,3 +183,19 @@ void *GetMemoryMapBase(const MemoryMap *map);
  *                    Note: 0 may also be a valid size for an empty file.
  */
 size_t GetMemoryMapSize(const MemoryMap *map);
+
+/**
+ * @brief Initialize signal and control handling.
+ *
+ * This function sets up console control and POSIX signal handlers so that
+ * the parent process is not prematurely terminated during initialization and
+ * cleanup phases. On Windows, a console control handler is registered to ignore
+ * control events (e.g., Ctrl+C) in the parent process. On POSIX, relevant
+ * signals (SIGINT, SIGTERM, SIGHUP) can be configured to allow cleanup
+ * processing before exit.
+ *
+ * @return
+ *   - true  if initialization succeeded  
+ *   - false if an error occurred (e.g., SetConsoleCtrlHandler failed)
+ */
+bool InitializeSignalHandling(void);

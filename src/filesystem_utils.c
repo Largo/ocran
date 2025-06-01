@@ -757,3 +757,29 @@ size_t GetMemoryMapSize(const MemoryMap *map)
     }
     return map->size;
 }
+
+/**
+ * @brief Handle console control events in the parent process.
+ *
+ * This handler ignores all console control events (Ctrl+C, Ctrl+Break, etc.)
+ * in the parent process so it can complete cleanup without interruption.
+ * Child processes (e.g., Ruby) receive these events and exit quickly,
+ * allowing the parent to perform final cleanup tasks.
+ *
+ * @param dwCtrlType The type of console control event received.
+ * @return TRUE to indicate the event was handled and should be ignored.
+ */
+static BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
+{
+    return TRUE;
+}
+
+bool InitializeSignalHandling(void)
+{
+    if (!SetConsoleCtrlHandler(ConsoleHandleRoutine, TRUE)) {
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to set console control handler, Error=%lu", err);
+        return false;
+    }
+    return true;
+}

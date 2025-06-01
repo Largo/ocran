@@ -35,17 +35,6 @@ const void *FindSignature(const void *buffer, size_t size)
     return sig;
 }
 
-/**
-   Handler for console events.
-*/
-BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
-{
-   // Ignore all events. They will also be dispatched to the child procress (Ruby) which should
-   // exit quickly, allowing us to clean up.
-   return TRUE;
-}
-
-
 int main(int argc, char *argv[])
 {
     int exit_code = EXIT_CODE_FAILURE;
@@ -53,16 +42,13 @@ int main(int argc, char *argv[])
     OperationModes flags = 0;
 
     /*
-       Set up the console control handler to ignore all control signals.
-       This is crucial because it allows the parent process to continue running
-       without interruption during initial file operations and other setup tasks.
-       Control signals are managed independently by the child process (Ruby),
-       which has its own signal handling mechanisms. This design ensures that
-       the parent process can perform critical cleanup and other tasks without
-       being prematurely terminated by such signals.
+       Initialize signal and control handling so the parent process remains
+       active during startup and cleanup. This setup prevents interruption
+       of critical tasks (such as file extraction) by control events.
+       Child processes (e.g., Ruby) handle their own signals independently,
+       ensuring the parent can finalize cleanup without premature termination.
     */
-    if (!SetConsoleCtrlHandler(&ConsoleHandleRoutine, TRUE)) {
-        APP_ERROR("Failed to set control handler (%lu)", GetLastError());
+    if (!InitializeSignalHandling()) {
         FATAL("Failed to initialize system controls");
         goto cleanup;
     }
