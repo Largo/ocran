@@ -130,8 +130,7 @@ int main(int argc, char *argv[])
         }
     }
     DEBUG("Set the 'OCRAN_EXECUTABLE' environment variable to %s", image_path);
-    if (!SetEnvironmentVariable("OCRAN_EXECUTABLE", image_path)) {
-        APP_ERROR("Failed to set the 'OCRAN_EXECUTABLE' environment variable (%lu)", GetLastError());
+    if (!SetEnvVar("OCRAN_EXECUTABLE", image_path)) {
         FATAL("The script cannot be launched due to a configuration error");
         goto cleanup;
     }

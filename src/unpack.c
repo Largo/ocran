@@ -115,7 +115,7 @@ bool OpSetEnv(void **p)
 
     DEBUG("SetEnv(%s, %s)", name, replaced_value);
 
-    bool result = SetEnvironmentVariable(name, replaced_value);
+    bool result = SetEnvVar(name, replaced_value);
     free(replaced_value);
     if (!result) {
         APP_ERROR("Failed to set environment variable (%lu)", GetLastError());

@@ -783,3 +783,18 @@ bool InitializeSignalHandling(void)
     }
     return true;
 }
+
+bool SetEnvVar(const char *name, const char *value)
+{
+    if (!name) {
+        APP_ERROR("name is NULL");
+        return false;
+    }
+
+    if (!SetEnvironmentVariable(name, value)) {
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to set environment variable, Error=%lu", err);
+        return false;
+    }
+    return true;
+}

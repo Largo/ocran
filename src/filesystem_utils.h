@@ -199,3 +199,16 @@ size_t GetMemoryMapSize(const MemoryMap *map);
  *   - false if an error occurred (e.g., SetConsoleCtrlHandler failed)
  */
 bool InitializeSignalHandling(void);
+
+/**
+ * @brief Sets or removes an environment variable.
+ *
+ * Sets the specified environment variable to the given value. If value is NULL,
+ * the variable will be removed from the environment. Returns true on success,
+ * false if the operation fails.
+ *
+ * @param name  Name of the environment variable to set or remove.
+ * @param value Value to assign to the variable, or NULL to remove it.
+ * @return true if the operation succeeded; false otherwise.
+ */
+bool SetEnvVar(const char *name, const char *value);
