@@ -168,31 +168,30 @@ cleanup:
 
     FreeScriptInfo();
 
-    /* If necessary, recursively delete the installation directory */
-    /*
-       Retrieve the installation directory path using GetInstDir() to ensure we
-       only attempt to delete directories that were properly initialized and are
-       still relevant. This prevents any deletion operations on non-existent or
-       previously cleaned-up directories.
+    /* 
+       Move to a safe directory if requested; on failure, log and continue.
     */
-    const char *current_inst_dir = GetInstDir();
-    if (current_inst_dir != NULL && IS_AUTO_CLEAN_INST_DIR(flags)) {
-        DEBUG("Deleting temporary installation directory: %s", current_inst_dir);
-
-        if (IS_CHDIR_BEFORE_SCRIPT(flags)) {
-            if (!ChangeDirectoryToSafeDirectory()) {
-                DEBUG("Failed to change the current directory to a safe location; "
-                      "proceeding with deletion process");
-                /*
-                   The attempt to change to a safe directory failed. While this failure does not
-                   halt the process, it may prevent the complete deletion of the installation
-                   directory. The operation will proceed under the assumption that partial
-                   cleanup may still be preferable or required.
-                */
-            }
+    if (IS_CHDIR_BEFORE_SCRIPT(flags)) {
+        if (!ChangeDirectoryToSafeDirectory()) {
+            DEBUG("Failed to change to a safe working directory. "
+                  "Proceeding with deletion.");
+            /*
+               Safe‐directory change failed. Continue anyway—partial cleanup
+               may still be preferable.
+            */
         }
-        if (!DeleteInstDir()) {
-            DEBUG("Failed to delete installation directory");
+    }
+    /*
+       If auto‐cleanup is enabled, get the install directory and delete it.
+       GetInstDir() returns NULL if no valid directory remains.
+    */
+    if (IS_AUTO_CLEAN_INST_DIR(flags)) {
+        const char *current_inst_dir = GetInstDir();
+        if (current_inst_dir) {
+            DEBUG("Deleting temporary installation directory: %s", current_inst_dir);
+            if (!DeleteInstDir()) {
+                DEBUG("Failed to delete installation directory");
+            }
         }
     }
 
