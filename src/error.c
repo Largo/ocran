@@ -13,15 +13,53 @@ void EnableDebugMode()
     debug_mode = true;
 }
 
+static bool vformat_message(char *buffer, size_t buffer_size, const char *label,
+                            const char* format, va_list args)
+{
+    if (!buffer || buffer_size < 2) {
+        return false;
+    }
+
+    size_t offset = 0;
+
+    if (label) {
+        int label_needed = snprintf(buffer, buffer_size, "%s: ", label);
+        if (label_needed < 0 || (size_t)label_needed >= buffer_size) {
+            return false;
+        }
+        offset = (size_t)label_needed;
+    }
+
+    int needed = vsnprintf(buffer + offset, buffer_size - offset, format, args);
+    if (needed < 0) {
+        return false;
+    } else if ((size_t)needed >= buffer_size - offset - 2) {
+        offset = buffer_size - 2;
+    } else {
+        offset += (size_t)needed;
+    }
+    buffer[offset++] = '\n';
+    buffer[offset]   = '\0';
+    return true;
+}
+
+static void print_message(const char *label, const char *format, va_list args)
+{
+    char text[4096];
+    if (vformat_message(text, sizeof(text), label, format, args)) {
+        fputs(text, stderr);
+    } else {
+        fputs("log message formatting failed\n", stderr);
+    }
+}
+
 // Prints a fatal error message to stderr.
 void PrintFatalMessage(const char *format, ...)
 {
-    fprintf_s(stderr, "FATAL: ");
     va_list args;
     va_start(args, format);
-    vfprintf_s(stderr, format, args);
+    print_message("FATAL", format, args);
     va_end(args);
-    fprintf_s(stderr, "\n");
 }
 
 // Displays a fatal error message via a message box.
@@ -40,12 +78,10 @@ void PrintAppErrorMessage(const char *format, ...)
 {
     if (!debug_mode) return;
 
-    fprintf_s(stderr, "ERROR: ");
     va_list args;
     va_start(args, format);
-    vfprintf_s(stderr, format, args);
+    print_message("ERROR", format, args);
     va_end(args);
-    fprintf_s(stderr, "\n");
 }
 
 // Prints a debug message to stderr if in debug mode.
@@ -53,10 +89,8 @@ void PrintDebugMessage(const char *format, ...)
 {
     if (!debug_mode) return;
 
-    fprintf_s(stderr, "DEBUG: ");
     va_list args;
     va_start(args, format);
-    vfprintf_s(stderr, format, args);
+    print_message("DEBUG", format, args);
     va_end(args);
-    fprintf_s(stderr, "\n");
 }
