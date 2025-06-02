@@ -138,13 +138,9 @@ int main(int argc, char *argv[])
     /*
        RunScript uses the current value of exit_code as its initial value
        and then overwrites it with the external script’s return code.
-       Therefore, we must set the success code here.
     */
-    exit_code = EXIT_CODE_SUCCESS;
-
     DEBUG("Run application script");
     if (!RunScript(argc, argv, &exit_code)) {
-        exit_code = EXIT_CODE_FAILURE;
         FATAL("Failed to run script");
         goto cleanup;
     }
