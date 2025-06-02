@@ -150,10 +150,8 @@ int main(int argc, char *argv[])
 
 cleanup:
     /*
-       During cleanup, GUI error dialogs are suppressed to avoid blocking the user.
-       Cleanup failures are non-critical resource release issues;
-       they are logged with DEBUG output only, preventing unnecessary user interaction
-       and reducing risk of exposing internal details.
+       Suppress GUI error dialogs during cleanup to avoid blocking the user.
+       Cleanup failures are non-critical and logged as DEBUG only.
     */
 
     if (map) {
