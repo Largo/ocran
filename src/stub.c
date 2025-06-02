@@ -37,7 +37,7 @@ const void *FindSignature(const void *buffer, size_t size)
 
 int main(int argc, char *argv[])
 {
-    int exit_code = EXIT_CODE_FAILURE;
+    int status = EXIT_CODE_FAILURE;
     MemoryMap *map = NULL;
     OperationModes flags = 0;
     const char *extract_dir = NULL;
@@ -136,16 +136,16 @@ int main(int argc, char *argv[])
     }
 
     /*
-       RunScript uses the current value of exit_code as its initial value
+       RunScript uses the current value of status as its initial value
        and then overwrites it with the external script’s return code.
     */
     DEBUG("Run application script");
-    if (!RunScript(argc, argv, &exit_code)) {
+    if (!RunScript(argc, argv, &status)) {
         FATAL("Failed to run script");
         goto cleanup;
     }
     /*
-       If the script executes successfully, its return code is stored in exit_code.
+       If the script executes successfully, its return code is stored in status.
     */
 
 cleanup:
@@ -188,5 +188,5 @@ cleanup:
 
     FreeInstDir();
     extract_dir = NULL;
-    return exit_code;
+    return status;
 }
