@@ -255,11 +255,9 @@ bool CreateDirectoriesRecursively(const char *dir)
 
         *p = PATH_SEPARATOR;
 
-        DEBUG("CreateDirectory(%s)", path);
-
         if (!CreateDirectory(path, NULL)) {
             DWORD err = GetLastError();
-            APP_ERROR("Failed to create directory, Error=%lu", err);
+            APP_ERROR("Failed to create directory '%s', Error=%lu", path, err);
 
             goto cleanup;
         }
