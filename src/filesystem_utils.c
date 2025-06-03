@@ -277,13 +277,13 @@ cleanup:
 // Deletes a directory and all its contents recursively.
 bool DeleteRecursively(const char *path)
 {
-    if (path == NULL || *path == '\0') {
-        APP_ERROR("path is null or empty");
+    if (!path || !*path) {
+        APP_ERROR("path is NULL or empty");
         return false;
     }
 
     char *findPath = JoinPath(path, "*");
-    if (findPath == NULL) {
+    if (!findPath) {
         APP_ERROR("Failed to build find path for deletion");
         return false;
     }
@@ -298,18 +298,17 @@ bool DeleteRecursively(const char *path)
             }
 
             char *subPath = JoinPath(path, name);
-            if (subPath == NULL) {
+            if (!subPath) {
                 APP_ERROR("Failed to build delete file path");
                 break;
             }
 
             if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
                 DeleteRecursively(subPath);
-            } else {
-                if (!DeleteFile(subPath)) {
-                    APP_ERROR("Failed to delete file (%lu)", GetLastError());
-                    MoveFileEx(subPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
-                }
+            } else if (!DeleteFile(subPath)) {
+                DWORD err = GetLastError();
+                APP_ERROR("Failed to delete file, Error=%lu", err);
+                MoveFileEx(subPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
             }
 
             free(subPath);
@@ -319,12 +318,12 @@ bool DeleteRecursively(const char *path)
     free(findPath);
 
     if (!RemoveDirectory(path)) {
-        APP_ERROR("Failed to delete directory (%lu)", GetLastError());
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to delete directory, Error=%lu", err);
         MoveFileEx(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
         return false;
-    } else {
-        return true;
     }
+    return true;
 }
 
 char *GenerateUniqueName(const char *prefix)
