@@ -44,27 +44,9 @@ unsigned char GetOpcode(void **p)
     return op;
 }
 
-bool OpCreateDirectory(void **p);
-bool OpCreateFile(void **p);
-bool OpSetEnv(void **p);
-bool OpSetScript(void **p);
-
-typedef bool (*POpcodeHandler)(void **);
-
-POpcodeHandler OpcodeHandlers[OP_MAX] =
-{
-    NULL,
-    &OpCreateDirectory,
-    &OpCreateFile,
-    &OpSetEnv,
-    &OpSetScript,
-};
-
 // Create a directory (OP_CREATE_DIRECTORY opcode handler)
-bool OpCreateDirectory(void **p)
+bool OpCreateDirectory(const char *dir_name)
 {
-    const char *dir_name = GetString(p);
-
     if (dir_name == NULL || *dir_name == '\0') {
         APP_ERROR("dir_name is NULL or empty");
         return false;
@@ -80,13 +62,8 @@ bool OpCreateDirectory(void **p)
 }
 
 // Create a file (OP_CREATE_FILE opcode handler)
-bool OpCreateFile(void **p)
+bool OpCreateFile(const char *file_name, size_t file_size, const void* data)
 {
-    const char *file_name = GetString(p);
-    size_t file_size = GetInteger(p);
-    const void *data = *p;
-    *p = (char *)(*p) + file_size;
-
     if (file_name == NULL || *file_name == '\0') {
         APP_ERROR("file_name is null or empty");
         return false;
@@ -102,11 +79,8 @@ bool OpCreateFile(void **p)
 }
 
 // Set a environment variable (OP_SETENV opcode handler)
-bool OpSetEnv(void **p)
+bool OpSetEnv(const char *name, const char *value)
 {
-    const char *name = GetString(p);
-    const char *value = GetString(p);
-
     char *replaced_value = ReplaceInstDirPlaceholder(value);
     if (replaced_value == NULL) {
         APP_ERROR("Failed to replace the value placeholder");
@@ -125,12 +99,8 @@ bool OpSetEnv(void **p)
 }
 
 // Set a application script info (OP_SET_SCRIPT opcode handler)
-bool OpSetScript(void **p)
+bool OpSetScript(size_t args_size, const char *args)
 {
-    size_t args_size = GetInteger(p);
-    const char *args = *p;
-    *p = (char *)(*p) + args_size;
-
     DEBUG("SetScript");
 
     return InitializeScriptInfo(args, args_size);
@@ -143,24 +113,54 @@ bool ProcessOpcodes(void **p)
     for (;;) {
         op = GetOpcode(p);
 
-        if (op >= OP_MAX) {
-            APP_ERROR("Opcode out of range: %hhu", op);
-            return false;
-        }
+        switch (op) {
+            case OP_END:
+                DEBUG("Encountered OP_END");
+                return true;
+                break;
 
-        if (op == OP_END) {
-            DEBUG("Encountered OP_END");
-            return true;
-        }
+            case OP_CREATE_DIRECTORY:
+                const char *dir_name = GetString(p);
+                if (!OpCreateDirectory(dir_name)) {
+                    APP_ERROR("Handler failed for opcode: %hhu", op);
+                    return false;
+                }
+                break;
 
-        if (OpcodeHandlers[op] == NULL) {
-            APP_ERROR("No handler for opcode: %hhu", op);
-            return false;
-        }
+            case OP_CREATE_FILE:
+                const char *file_name = GetString(p);
+                size_t file_size = GetInteger(p);
+                const void *data = *p;
+                *p = (char *)(*p) + file_size;
+                if (!OpCreateFile(file_name, file_size, data)) {
+                    APP_ERROR("Handler failed for opcode: %hhu", op);
+                    return false;
+                }
+                break;
 
-        if (!OpcodeHandlers[op](p)) {
-            APP_ERROR("Handler failed for opcode: %hhu", op);
-            return false;
+            case OP_SETENV:
+                const char *name  = GetString(p);
+                const char *value = GetString(p);
+                if (!OpSetEnv(name, value)) {
+                    APP_ERROR("Handler failed for opcode: %hhu", op);
+                    return false;
+                }
+                break;
+
+            case OP_SET_SCRIPT:            
+                size_t args_size = GetInteger(p);
+                const char *args = *p;
+                *p = (char *)(*p) + args_size;
+                if (!OpSetScript(args_size, args)) {
+                    APP_ERROR("Handler failed for opcode: %hhu", op);
+                    return false;
+                }
+                break;
+
+            default:
+                APP_ERROR("No handler for opcode: %hhu", op);
+                return false;
+                break;
         }
     }
 }
