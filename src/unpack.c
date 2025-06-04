@@ -108,10 +108,10 @@ bool OpSetScript(size_t args_size, const char *args)
 
 bool ProcessOpcodes(void **p)
 {
-    unsigned char op;
+    Opcode op;
 
     for (;;) {
-        op = GetOpcode(p);
+        op = (Opcode)GetOpcode(p);
 
         switch (op) {
             case OP_END:
@@ -122,7 +122,7 @@ bool ProcessOpcodes(void **p)
             case OP_CREATE_DIRECTORY:
                 const char *dir_name = GetString(p);
                 if (!OpCreateDirectory(dir_name)) {
-                    APP_ERROR("Handler failed for opcode: %hhu", op);
+                    APP_ERROR("Handler failed for opcode: %d", op);
                     return false;
                 }
                 break;
@@ -133,7 +133,7 @@ bool ProcessOpcodes(void **p)
                 const void *data = *p;
                 *p = (char *)(*p) + file_size;
                 if (!OpCreateFile(file_name, file_size, data)) {
-                    APP_ERROR("Handler failed for opcode: %hhu", op);
+                    APP_ERROR("Handler failed for opcode: %d", op);
                     return false;
                 }
                 break;
@@ -142,7 +142,7 @@ bool ProcessOpcodes(void **p)
                 const char *name  = GetString(p);
                 const char *value = GetString(p);
                 if (!OpSetEnv(name, value)) {
-                    APP_ERROR("Handler failed for opcode: %hhu", op);
+                    APP_ERROR("Handler failed for opcode: %d", op);
                     return false;
                 }
                 break;
@@ -152,13 +152,13 @@ bool ProcessOpcodes(void **p)
                 const char *args = *p;
                 *p = (char *)(*p) + args_size;
                 if (!OpSetScript(args_size, args)) {
-                    APP_ERROR("Handler failed for opcode: %hhu", op);
+                    APP_ERROR("Handler failed for opcode: %d", op);
                     return false;
                 }
                 break;
 
             default:
-                APP_ERROR("No handler for opcode: %hhu", op);
+                APP_ERROR("No handler for opcode: %d", op);
                 return false;
                 break;
         }

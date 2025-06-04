@@ -1,10 +1,11 @@
 #include <stdbool.h>
 
-#define OP_END (BYTE)0
-#define OP_CREATE_DIRECTORY (BYTE)1
-#define OP_CREATE_FILE (BYTE)2
-#define OP_SETENV (BYTE)3
-#define OP_SET_SCRIPT (BYTE)4
-#define OP_MAX (BYTE)5
+typedef enum {
+    OP_END              = 0,
+    OP_CREATE_DIRECTORY = 1,
+    OP_CREATE_FILE      = 2,
+    OP_SETENV           = 3,
+    OP_SET_SCRIPT       = 4,
+} Opcode;
 
 bool ProcessImage(const void *data, size_t data_len, bool compressed);
