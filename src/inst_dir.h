@@ -173,3 +173,15 @@ bool CreateDirectoryUnderInstDir(const char *rel_path);
  *   true on success; false on failure (error logged via APP_ERROR/DEBUG).
  */
 bool ExportFileToInstDir(const char *rel_path, const void *buf, size_t len);
+
+/**
+ * @brief  Expands any installation-directory placeholder found in 'value' and
+ *         sets the environment variable.
+ *
+ * @param  name   Environment variable name to set (must not be NULL).
+ * @param  value  Value string that may include a placeholder for the
+ *                installation directory.
+ *
+ * @return true on success; false on failure.
+ */
+bool SetEnvWithInstDir(const char *name, const char *value);

@@ -321,3 +321,22 @@ cleanup:
     }
     return result;
 }
+
+bool SetEnvWithInstDir(const char *name, const char *value)
+{
+    char *replaced_value = ReplaceInstDirPlaceholder(value);
+    if (!replaced_value) {
+        APP_ERROR("Failed to replace the value placeholder");
+        return false;
+    }
+
+    DEBUG("SetEnv(%s, %s)", name, replaced_value);
+
+    bool result = SetEnvVar(name, replaced_value);
+    if (!result) {
+        APP_ERROR("Failed to set environment variable: %s", name);
+    }
+
+    free(replaced_value);
+    return result;
+}

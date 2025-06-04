@@ -81,21 +81,9 @@ bool OpCreateFile(const char *file_name, size_t file_size, const void* data)
 // Set a environment variable (OP_SETENV opcode handler)
 bool OpSetEnv(const char *name, const char *value)
 {
-    char *replaced_value = ReplaceInstDirPlaceholder(value);
-    if (replaced_value == NULL) {
-        APP_ERROR("Failed to replace the value placeholder");
-        return false;
-    }
+    DEBUG("SetEnv(%s, %s)", name, value);
 
-    DEBUG("SetEnv(%s, %s)", name, replaced_value);
-
-    bool result = SetEnvVar(name, replaced_value);
-    free(replaced_value);
-    if (!result) {
-        APP_ERROR("Failed to set environment variable (%lu)", GetLastError());
-    }
-
-    return result;
+    return SetEnvWithInstDir(name, value);
 }
 
 // Set a application script info (OP_SET_SCRIPT opcode handler)
