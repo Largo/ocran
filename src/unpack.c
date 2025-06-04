@@ -44,56 +44,6 @@ unsigned char GetOpcode(void **p)
     return op;
 }
 
-// Create a directory (OP_CREATE_DIRECTORY opcode handler)
-bool OpCreateDirectory(const char *dir_name)
-{
-    if (dir_name == NULL || *dir_name == '\0') {
-        APP_ERROR("dir_name is NULL or empty");
-        return false;
-    }
-
-    DEBUG("Create directory: %s", dir_name);
-
-    if (!CreateDirectoryUnderInstDir(dir_name)) {
-        APP_ERROR("Failed to create directory: %s", dir_name);
-        return false;
-    }
-    return true;
-}
-
-// Create a file (OP_CREATE_FILE opcode handler)
-bool OpCreateFile(const char *file_name, size_t file_size, const void* data)
-{
-    if (file_name == NULL || *file_name == '\0') {
-        APP_ERROR("file_name is null or empty");
-        return false;
-    }
-
-    DEBUG("Create file: %s (%zu bytes)", file_name, file_size);
-
-    if (!ExportFileToInstDir(file_name, data, file_size)) {
-        APP_ERROR("Failed to export file: %s", file_name);
-        return false;
-    }
-    return true;
-}
-
-// Set a environment variable (OP_SETENV opcode handler)
-bool OpSetEnv(const char *name, const char *value)
-{
-    DEBUG("SetEnv(%s, %s)", name, value);
-
-    return SetEnvWithInstDir(name, value);
-}
-
-// Set a application script info (OP_SET_SCRIPT opcode handler)
-bool OpSetScript(size_t args_size, const char *args)
-{
-    DEBUG("SetScript");
-
-    return InitializeScriptInfo(args, args_size);
-}
-
 bool ProcessOpcodes(void **p)
 {
     Opcode op;
@@ -109,8 +59,12 @@ bool ProcessOpcodes(void **p)
 
             case OP_CREATE_DIRECTORY:
                 const char *dir_name = GetString(p);
-                if (!OpCreateDirectory(dir_name)) {
-                    APP_ERROR("Handler failed for opcode: %d", op);
+                if (!dir_name || !*dir_name) {
+                    APP_ERROR("dir_name is NULL or empty");
+                    return false;
+                }
+                DEBUG("OP_CREATE_DIRECTORY: %s", dir_name);
+                if (!CreateDirectoryUnderInstDir(dir_name)) {
                     return false;
                 }
                 break;
@@ -120,8 +74,12 @@ bool ProcessOpcodes(void **p)
                 size_t file_size = GetInteger(p);
                 const void *data = *p;
                 *p = (char *)(*p) + file_size;
-                if (!OpCreateFile(file_name, file_size, data)) {
-                    APP_ERROR("Handler failed for opcode: %d", op);
+                if (!file_name || !*file_name) {
+                    APP_ERROR("file_name is NULL or empty");
+                    return false;
+                }
+                DEBUG("OP_CREATE_FILE: %s (%zu bytes)", file_name, file_size);
+                if (!ExportFileToInstDir(file_name, data, file_size)) {
                     return false;
                 }
                 break;
@@ -129,8 +87,8 @@ bool ProcessOpcodes(void **p)
             case OP_SETENV:
                 const char *name  = GetString(p);
                 const char *value = GetString(p);
-                if (!OpSetEnv(name, value)) {
-                    APP_ERROR("Handler failed for opcode: %d", op);
+                DEBUG("OP_SETENV: %s, %s", name, value);
+                if (!SetEnvWithInstDir(name, value)) {
                     return false;
                 }
                 break;
@@ -139,8 +97,8 @@ bool ProcessOpcodes(void **p)
                 size_t args_size = GetInteger(p);
                 const char *args = *p;
                 *p = (char *)(*p) + args_size;
-                if (!OpSetScript(args_size, args)) {
-                    APP_ERROR("Handler failed for opcode: %d", op);
+                DEBUG("OP_SET_SCRIPT");
+                if (!InitializeScriptInfo(args, args_size)) {
                     return false;
                 }
                 break;
