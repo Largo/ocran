@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <string.h>
+#include <stdint.h>
 #include "error.h"
 #include "filesystem_utils.h"
 #include "inst_dir.h"
@@ -13,37 +14,36 @@
 static const void *get_data(void **p, size_t size)
 {
     const void *data = *p;
-    *p = (char *)(*p) + size;
+    *p = (uint8_t *)(*p) + size;
     return data;
 }
 
-size_t GetLength(void **p) {
-    const unsigned char *b = get_data(p, 2);
-    return ((size_t)(b[0]) << 0) |
-           ((size_t)(b[1]) << 8);
+static size_t get_length(void **p)
+{
+    const uint8_t *b = get_data(p, 2);
+    return (size_t)b[0] | ((size_t)b[1] << 8);
 }
 
-/** Decoder: Zero-terminated string */
-const char *GetString(void **p)
+static const char *get_string(void **p)
 {
-    size_t len = GetLength(p);
-    return get_data(p, len);
+    size_t len = get_length(p);
+    return (const char *)get_data(p, len);
 }
 
-/** Decoder: 32 bit unsigned integer */
-size_t GetInteger(void **p)
+static size_t get_integer(void **p)
 {
-    const unsigned char *b = get_data(p, 4);
-    return ((size_t)(b[0]) <<  0) |
-           ((size_t)(b[1]) <<  8) |
-           ((size_t)(b[2]) << 16) |
-           ((size_t)(b[3]) << 24);
+    const uint8_t *b = get_data(p, 4);
+    uint32_t v = (uint32_t)b[0]
+               | ((uint32_t)b[1] <<  8)
+               | ((uint32_t)b[2] << 16)
+               | ((uint32_t)b[3] << 24);
+    return (size_t)v;
 }
 
-unsigned char GetOpcode(void **p)
+static Opcode get_opcode(void **p)
 {
-    const unsigned char *b = get_data(p, 1);
-    return b[0];
+    const uint8_t *b = get_data(p, 1);
+    return (Opcode)b[0];
 }
 
 bool ProcessOpcodes(void **p)
@@ -51,7 +51,7 @@ bool ProcessOpcodes(void **p)
     Opcode op;
 
     for (;;) {
-        op = (Opcode)GetOpcode(p);
+        op = get_opcode(p);
 
         switch (op) {
             case OP_END:
@@ -60,7 +60,7 @@ bool ProcessOpcodes(void **p)
                 break;
 
             case OP_CREATE_DIRECTORY:
-                const char *dir_name = GetString(p);
+                const char *dir_name = get_string(p);
                 if (!dir_name || !*dir_name) {
                     APP_ERROR("dir_name is NULL or empty");
                     return false;
@@ -72,8 +72,8 @@ bool ProcessOpcodes(void **p)
                 break;
 
             case OP_CREATE_FILE:
-                const char *file_name = GetString(p);
-                size_t file_size = GetInteger(p);
+                const char *file_name = get_string(p);
+                size_t file_size = get_integer(p);
                 const void *data = get_data(p, file_size);
                 if (!file_name || !*file_name) {
                     APP_ERROR("file_name is NULL or empty");
@@ -86,8 +86,8 @@ bool ProcessOpcodes(void **p)
                 break;
 
             case OP_SETENV:
-                const char *name  = GetString(p);
-                const char *value = GetString(p);
+                const char *name  = get_string(p);
+                const char *value = get_string(p);
                 DEBUG("OP_SETENV: %s, %s", name, value);
                 if (!SetEnvWithInstDir(name, value)) {
                     return false;
@@ -95,7 +95,7 @@ bool ProcessOpcodes(void **p)
                 break;
 
             case OP_SET_SCRIPT:            
-                size_t args_size = GetInteger(p);
+                size_t args_size = get_integer(p);
                 const char *args = get_data(p, args_size);
                 DEBUG("OP_SET_SCRIPT");
                 if (!InitializeScriptInfo(args, args_size)) {
