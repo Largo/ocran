@@ -9,3 +9,4 @@ typedef enum {
 } Opcode;
 
 bool ProcessImage(const void *data, size_t data_len, bool compressed);
+const void *FindSignature(const void *buffer, size_t size);

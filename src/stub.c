@@ -15,26 +15,6 @@
 #include "unpack.h"
 #include "stub.h"
 
-const BYTE Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
-
-const void *FindSignature(const void *buffer, size_t size)
-{
-    if (size < sizeof(Signature)) {
-        DEBUG("Buffer too small to contain signature");
-        return NULL;
-    }
-
-    // Currently, the signature is being searched for at the end of the file.
-    const void *sig = (const char *)buffer + size - sizeof(Signature);
-
-    if (memcmp(sig, Signature, sizeof(Signature)) != 0) {
-        DEBUG("Signature not found in executable");
-        return NULL;
-    }
-
-    return sig;
-}
-
 int main(int argc, char *argv[])
 {
     int status = EXIT_CODE_FAILURE;

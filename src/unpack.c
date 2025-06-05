@@ -244,3 +244,23 @@ bool ProcessImage(const void *data, size_t data_len, bool compressed)
         return ProcessUncompressedData(data, data_len);
     }
 }
+
+const uint8_t Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
+
+const void *FindSignature(const void *buffer, size_t size)
+{
+    if (size < sizeof(Signature)) {
+        APP_ERROR("Buffer too small to contain signature");
+        return NULL;
+    }
+
+    // Currently, the signature is being searched for at the end of the file.
+    const void *sig = (const char *)buffer + size - sizeof(Signature);
+
+    if (memcmp(sig, Signature, sizeof(Signature))) {
+        APP_ERROR("Signature not found in executable");
+        return NULL;
+    }
+
+    return sig;
+}
