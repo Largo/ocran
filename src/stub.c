@@ -13,7 +13,6 @@
 #include "inst_dir.h"
 #include "script_info.h"
 #include "unpack.h"
-#include "stub.h"
 
 int main(int argc, char *argv[])
 {
