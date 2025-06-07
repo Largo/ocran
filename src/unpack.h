@@ -8,9 +8,6 @@ typedef enum {
     OP_SET_SCRIPT       = 4,
 } Opcode;
 
-bool ProcessImage(const void *data, size_t data_len, bool compressed);
-const void *FindSignature(const void *buffer, size_t size);
-
 /**
  * OperationModes defines a set of flags used to control various aspects of the
  * program's behavior during runtime. These flags enable or disable specific
@@ -77,3 +74,13 @@ typedef enum {
 #define IS_AUTO_CLEAN_INST_DIR(X) IS_MODE((X), AUTO_CLEAN_INST_DIR)
 #define IS_CHDIR_BEFORE_SCRIPT(X) IS_MODE((X), CHDIR_BEFORE_SCRIPT)
 #define IS_DATA_COMPRESSED(X)     IS_MODE((X), DATA_COMPRESSED)
+
+typedef struct UnpackContext UnpackContext;
+
+UnpackContext *OpenPackFile(const char *self_path);
+
+bool ClosePackFile(UnpackContext *context);
+
+OperationModes GetOperationModes(const UnpackContext *context);
+
+bool ProcessImage(const UnpackContext *context);

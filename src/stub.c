@@ -17,8 +17,8 @@
 int main(int argc, char *argv[])
 {
     int status = EXIT_CODE_FAILURE;
-    MemoryMap *map = NULL;
-    OperationModes flags = 0;
+    UnpackContext *unpack_ctx = NULL;
+    OperationModes op_modes = 0;
     const char *extract_dir = NULL;
 
     /*
@@ -41,40 +41,23 @@ int main(int argc, char *argv[])
     }
 
     /* Open and map the image (executable) into memory */
-    map = CreateMemoryMap(image_path);
-    if (!map) {
+    unpack_ctx = OpenPackFile(image_path);
+    if (!unpack_ctx) {
         FATAL("Failed to map the executable file");
         goto cleanup;
     }
 
-    void * base = GetMemoryMapBase(map);
-    size_t image_size = GetMemoryMapSize(map);
-
-    /* Process the image by checking the signature and locating the first opcode */
-    const void *sig = FindSignature(base, image_size);
-    if (sig == NULL) {
-        FATAL("Bad signature in executable");
-        goto cleanup;
-    }
-
-    const void *tail = (const char *)sig - sizeof(DWORD);
-    size_t offset = *(const DWORD*)(tail);
-    const void *head = (const char *)base + offset;
-
     /* Read header of packed data */
-    // Read the operation mode flag from the packed data header
-    flags = (OperationModes)*(BYTE *)head;
-    // Move to the next byte in the data stream
-    head = (BYTE *)head + 1;
+    op_modes = GetOperationModes(unpack_ctx);
 
     /* Enable debug mode when the flag is set */
-    if (IS_DEBUG_MODE(flags)) {
+    if (IS_DEBUG_MODE(op_modes)) {
         EnableDebugMode();
         DEBUG("Ocran stub running in debug mode");
     }
 
     /* Create extraction directory */
-    if (IS_EXTRACT_TO_EXE_DIR(flags)) {
+    if (IS_EXTRACT_TO_EXE_DIR(op_modes)) {
         extract_dir = CreateDebugExtractInstDir();
     } else {
         extract_dir = CreateTemporaryInstDir();
@@ -87,21 +70,21 @@ int main(int argc, char *argv[])
     DEBUG("Created extraction directory: %s", extract_dir);
 
     /* Unpacking process */
-    if (!ProcessImage(head, tail - head, IS_DATA_COMPRESSED(flags))) {
+    if (!ProcessImage(unpack_ctx)) {
         FATAL("Failed to unpack image due to invalid or corrupted data");
         goto cleanup;
     }
 
     // Memory map no longer needed after unpacking; free its resources.
-    DestroyMemoryMap(map);
+    ClosePackFile(unpack_ctx);
 
     // Prevent accidental use of the freed map.
-    map = NULL;
+    unpack_ctx = NULL;
 
     /* Launching the script, provided there are no errors in file extraction from the image */
     DEBUG("*** Starting application script in %s", extract_dir);
 
-    if (IS_CHDIR_BEFORE_SCRIPT(flags)) {
+    if (IS_CHDIR_BEFORE_SCRIPT(op_modes)) {
         DEBUG("Change directory to the script location before running the script");
         if (!ChangeDirectoryToScriptDirectory()) {
             FATAL("Failed to change directory to the script location");
@@ -133,9 +116,9 @@ cleanup:
        Cleanup failures are non-critical and logged as DEBUG only.
     */
 
-    if (map) {
-        DestroyMemoryMap(map);
-        map = NULL;
+    if (unpack_ctx) {
+        ClosePackFile(unpack_ctx);
+        unpack_ctx = NULL;
     }
 
     FreeScriptInfo();
@@ -143,7 +126,7 @@ cleanup:
     /* 
        Move to a safe directory if requested; on failure, log and continue.
     */
-    if (IS_CHDIR_BEFORE_SCRIPT(flags)) {
+    if (IS_CHDIR_BEFORE_SCRIPT(op_modes)) {
         if (!ChangeDirectoryToSafeDirectory()) {
             DEBUG("Failed to change to a safe working directory. "
                   "Proceeding with deletion.");
@@ -156,7 +139,7 @@ cleanup:
     /*
        If auto-cleanup is enabled, delete the extraction directory.
     */
-    if (IS_AUTO_CLEAN_INST_DIR(flags)) {
+    if (IS_AUTO_CLEAN_INST_DIR(op_modes)) {
         DEBUG("Deleting extraction directory: %s", extract_dir);
         if (!DeleteInstDir()) {
             DEBUG("Failed to delete extraction directory");

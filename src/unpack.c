@@ -236,31 +236,154 @@ bool ProcessUncompressedData(const void *data, size_t data_len)
     return result;
 }
 
-bool ProcessImage(const void *data, size_t data_len, bool compressed)
-{
-    if (compressed) {
-        return ProcessCompressedData(data, data_len);
-    } else {
-        return ProcessUncompressedData(data, data_len);
-    }
-}
-
 const uint8_t Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
-const void *FindSignature(const void *buffer, size_t size)
+static const void *find_signature(const void *buffer, size_t buffer_size)
 {
-    if (size < sizeof(Signature)) {
-        APP_ERROR("Buffer too small to contain signature");
-        return NULL;
-    }
-
     // Currently, the signature is being searched for at the end of the file.
-    const void *sig = (const char *)buffer + size - sizeof(Signature);
-
+    const void *sig = (const uint8_t *)buffer + buffer_size - sizeof(Signature);
     if (memcmp(sig, Signature, sizeof(Signature))) {
-        APP_ERROR("Signature not found in executable");
         return NULL;
     }
-
     return sig;
+}
+
+typedef uint8_t OperationModesType;
+
+OperationModes get_operation_modes(const void **p)
+{
+    const OperationModesType *q = (const OperationModesType *)*p;
+    *p = q + 1;
+    return (OperationModes)*q;
+}
+
+typedef uint32_t OffsetType;
+
+size_t get_offset(const void **p)
+{
+    const OffsetType *q = (const OffsetType *)*p - 1;
+    *p = q;
+    return (size_t)*q;
+}
+
+struct UnpackContext {
+    MemoryMap      *map;
+    OperationModes  modes;
+    const void     *data;
+    size_t          data_size;
+};
+
+UnpackContext *OpenPackFile(const char *self_path)
+{
+    UnpackContext *context = NULL;
+
+    if (!self_path || !*self_path) {
+        APP_ERROR("self_path is NULL or empty");
+
+        goto cleanup;
+    }
+
+    context = calloc(1, sizeof(UnpackContext)) ;
+    if (!context) {
+        APP_ERROR("Memory allocation failed for context");
+
+        goto cleanup;
+    }
+
+    context->map = CreateMemoryMap(self_path);
+    if (!context->map) {
+        APP_ERROR("Failed to map the executable file");
+
+        goto cleanup;
+    }
+    const void *map_base = GetMemoryMapBase(context->map);
+    size_t      map_size = GetMemoryMapSize(context->map);
+
+     /* Locate the end of the packed data */
+    if (map_size < sizeof(Signature)) {
+        APP_ERROR("Too small to contain signature");
+
+        goto cleanup;
+    }
+    const void *signature = find_signature(map_base, map_size);
+    if (!signature) {
+        APP_ERROR("Signature not found");
+
+        goto cleanup;
+    }
+    if ((size_t)((const uint8_t *)signature - (const uint8_t *)map_base)
+        < sizeof(OffsetType)) {
+        APP_ERROR("Signature too close to buffer start");
+
+        goto cleanup;
+    }
+    const void *tail = signature;
+
+    /* Determine the start of the packed data */
+    size_t offset = get_offset(&tail);
+    if (offset > map_size - sizeof(OperationModesType)) {
+        APP_ERROR("Offset out of range");
+        
+        goto cleanup;
+    }
+    const void *head = (const uint8_t *)map_base + offset;
+
+    /* Verify that the header fits immediately before the offset */
+    if ((size_t)((const uint8_t *)tail - (const uint8_t *)head)
+        < sizeof(OperationModesType)) {
+        APP_ERROR("Not enough space for header before offset");
+        
+        goto cleanup;
+    }
+    context->modes = get_operation_modes(&head);
+    context->data = head;
+    context->data_size = (const uint8_t *)tail - (const uint8_t *)head;
+
+    DEBUG(
+        "OpenPackFile: offset=%zu, modes= %u, data_size=%zu",
+        offset, (unsigned)context->modes, context->data_size
+    );
+    return context;
+
+cleanup:
+    if (context) {
+        ClosePackFile(context);
+    }
+    return NULL;
+}
+
+bool ClosePackFile(UnpackContext *context)
+{
+    if (context) {
+        if (context->map) {
+            DestroyMemoryMap(context->map);
+        }
+        free(context);
+    }
+    return true;
+}
+
+OperationModes GetOperationModes(const UnpackContext *context)
+{
+    if (!context) {
+        APP_ERROR("context is NULL");
+
+        return 0;
+    }
+    return context->modes;
+}
+
+bool ProcessImage(const UnpackContext *context)
+{
+    if (!context) {
+        APP_ERROR("context is NULL");
+
+        return false;
+    }
+
+    if (IS_DATA_COMPRESSED(context->modes)) {
+        return ProcessCompressedData(context->data, context->data_size);
+    } else {
+        return ProcessUncompressedData(context->data, context->data_size);
+    }
 }
