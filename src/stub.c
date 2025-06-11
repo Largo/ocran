@@ -123,21 +123,20 @@ cleanup:
 
     FreeScriptInfo();
 
-    /* 
-       Move to a safe directory if requested; on failure, log and continue.
+    /*
+       If CHDIR_BEFORE_SCRIPT is set, change to a safe working directory.
+       On failure, log and continue (partial cleanup still preferable).
     */
     if (IsChdirBeforeScript(op_modes)) {
+        DEBUG("Changing to safe working directory");
         if (!ChangeDirectoryToSafeDirectory()) {
             DEBUG("Failed to change to a safe working directory. "
                   "Proceeding with deletion.");
-            /*
-               Safe‐directory change failed. Continue anyway—partial cleanup
-               may still be preferable.
-            */
         }
     }
+
     /*
-       If auto-cleanup is enabled, delete the extraction directory.
+       If AUTO_CLEAN_INST_DIR is set, delete the extraction directory.
     */
     if (IsAutoCleanInstDir(op_modes)) {
         DEBUG("Deleting extraction directory: %s", extract_dir);
