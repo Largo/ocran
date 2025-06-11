@@ -51,13 +51,13 @@ int main(int argc, char *argv[])
     op_modes = GetOperationModes(unpack_ctx);
 
     /* Enable debug mode when the flag is set */
-    if (IS_DEBUG_MODE(op_modes)) {
+    if (IsDebugMode(op_modes)) {
         EnableDebugMode();
         DEBUG("Ocran stub running in debug mode");
     }
 
     /* Create extraction directory */
-    if (IS_EXTRACT_TO_EXE_DIR(op_modes)) {
+    if (IsExtractToExeDir(op_modes)) {
         extract_dir = CreateDebugExtractInstDir();
     } else {
         extract_dir = CreateTemporaryInstDir();
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
     /* Launching the script, provided there are no errors in file extraction from the image */
     DEBUG("*** Starting application script in %s", extract_dir);
 
-    if (IS_CHDIR_BEFORE_SCRIPT(op_modes)) {
+    if (IsChdirBeforeScript(op_modes)) {
         DEBUG("Change directory to the script location before running the script");
         if (!ChangeDirectoryToScriptDirectory()) {
             FATAL("Failed to change directory to the script location");
@@ -126,7 +126,7 @@ cleanup:
     /* 
        Move to a safe directory if requested; on failure, log and continue.
     */
-    if (IS_CHDIR_BEFORE_SCRIPT(op_modes)) {
+    if (IsChdirBeforeScript(op_modes)) {
         if (!ChangeDirectoryToSafeDirectory()) {
             DEBUG("Failed to change to a safe working directory. "
                   "Proceeding with deletion.");
@@ -139,7 +139,7 @@ cleanup:
     /*
        If auto-cleanup is enabled, delete the extraction directory.
     */
-    if (IS_AUTO_CLEAN_INST_DIR(op_modes)) {
+    if (IsAutoCleanInstDir(op_modes)) {
         DEBUG("Deleting extraction directory: %s", extract_dir);
         if (!DeleteInstDir()) {
             DEBUG("Failed to delete extraction directory");

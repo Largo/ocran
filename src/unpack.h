@@ -68,12 +68,11 @@ typedef enum {
     DATA_COMPRESSED     = 0x10,
 } OperationModes;
 
-#define IS_MODE(X, mask) (((X) & (mask)) == (mask))
-#define IS_DEBUG_MODE(X)          IS_MODE((X), DEBUG_MODE)
-#define IS_EXTRACT_TO_EXE_DIR(X)  IS_MODE((X), EXTRACT_TO_EXE_DIR)
-#define IS_AUTO_CLEAN_INST_DIR(X) IS_MODE((X), AUTO_CLEAN_INST_DIR)
-#define IS_CHDIR_BEFORE_SCRIPT(X) IS_MODE((X), CHDIR_BEFORE_SCRIPT)
-#define IS_DATA_COMPRESSED(X)     IS_MODE((X), DATA_COMPRESSED)
+bool IsDebugMode(OperationModes modes);
+bool IsExtractToExeDir(OperationModes modes);
+bool IsAutoCleanInstDir(OperationModes modes);
+bool IsChdirBeforeScript(OperationModes modes);
+bool IsDataCompressed(OperationModes modes);
 
 typedef struct UnpackContext UnpackContext;
 

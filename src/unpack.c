@@ -373,6 +373,30 @@ OperationModes GetOperationModes(const UnpackContext *context)
     return context->modes;
 }
 
+static inline bool IsMode(OperationModes modes, OperationModes mask) {
+    return (modes & mask) == mask;
+}
+
+bool IsDebugMode(OperationModes modes) {
+    return IsMode(modes, DEBUG_MODE);
+}
+
+bool IsExtractToExeDir(OperationModes modes) {
+    return IsMode(modes, EXTRACT_TO_EXE_DIR);
+}
+
+bool IsAutoCleanInstDir(OperationModes modes) {
+    return IsMode(modes, AUTO_CLEAN_INST_DIR);
+}
+
+bool IsChdirBeforeScript(OperationModes modes) {
+    return IsMode(modes, CHDIR_BEFORE_SCRIPT);
+}
+
+bool IsDataCompressed(OperationModes modes) {
+    return IsMode(modes, DATA_COMPRESSED);
+}
+
 bool ProcessImage(const UnpackContext *context)
 {
     if (!context) {
@@ -381,7 +405,7 @@ bool ProcessImage(const UnpackContext *context)
         return false;
     }
 
-    if (IS_DATA_COMPRESSED(context->modes)) {
+    if (IsDataCompressed(context->modes)) {
         return ProcessCompressedData(context->data, context->data_size);
     } else {
         return ProcessUncompressedData(context->data, context->data_size);
