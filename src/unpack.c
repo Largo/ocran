@@ -1,6 +1,8 @@
-#include <windows.h>
-#include <string.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
 #include "error.h"
 #include "filesystem_utils.h"
 #include "inst_dir.h"
