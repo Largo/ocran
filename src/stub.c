@@ -20,6 +20,7 @@ int main(int argc, char *argv[])
     UnpackContext *unpack_ctx = NULL;
     OperationModes op_modes = 0;
     const char *extract_dir = NULL;
+    char *image_path = NULL;
 
     /*
        Initialize signal and control handling so the parent process remains
@@ -34,8 +35,8 @@ int main(int argc, char *argv[])
     }
 
     /* Find name of image */
-    char *image_path = GetImagePath();
-    if (image_path == NULL) {
+    image_path = GetImagePath();
+    if (!image_path) {
         FATAL("Failed to get executable name");
         goto cleanup;
     }
@@ -115,6 +116,10 @@ cleanup:
        Suppress GUI error dialogs during cleanup to avoid blocking the user.
        Cleanup failures are non-critical and logged as DEBUG only.
     */
+
+    if (image_path) {
+        free(image_path);
+    }
 
     if (unpack_ctx) {
         ClosePackFile(unpack_ctx);
