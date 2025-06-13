@@ -13,26 +13,26 @@
 #include <LzmaDec.h>
 #endif
 
-static const void *get_data(void **p, size_t size)
+static const void *get_data(const void **p, size_t size)
 {
     const void *data = *p;
     *p = (uint8_t *)(*p) + size;
     return data;
 }
 
-static size_t get_length(void **p)
+static size_t get_length(const void **p)
 {
     const uint8_t *b = get_data(p, 2);
     return (size_t)b[0] | ((size_t)b[1] << 8);
 }
 
-static const char *get_string(void **p)
+static const char *get_string(const void **p)
 {
     size_t len = get_length(p);
     return (const char *)get_data(p, len);
 }
 
-static size_t get_integer(void **p)
+static size_t get_integer(const void **p)
 {
     const uint8_t *b = get_data(p, 4);
     uint32_t v = (uint32_t)b[0]
@@ -42,18 +42,18 @@ static size_t get_integer(void **p)
     return (size_t)v;
 }
 
-static Opcode get_opcode(void **p)
+static Opcode get_opcode(const void **p)
 {
     const uint8_t *b = get_data(p, 1);
     return (Opcode)b[0];
 }
 
-bool ProcessOpcodes(void **p)
+static bool process_opcodes(const void *p)
 {
     Opcode op;
 
     for (;;) {
-        op = get_opcode(p);
+        op = get_opcode(&p);
 
         switch (op) {
             case OP_END:
@@ -62,7 +62,7 @@ bool ProcessOpcodes(void **p)
                 break;
 
             case OP_CREATE_DIRECTORY:
-                const char *dir_name = get_string(p);
+                const char *dir_name = get_string(&p);
                 if (!dir_name || !*dir_name) {
                     APP_ERROR("dir_name is NULL or empty");
                     return false;
@@ -74,9 +74,9 @@ bool ProcessOpcodes(void **p)
                 break;
 
             case OP_CREATE_FILE:
-                const char *file_name = get_string(p);
-                size_t file_size = get_integer(p);
-                const void *data = get_data(p, file_size);
+                const char *file_name = get_string(&p);
+                size_t file_size = get_integer(&p);
+                const void *data = get_data(&p, file_size);
                 if (!file_name || !*file_name) {
                     APP_ERROR("file_name is NULL or empty");
                     return false;
@@ -88,8 +88,8 @@ bool ProcessOpcodes(void **p)
                 break;
 
             case OP_SETENV:
-                const char *name  = get_string(p);
-                const char *value = get_string(p);
+                const char *name  = get_string(&p);
+                const char *value = get_string(&p);
                 DEBUG("OP_SETENV: %s, %s", name, value);
                 if (!SetEnvWithInstDir(name, value)) {
                     return false;
@@ -97,8 +97,8 @@ bool ProcessOpcodes(void **p)
                 break;
 
             case OP_SET_SCRIPT:            
-                size_t args_size = get_integer(p);
-                const char *args = get_data(p, args_size);
+                size_t args_size = get_integer(&p);
+                const char *args = get_data(&p, args_size);
                 DEBUG("OP_SET_SCRIPT");
                 if (!InitializeScriptInfo(args, args_size)) {
                     return false;
@@ -217,8 +217,7 @@ bool ProcessCompressedData(const void *data, size_t data_len)
         return false;
     }
 
-    void *p = unpack_data;
-    bool result = ProcessOpcodes(&p);
+    bool result = process_opcodes(unpack_data);
     free(unpack_data);
 
     return result;
@@ -232,8 +231,7 @@ bool ProcessUncompressedData(const void *data, size_t data_len)
 {
     DEBUG("Uncompressed data segment size: %zu bytes", data_len);
 
-    void *p = (void *)data;
-    bool result = ProcessOpcodes(&p);
+    bool result = process_opcodes(data);
 
     return result;
 }
