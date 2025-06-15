@@ -149,10 +149,10 @@ static bool decompress_lzma(void *dest, unsigned long long dest_size,
 
 static unsigned long long parse_lzma_unpack_size(const void *data)
 {
-    const Byte *header = (const Byte *)data + LZMA_PROPS_SIZE;
+    const Byte *size_bytes = (const Byte *)data + LZMA_PROPS_SIZE;
     unsigned long long size64 = 0;
     for (int i = 0; i < LZMA_UNPACKSIZE_SIZE; i++) {
-        size64 |= (unsigned long long)header[i] << (i * 8);
+        size64 |= (unsigned long long)size_bytes[i] << (i * 8);
     }
     return size64;
 }
