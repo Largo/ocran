@@ -122,25 +122,9 @@ void *SzAlloc(const ISzAlloc *p, size_t size) { p = p; return malloc(size); }
 void SzFree(const ISzAlloc *p, void *address) { p = p; free(address); }
 ISzAlloc alloc = { SzAlloc, SzFree };
 
-bool DecompressLzma(void *dest, unsigned long long dest_size, const void *src, size_t src_size)
+static bool decompress_lzma(void *dest, unsigned long long dest_size, const void *src, size_t src_size)
 {
-    if (dest == NULL) {
-        APP_ERROR("Null dest buffer");
-        return false;
-    }
-
-    if (dest_size > (unsigned long long)LZMA_SIZET_MAX) {
-        APP_ERROR("Decompression size exceeds LZMA SizeT limit");
-        return false;
-    }
-
     SizeT decompressed_size = (SizeT)dest_size;
-
-    if (src_size < LZMA_HEADER_SIZE) {
-        APP_ERROR("Input data too short for LZMA header");
-        return false;
-    }
-
     SizeT inSizePure = src_size - LZMA_HEADER_SIZE;
     ELzmaStatus status;
 
@@ -182,6 +166,11 @@ bool ProcessCompressedData(const void *data, size_t data_len)
 
     DEBUG("Parsed LZMA unpack size: %llu bytes", unpack_size);
 
+    if (unpack_size > (unsigned long long)LZMA_SIZET_MAX) {
+        APP_ERROR("Decompression size exceeds LZMA SizeT limit");
+        return false;
+    }
+
     if (unpack_size > (unsigned long long)SIZE_MAX) {
         APP_ERROR("Size too large to fit in size_t");
         return false;
@@ -193,7 +182,7 @@ bool ProcessCompressedData(const void *data, size_t data_len)
         return false;
     }
 
-    if (!DecompressLzma(unpack_data, unpack_size, data, data_len)) {
+    if (!decompress_lzma(unpack_data, unpack_size, data, data_len)) {
         APP_ERROR("LZMA decompression failed");
         free(unpack_data);
         return false;
