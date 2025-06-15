@@ -122,21 +122,27 @@ void *SzAlloc(const ISzAlloc *p, size_t size) { p = p; return malloc(size); }
 void SzFree(const ISzAlloc *p, void *address) { p = p; free(address); }
 ISzAlloc alloc = { SzAlloc, SzFree };
 
-static bool decompress_lzma(void *dest, unsigned long long dest_size, const void *src, size_t src_size)
+static bool decompress_lzma(void *dest, unsigned long long dest_size,
+                            const void *src, size_t src_size)
 {
     SizeT decompressed_size = (SizeT)dest_size;
     SizeT inSizePure = src_size - LZMA_HEADER_SIZE;
     ELzmaStatus status;
 
-    SRes res = LzmaDecode((Byte *)dest, &decompressed_size, (Byte *)src + LZMA_HEADER_SIZE, &inSizePure,
-                          (Byte *)src, LZMA_PROPS_SIZE, LZMA_FINISH_END, &status, &alloc);
+    SRes res = LzmaDecode((Byte *)dest, &decompressed_size,
+                          (Byte *)src + LZMA_HEADER_SIZE, &inSizePure,
+                          (Byte *)src, LZMA_PROPS_SIZE,
+                          LZMA_FINISH_END, &status, &alloc);
 
     if (res != SZ_OK || status != LZMA_STATUS_FINISHED_WITH_MARK) {
         APP_ERROR("LZMA decompression error: %d, status: %d", res, status);
         return false;
     }
 
-    DEBUG("LZMA decompressed %zu bytes from %zu input bytes", (size_t)decompressed_size, inSizePure);
+    DEBUG(
+        "LZMA decompressed %zu bytes from %zu input bytes",
+        (size_t)decompressed_size, inSizePure
+    );
 
     return true;
 }
