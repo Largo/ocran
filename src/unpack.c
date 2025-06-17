@@ -31,21 +31,12 @@ static bool read_bytes(UnpackReader *reader, size_t size, const uint8_t **ptr)
     return true;
 }
 
-static bool read_length(UnpackReader *reader, size_t *size)
-{
-    const uint8_t *b;
-    if (!read_bytes(reader, sizeof(uint16_t), &b)) {
-        return false;
-    }
-
-    *size = (size_t)b[0] | ((size_t)b[1] << 8);
-    return true;
-}
+static bool read_integer(UnpackReader *reader, size_t *size);
 
 static bool read_string(UnpackReader *reader, const char **str)
 {
     size_t len;
-    if (!read_length(reader, &len)) {
+    if (!read_integer(reader, &len)) {
         return false;
     }
 

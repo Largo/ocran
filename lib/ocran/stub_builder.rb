@@ -184,8 +184,9 @@ module Ocran
         raise ArgumentError, "String length #{len} is too large: must be less than or equal to 65535 bytes including null terminator"
       end
 
-      @of << [len, str].pack("vZ*")
-      @data_size += 2 + len
+      write_size(len)
+      @of << [str].pack("Z*")
+      @data_size += len
     end
     private :write_string
 
