@@ -13,6 +13,17 @@
 #include <LzmaDec.h>
 #endif
 
+typedef uint32_t SizeType;
+
+static inline size_t get_size(const void *p)
+{
+    const uint8_t *b = p;
+    return  (size_t)b[0]
+         | ((size_t)b[1] <<  8)
+         | ((size_t)b[2] << 16)
+         | ((size_t)b[3] << 24);
+}
+
 typedef struct {
     const uint8_t *begin;
     const uint8_t *end;
@@ -52,14 +63,11 @@ static bool read_string(UnpackReader *reader, const char **str)
 static bool read_integer(UnpackReader *reader, size_t *size)
 {
     const uint8_t *b;
-    if (!read_bytes(reader, sizeof(uint32_t), &b)) {
+    if (!read_bytes(reader, sizeof(SizeType), &b)) {
         return false;
     }
-
-    *size =  (size_t)b[0]
-          | ((size_t)b[1] <<  8)
-          | ((size_t)b[2] << 16)
-          | ((size_t)b[3] << 24);
+    
+    *size = get_size(b);
     return true;
 }
 
@@ -293,13 +301,13 @@ OperationModes get_operation_modes(const void **p)
     return (OperationModes)*q;
 }
 
-typedef uint32_t OffsetType;
+typedef SizeType OffsetType;
 
 size_t get_offset(const void **p)
 {
     const OffsetType *q = (const OffsetType *)*p - 1;
     *p = q;
-    return (size_t)*q;
+    return get_size(q);
 }
 
 struct UnpackContext {
