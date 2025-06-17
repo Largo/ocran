@@ -13,47 +13,89 @@
 #include <LzmaDec.h>
 #endif
 
-static const void *get_data(const void **p, size_t size)
+typedef struct {
+    const uint8_t *begin;
+    const uint8_t *end;
+    const uint8_t *cur;
+} UnpackReader;
+
+static bool read_bytes(UnpackReader *reader, size_t size, const uint8_t **ptr)
 {
-    const void *data = *p;
-    *p = (uint8_t *)(*p) + size;
-    return data;
+    size_t avail = (size_t)(reader->end - reader->cur);
+    if (size > avail) {
+        return false;
+    }
+
+    *ptr = reader->cur;
+    reader->cur += size;
+    return true;
 }
 
-static size_t get_length(const void **p)
+static bool read_length(UnpackReader *reader, size_t *size)
 {
-    const uint8_t *b = get_data(p, 2);
-    return (size_t)b[0] | ((size_t)b[1] << 8);
+    const uint8_t *b;
+    if (!read_bytes(reader, sizeof(uint16_t), &b)) {
+        return false;
+    }
+
+    *size = (size_t)b[0] | ((size_t)b[1] << 8);
+    return true;
 }
 
-static const char *get_string(const void **p)
+static bool read_string(UnpackReader *reader, const char **str)
 {
-    size_t len = get_length(p);
-    return (const char *)get_data(p, len);
+    size_t len;
+    if (!read_length(reader, &len)) {
+        return false;
+    }
+
+    const uint8_t *b;
+    if (!read_bytes(reader, len, &b)) {
+        return false;
+    }
+
+    *str = (const char *)b;
+    return true;
 }
 
-static size_t get_integer(const void **p)
+static bool read_integer(UnpackReader *reader, size_t *size)
 {
-    const uint8_t *b = get_data(p, 4);
-    uint32_t v = (uint32_t)b[0]
-               | ((uint32_t)b[1] <<  8)
-               | ((uint32_t)b[2] << 16)
-               | ((uint32_t)b[3] << 24);
-    return (size_t)v;
+    const uint8_t *b;
+    if (!read_bytes(reader, sizeof(uint32_t), &b)) {
+        return false;
+    }
+
+    *size =  (size_t)b[0]
+          | ((size_t)b[1] <<  8)
+          | ((size_t)b[2] << 16)
+          | ((size_t)b[3] << 24);
+    return true;
 }
 
-static Opcode get_opcode(const void **p)
+static bool read_opcode(UnpackReader *reader, Opcode *opcode)
 {
-    const uint8_t *b = get_data(p, 1);
-    return (Opcode)b[0];
+    const uint8_t *b;
+    if (!read_bytes(reader, 1, &b)) {
+        return false;
+    }
+
+    *opcode = (Opcode)b[0];
+    return true;
 }
 
-static bool process_opcodes(const void *p)
+static bool process_opcodes(const void *data, size_t data_size)
 {
+    UnpackReader context = {
+        .begin = (const uint8_t *)data,
+        .cur   = (const uint8_t *)data,
+        .end   = (const uint8_t *)data + data_size
+    };
     Opcode op;
 
     for (;;) {
-        op = get_opcode(&p);
+        if (!read_opcode(&context, &op)) {
+            return false;
+        }
 
         switch (op) {
             case OP_END:
@@ -62,7 +104,10 @@ static bool process_opcodes(const void *p)
                 break;
 
             case OP_CREATE_DIRECTORY:
-                const char *dir_name = get_string(&p);
+                const char *dir_name;
+                if (!read_string(&context, &dir_name)) {
+                    return false;
+                }
                 if (!dir_name || !*dir_name) {
                     APP_ERROR("dir_name is NULL or empty");
                     return false;
@@ -74,13 +119,23 @@ static bool process_opcodes(const void *p)
                 break;
 
             case OP_CREATE_FILE:
-                const char *file_name = get_string(&p);
-                size_t file_size = get_integer(&p);
-                const void *data = get_data(&p, file_size);
+                const char *file_name;
+                if (!read_string(&context, &file_name)) {
+                    return false;
+                }
                 if (!file_name || !*file_name) {
                     APP_ERROR("file_name is NULL or empty");
                     return false;
                 }
+                size_t file_size;
+                if (!read_integer(&context, &file_size)) {
+                    return false;
+                }
+                const uint8_t *d;
+                if (!read_bytes(&context, file_size, &d)) {
+                    return false;
+                }
+                const void *data = d;
                 DEBUG("OP_CREATE_FILE: %s (%zu bytes)", file_name, file_size);
                 if (!ExportFileToInstDir(file_name, data, file_size)) {
                     return false;
@@ -88,8 +143,14 @@ static bool process_opcodes(const void *p)
                 break;
 
             case OP_SETENV:
-                const char *name  = get_string(&p);
-                const char *value = get_string(&p);
+                const char *name;
+                if (!read_string(&context, &name)) {
+                    return false;
+                }
+                const char *value;
+                if (!read_string(&context, &value)) {
+                    return false;
+                }
                 DEBUG("OP_SETENV: %s, %s", name, value);
                 if (!SetEnvWithInstDir(name, value)) {
                     return false;
@@ -97,8 +158,15 @@ static bool process_opcodes(const void *p)
                 break;
 
             case OP_SET_SCRIPT:            
-                size_t args_size = get_integer(&p);
-                const char *args = get_data(&p, args_size);
+                size_t args_size;
+                if (!read_integer(&context, &args_size)) {
+                    return false;
+                }
+                const uint8_t *a;
+                if (!read_bytes(&context, args_size, &a)) {
+                    return false;
+                }
+                const char *args = (const char *)a;
                 DEBUG("OP_SET_SCRIPT");
                 if (!InitializeScriptInfo(args, args_size)) {
                     return false;
@@ -194,7 +262,7 @@ bool ProcessCompressedData(const void *data, size_t data_len)
         return false;
     }
 
-    bool result = process_opcodes(unpack_data);
+    bool result = process_opcodes(unpack_data, unpack_size);
     free(unpack_data);
 
     return result;
@@ -208,7 +276,7 @@ bool ProcessUncompressedData(const void *data, size_t data_len)
 {
     DEBUG("Uncompressed data segment size: %zu bytes", data_len);
 
-    bool result = process_opcodes(data);
+    bool result = process_opcodes(data, data_len);
 
     return result;
 }
