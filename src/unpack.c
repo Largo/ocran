@@ -303,11 +303,9 @@ OperationModes get_operation_modes(const void **p)
 
 typedef SizeType OffsetType;
 
-size_t get_offset(const void **p)
+size_t get_offset(const void *p)
 {
-    const OffsetType *q = (const OffsetType *)*p - 1;
-    *p = q;
-    return get_size(q);
+    return get_size(p);
 }
 
 struct UnpackContext {
@@ -364,7 +362,8 @@ UnpackContext *OpenPackFile(const char *self_path)
     const void *tail = signature;
 
     /* Determine the start of the packed data */
-    size_t offset = get_offset(&tail);
+    tail = (const uint8_t *)tail - sizeof(OffsetType);
+    size_t offset = get_offset(tail);
     if (offset > map_size - sizeof(OperationModesType)) {
         APP_ERROR("Offset out of range");
         
