@@ -48,15 +48,27 @@ static bool read_string(UnpackReader *reader, const char **str)
 {
     size_t len;
     if (!read_integer(reader, &len)) {
+        APP_ERROR("failed to read string length");
         return false;
     }
 
-    const uint8_t *b;
-    if (!read_bytes(reader, len, &b)) {
+    if (len == 0) {
+        APP_ERROR("string length is zero");
         return false;
     }
 
-    *str = (const char *)b;
+    const uint8_t *bytes;
+    if (!read_bytes(reader, len, &bytes)) {
+        APP_ERROR("failed to read string data");
+        return false;
+    }
+
+    if (bytes[len - 1] != '\0') {
+        APP_ERROR("string is not null-terminated");
+        return false;
+    }
+
+    *str = (const char *)bytes;
     return true;
 }
 
@@ -90,10 +102,6 @@ static bool process_opcode(UnpackReader *reader, Opcode opcode)
             if (!read_string(reader, &dir_name)) {
                 return false;
             }
-            if (!dir_name || !*dir_name) {
-                APP_ERROR("dir_name is NULL or empty");
-                return false;
-            }
             DEBUG("OP_CREATE_DIRECTORY: %s", dir_name);
             return CreateDirectoryUnderInstDir(dir_name);
         }
@@ -101,10 +109,6 @@ static bool process_opcode(UnpackReader *reader, Opcode opcode)
         case OP_CREATE_FILE: {
             const char *file_name;
             if (!read_string(reader, &file_name)) {
-                return false;
-            }
-            if (!file_name || !*file_name) {
-                APP_ERROR("file_name is NULL or empty");
                 return false;
             }
             size_t file_size;
