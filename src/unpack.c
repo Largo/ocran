@@ -91,17 +91,12 @@ static bool process_opcodes(const void *data, size_t data_size)
     };
     Opcode op;
 
-    for (;;) {
+    while (context.cur < context.end) {
         if (!read_opcode(&context, &op)) {
             return false;
         }
 
         switch (op) {
-            case OP_END:
-                DEBUG("Encountered OP_END");
-                return true;
-                break;
-
             case OP_CREATE_DIRECTORY:
                 const char *dir_name;
                 if (!read_string(&context, &dir_name)) {
@@ -178,6 +173,7 @@ static bool process_opcodes(const void *data, size_t data_size)
                 break;
         }
     }
+    return true;
 }
 
 #if WITH_LZMA

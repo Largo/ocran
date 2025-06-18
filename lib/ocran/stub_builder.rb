@@ -8,7 +8,7 @@ module Ocran
   # instance of OcranBuilder.
   class StubBuilder
     Signature = [0x41, 0xb6, 0xba, 0x4e].freeze
-    OP_END = 0
+
     OP_CREATE_DIRECTORY = 1
     OP_CREATE_FILE = 2
     OP_SETENV = 3
@@ -77,7 +77,6 @@ module Ocran
 
         b = proc {
           yield(self)
-          write_opcode(OP_END)
         }
 
         if enable_compression

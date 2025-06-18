@@ -1,7 +1,6 @@
 #include <stdbool.h>
 
 typedef enum {
-    OP_END              = 0,
     OP_CREATE_DIRECTORY = 1,
     OP_CREATE_FILE      = 2,
     OP_SETENV           = 3,
