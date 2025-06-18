@@ -82,95 +82,96 @@ static bool read_opcode(UnpackReader *reader, Opcode *opcode)
     return true;
 }
 
+static bool process_opcode(UnpackReader *reader, Opcode opcode)
+{
+    switch (opcode) {
+        case OP_CREATE_DIRECTORY: {
+            const char *dir_name;
+            if (!read_string(reader, &dir_name)) {
+                return false;
+            }
+            if (!dir_name || !*dir_name) {
+                APP_ERROR("dir_name is NULL or empty");
+                return false;
+            }
+            DEBUG("OP_CREATE_DIRECTORY: %s", dir_name);
+            return CreateDirectoryUnderInstDir(dir_name);
+        }
+
+        case OP_CREATE_FILE: {
+            const char *file_name;
+            if (!read_string(reader, &file_name)) {
+                return false;
+            }
+            if (!file_name || !*file_name) {
+                APP_ERROR("file_name is NULL or empty");
+                return false;
+            }
+            size_t file_size;
+            if (!read_integer(reader, &file_size)) {
+                return false;
+            }
+            const uint8_t *d;
+            if (!read_bytes(reader, file_size, &d)) {
+                return false;
+            }
+            const void *data = d;
+            DEBUG("OP_CREATE_FILE: %s (%zu bytes)", file_name, file_size);
+            return ExportFileToInstDir(file_name, data, file_size);
+        }
+
+        case OP_SETENV: {
+            const char *name;
+            if (!read_string(reader, &name)) {
+                return false;
+            }
+            const char *value;
+            if (!read_string(reader, &value)) {
+                return false;
+            }
+            DEBUG("OP_SETENV: %s, %s", name, value);
+            return SetEnvWithInstDir(name, value);
+        }
+
+        case OP_SET_SCRIPT: {
+            size_t args_size;
+            if (!read_integer(reader, &args_size)) {
+                return false;
+            }
+            const uint8_t *a;
+            if (!read_bytes(reader, args_size, &a)) {
+                return false;
+            }
+            const char *args = (const char *)a;
+            DEBUG("OP_SET_SCRIPT");
+            return InitializeScriptInfo(args, args_size);
+        }
+
+        default: {
+            APP_ERROR("Invalid opcode: %d", opcode);
+            return false;
+        }
+    }
+
+    /* Unreachable: every case returns earlier */
+    return false;
+}
+
 static bool process_opcodes(const void *data, size_t data_size)
 {
-    UnpackReader context = {
+    UnpackReader reader = {
         .begin = (const uint8_t *)data,
         .cur   = (const uint8_t *)data,
         .end   = (const uint8_t *)data + data_size
     };
-    Opcode op;
+    Opcode opcode;
 
-    while (context.cur < context.end) {
-        if (!read_opcode(&context, &op)) {
+    while (reader.cur < reader.end) {
+        if (!read_opcode(&reader, &opcode)) {
             return false;
         }
-
-        switch (op) {
-            case OP_CREATE_DIRECTORY:
-                const char *dir_name;
-                if (!read_string(&context, &dir_name)) {
-                    return false;
-                }
-                if (!dir_name || !*dir_name) {
-                    APP_ERROR("dir_name is NULL or empty");
-                    return false;
-                }
-                DEBUG("OP_CREATE_DIRECTORY: %s", dir_name);
-                if (!CreateDirectoryUnderInstDir(dir_name)) {
-                    return false;
-                }
-                break;
-
-            case OP_CREATE_FILE:
-                const char *file_name;
-                if (!read_string(&context, &file_name)) {
-                    return false;
-                }
-                if (!file_name || !*file_name) {
-                    APP_ERROR("file_name is NULL or empty");
-                    return false;
-                }
-                size_t file_size;
-                if (!read_integer(&context, &file_size)) {
-                    return false;
-                }
-                const uint8_t *d;
-                if (!read_bytes(&context, file_size, &d)) {
-                    return false;
-                }
-                const void *data = d;
-                DEBUG("OP_CREATE_FILE: %s (%zu bytes)", file_name, file_size);
-                if (!ExportFileToInstDir(file_name, data, file_size)) {
-                    return false;
-                }
-                break;
-
-            case OP_SETENV:
-                const char *name;
-                if (!read_string(&context, &name)) {
-                    return false;
-                }
-                const char *value;
-                if (!read_string(&context, &value)) {
-                    return false;
-                }
-                DEBUG("OP_SETENV: %s, %s", name, value);
-                if (!SetEnvWithInstDir(name, value)) {
-                    return false;
-                }
-                break;
-
-            case OP_SET_SCRIPT:            
-                size_t args_size;
-                if (!read_integer(&context, &args_size)) {
-                    return false;
-                }
-                const uint8_t *a;
-                if (!read_bytes(&context, args_size, &a)) {
-                    return false;
-                }
-                const char *args = (const char *)a;
-                DEBUG("OP_SET_SCRIPT");
-                if (!InitializeScriptInfo(args, args_size)) {
-                    return false;
-                }
-                break;
-
-            default:
-                APP_ERROR("No handler for opcode: %d", op);
-                return false;
-                break;
+        if (!process_opcode(&reader, opcode)) {
+            return false;
         }
     }
     return true;
