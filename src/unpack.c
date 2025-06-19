@@ -34,6 +34,7 @@ static bool read_bytes(UnpackReader *reader, size_t size, const uint8_t **ptr)
 {
     size_t avail = (size_t)(reader->end - reader->cur);
     if (size > avail) {
+        DEBUG("failed to read requested data bytes");
         return false;
     }
 
@@ -48,23 +49,23 @@ static bool read_string(UnpackReader *reader, const char **str)
 {
     size_t len;
     if (!read_integer(reader, &len)) {
-        APP_ERROR("failed to read string length");
+        DEBUG("failed to read string size");
         return false;
     }
 
     if (len == 0) {
-        APP_ERROR("string length is zero");
+        DEBUG("string size is zero");
         return false;
     }
 
     const uint8_t *bytes;
     if (!read_bytes(reader, len, &bytes)) {
-        APP_ERROR("failed to read string data");
+        DEBUG("failed to read string data");
         return false;
     }
 
     if (bytes[len - 1] != '\0') {
-        APP_ERROR("string is not null-terminated");
+        DEBUG("string is not null-terminated");
         return false;
     }
 
@@ -76,6 +77,7 @@ static bool read_integer(UnpackReader *reader, size_t *size)
 {
     const uint8_t *b;
     if (!read_bytes(reader, sizeof(SizeType), &b)) {
+        DEBUG("failed to read integer value");
         return false;
     }
     
@@ -87,6 +89,7 @@ static bool read_opcode(UnpackReader *reader, Opcode *opcode)
 {
     const uint8_t *b;
     if (!read_bytes(reader, 1, &b)) {
+        DEBUG("failed to read opcode");
         return false;
     }
 
