@@ -96,59 +96,55 @@ static bool read_opcode(UnpackReader *reader, Opcode *opcode)
 
 static bool process_opcode(UnpackReader *reader, Opcode opcode)
 {
+    const char *name, *value;
+    const uint8_t *bytes;
+    size_t size;
+
     switch (opcode) {
         case OP_CREATE_DIRECTORY: {
-            const char *dir_name;
-            if (!read_string(reader, &dir_name)) {
-                return false;
-            }
-            DEBUG("OP_CREATE_DIRECTORY: %s", dir_name);
-            return CreateDirectoryUnderInstDir(dir_name);
-        }
-
-        case OP_CREATE_FILE: {
-            const char *file_name;
-            if (!read_string(reader, &file_name)) {
-                return false;
-            }
-            size_t file_size;
-            if (!read_integer(reader, &file_size)) {
-                return false;
-            }
-            const uint8_t *d;
-            if (!read_bytes(reader, file_size, &d)) {
-                return false;
-            }
-            const void *data = d;
-            DEBUG("OP_CREATE_FILE: %s (%zu bytes)", file_name, file_size);
-            return ExportFileToInstDir(file_name, data, file_size);
-        }
-
-        case OP_SETENV: {
-            const char *name;
             if (!read_string(reader, &name)) {
                 return false;
             }
-            const char *value;
+            DEBUG("OP_CREATE_DIRECTORY: path='%s'", name);
+            return CreateDirectoryUnderInstDir(name);
+        }
+
+        case OP_CREATE_FILE: {
+            if (!read_string(reader, &name)) {
+                return false;
+            }
+            if (!read_integer(reader, &size)) {
+                return false;
+            }
+            if (!read_bytes(reader, size, &bytes)) {
+                return false;
+            }
+            const void *data = bytes;
+            DEBUG("OP_CREATE_FILE: path='%s' (%zu bytes)", name, size);
+            return ExportFileToInstDir(name, data, size);
+        }
+
+        case OP_SETENV: {
+            if (!read_string(reader, &name)) {
+                return false;
+            }
             if (!read_string(reader, &value)) {
                 return false;
             }
-            DEBUG("OP_SETENV: %s, %s", name, value);
+            DEBUG("OP_SETENV: name='%s', value='%s'", name, value);
             return SetEnvWithInstDir(name, value);
         }
 
         case OP_SET_SCRIPT: {
-            size_t args_size;
-            if (!read_integer(reader, &args_size)) {
+            if (!read_integer(reader, &size)) {
                 return false;
             }
-            const uint8_t *a;
-            if (!read_bytes(reader, args_size, &a)) {
+            if (!read_bytes(reader, size, &bytes)) {
                 return false;
             }
-            const char *args = (const char *)a;
+            const char *args = (const char *)bytes;
             DEBUG("OP_SET_SCRIPT");
-            return InitializeScriptInfo(args, args_size);
+            return InitializeScriptInfo(args, size);
         }
 
         default: {
