@@ -205,12 +205,6 @@ static bool decompress_lzma(void *dest, unsigned long long dest_size,
         APP_ERROR("LZMA decompression error: %d, status: %d", res, status);
         return false;
     }
-
-    DEBUG(
-        "LZMA decompressed %zu bytes from %zu input bytes",
-        (size_t)decompressed_size, inSizePure
-    );
-
     return true;
 }
 
@@ -225,59 +219,47 @@ static unsigned long long parse_lzma_unpack_size(const void *data)
 }
 #endif
 
-bool ProcessCompressedData(const void *data, size_t data_len)
+static void *DecompressLzmaData(const void *data, size_t data_size,
+                                size_t *decompressed_size)
 {
 #if WITH_LZMA
-    DEBUG("LZMA compressed data segment size: %zu bytes", data_len);
-
-    if (data_len < LZMA_HEADER_SIZE) {
+    if (data_size < LZMA_HEADER_SIZE) {
         APP_ERROR("LZMA header is truncated");
-        return false;
+        return NULL;
     }
 
     unsigned long long unpack_size = parse_lzma_unpack_size(data);
 
-    DEBUG("Parsed LZMA unpack size: %llu bytes", unpack_size);
+    DEBUG("Parsed LZMA decompressed size: %llu bytes", unpack_size);
 
     if (unpack_size > (unsigned long long)LZMA_SIZET_MAX) {
         APP_ERROR("Decompression size exceeds LZMA SizeT limit");
-        return false;
+        return NULL;
     }
 
     if (unpack_size > (unsigned long long)SIZE_MAX) {
         APP_ERROR("Size too large to fit in size_t");
-        return false;
+        return NULL;
     }
 
     void *unpack_data = malloc(unpack_size);
     if (!unpack_data) {
         APP_ERROR("Memory allocation failed during decompression");
-        return false;
+        return NULL;
     }
 
-    if (!decompress_lzma(unpack_data, unpack_size, data, data_len)) {
+    if (!decompress_lzma(unpack_data, unpack_size, data, data_size)) {
         APP_ERROR("LZMA decompression failed");
         free(unpack_data);
-        return false;
+        return NULL;
     }
 
-    bool result = process_opcodes(unpack_data, unpack_size);
-    free(unpack_data);
-
-    return result;
+    *decompressed_size = unpack_size;
+    return unpack_data;
 #else
     APP_ERROR("Does not support LZMA");
-    return false;
+    return NULL;
 #endif
-}
-
-bool ProcessUncompressedData(const void *data, size_t data_len)
-{
-    DEBUG("Uncompressed data segment size: %zu bytes", data_len);
-
-    bool result = process_opcodes(data, data_len);
-
-    return result;
 }
 
 const uint8_t Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
@@ -444,13 +426,35 @@ bool ProcessImage(const UnpackContext *context)
 {
     if (!context) {
         APP_ERROR("context is NULL");
-
         return false;
     }
 
-    if (IsDataCompressed(context->modes)) {
-        return ProcessCompressedData(context->data, context->data_size);
+    DEBUG("Data segment size: %zu bytes", context->data_size);
+
+    bool compressed = IsDataCompressed(context->modes);
+    void  *data;
+    size_t data_size;
+
+    if (compressed) {
+        data = DecompressLzmaData(
+            context->data,
+            context->data_size,
+            &data_size
+        );
+        if (!data) {
+            APP_ERROR("LZMA decompression failed");
+            return false;
+        }
+        DEBUG("LZMA decompressed %zu bytes", data_size);
     } else {
-        return ProcessUncompressedData(context->data, context->data_size);
+        data      = (void *)context->data;
+        data_size = context->data_size;
     }
+
+    bool ok = process_opcodes(data, data_size);
+
+    if (compressed) {
+        free(data);
+    }
+    return ok;
 }
