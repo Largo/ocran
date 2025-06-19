@@ -151,7 +151,7 @@ static bool process_opcode(UnpackReader *reader, Opcode opcode)
         }
 
         default: {
-            APP_ERROR("Invalid opcode: %d", opcode);
+            DEBUG("Invalid opcode: %d", opcode);
             return false;
         }
     }
