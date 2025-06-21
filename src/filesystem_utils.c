@@ -201,16 +201,6 @@ bool CreateDirectoriesRecursively(const char *dir)
         return false;
     }
 
-    DWORD dir_attr = GetFileAttributes(dir);
-    if (dir_attr != INVALID_FILE_ATTRIBUTES) {
-        if (dir_attr & FILE_ATTRIBUTE_DIRECTORY) {
-            return true;
-        } else {
-            APP_ERROR("Directory name conflicts with a file(%s)", dir);
-            return false;
-        }
-    }
-
     bool result = false;
 
     size_t path_len = strlen(dir);
@@ -223,12 +213,8 @@ bool CreateDirectoriesRecursively(const char *dir)
     memcpy(path, dir, path_len);
     path[path_len] = '\0';
 
-    char *end = path + path_len;
-    char *p = end;
-    for (; p >= path; p--) {
-        if (!is_path_separator(*p)) continue;
-
-        *p = '\0';
+    char *p = path + path_len;
+    do {
         DWORD path_attr = GetFileAttributes(path);
         if (path_attr != INVALID_FILE_ATTRIBUTES) {
             if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
@@ -241,15 +227,21 @@ bool CreateDirectoriesRecursively(const char *dir)
         } else {
             DWORD err = GetLastError();
             if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) {
-                continue;
+                // continue;
             } else {
                 APP_ERROR("Cannot access the directory, Error=%lu", err);
 
                 goto cleanup;
             }
         }
-    }
 
+        while (p > path && !is_path_separator(*p)) {
+            p--;
+        }
+        *p = '\0';
+    } while (p >= path);
+
+    char *end = path + path_len;
     for (; p < end; p++) {
         if (*p) continue;
 
