@@ -1,5 +1,5 @@
-#include <windows.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 /**
  * @brief Creates an installation directory with a unique name.

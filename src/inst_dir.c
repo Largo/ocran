@@ -1,4 +1,5 @@
-#include <windows.h>
+#include <stdlib.h>
+#include <string.h>
 #include "error.h"
 #include "filesystem_utils.h"
 #include "inst_dir.h"
