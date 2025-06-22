@@ -214,7 +214,7 @@ bool ChangeDirectoryToScriptDirectory(void)
 
     bool changed = ChangeWorkingDirectory(script_dir);
     if (!changed) {
-        APP_ERROR("Failed to change CWD (%lu)", GetLastError());
+        APP_ERROR("Failed to change CWD");
     }
     free(script_dir);
 
