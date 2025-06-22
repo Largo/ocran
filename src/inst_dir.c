@@ -17,25 +17,13 @@ static inline bool IsInstDirSet(void)
 }
 
 // Creates an installation directory with a unique name in the specified target directory.
-const char *CreateInstDirectory(const char *target_dir)
+static char *create_uniq_dir(const char *target_dir)
 {
-    if (InstDir != NULL) {
-        APP_ERROR("Installation directory has already been set");
-        return NULL;
-    }
-
-    char *inst_dir = CreateUniqueDirectory(target_dir, "ocran");
-    if (inst_dir == NULL) {
-        APP_ERROR("Failed to create a unique installation directory within the specified target directory");
-        return NULL;
-    }
-
-    InstDir = inst_dir;
-    return inst_dir;
+    return CreateUniqueDirectory(target_dir, "ocran");
 }
 
 // Creates a debug installation directory next to the executable.
-const char *CreateDebugExtractInstDir(void)
+static char *create_debug_extract_inst_dir(void)
 {
     char *image_path = GetImagePath();
     if (!image_path) {
@@ -50,30 +38,57 @@ const char *CreateDebugExtractInstDir(void)
         return NULL;
     }
 
-    const char *inst_dir = CreateInstDirectory(image_dir);
-    free(image_dir);
+    char *inst_dir = create_uniq_dir(image_dir);
+    
     if (!inst_dir) {
-        APP_ERROR("Failed to create installation directory in the executable's directory");
+        APP_ERROR("Failed to create installation directory in '%s'", image_dir);
+        free(image_dir);
         return NULL;
     }
+
+    free(image_dir);
     return inst_dir;
 }
 
 // Creates a temporary installation directory in the system's temp directory.
-const char *CreateTemporaryInstDir(void)
+static char *create_temporary_inst_dir(void)
 {
     char *temp_dir = GetTempDirectoryPath();
-    if (temp_dir == NULL) {
+    if (!temp_dir) {
         APP_ERROR("Failed to obtain the temporary directory path");
         return NULL;
     }
 
-    const char *inst_dir = CreateInstDirectory(temp_dir);
-    free(temp_dir);
-    if (inst_dir == NULL) {
-        APP_ERROR("Failed to create installation directory in the temporary directory");
+    char *inst_dir = create_uniq_dir(temp_dir);
+    if (!inst_dir) {
+        APP_ERROR("Failed to create installation directory in '%s'", temp_dir);
+        free(temp_dir);
+        return NULL;
     }
 
+    free(temp_dir);
+    return inst_dir;
+}
+
+const char *CreateInstDir(bool is_extract_to_exe_dir)
+{
+    if (InstDir != NULL) {
+        APP_ERROR("Installation directory has already been set");
+        return NULL;
+    }
+
+    char *inst_dir = NULL;
+
+    if (is_extract_to_exe_dir) {
+        inst_dir = create_debug_extract_inst_dir();
+    } else {
+        inst_dir = create_temporary_inst_dir();
+    }
+    if (!inst_dir) {
+        return NULL;
+    }
+
+    InstDir = inst_dir;
     return inst_dir;
 }
 

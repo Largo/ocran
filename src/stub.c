@@ -58,11 +58,7 @@ int main(int argc, char *argv[])
     }
 
     /* Create extraction directory */
-    if (IsExtractToExeDir(op_modes)) {
-        extract_dir = CreateDebugExtractInstDir();
-    } else {
-        extract_dir = CreateTemporaryInstDir();
-    }
+    extract_dir = CreateInstDir(IsExtractToExeDir(op_modes));
     if (!extract_dir) {
         FATAL("Failed to create extraction directory");
         goto cleanup;
