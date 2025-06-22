@@ -37,18 +37,25 @@ const char *CreateInstDirectory(const char *target_dir)
 // Creates a debug installation directory next to the executable.
 const char *CreateDebugExtractInstDir(void)
 {
-    char *image_dir = GetImageDirectoryPath();
-    if (image_dir == NULL) {
+    char *image_path = GetImagePath();
+    if (!image_path) {
+        APP_ERROR("Failed to get executable name");
+        return NULL;
+    }
+
+    char *image_dir = GetParentPath(image_path);
+    free(image_path);
+    if (!image_dir) {
         APP_ERROR("Failed to obtain the directory path of the executable file");
         return NULL;
     }
 
     const char *inst_dir = CreateInstDirectory(image_dir);
     free(image_dir);
-    if (inst_dir == NULL) {
+    if (!inst_dir) {
         APP_ERROR("Failed to create installation directory in the executable's directory");
+        return NULL;
     }
-
     return inst_dir;
 }
 

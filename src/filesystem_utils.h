@@ -98,14 +98,6 @@ char *CreateUniqueDirectory(const char *base_path, const char *prefix);
 char *GetImagePath(void);
 
 /**
- * GetImageDirectoryPath - Retrieves the directory path of the executable file of the current process.
- *
- * @return A pointer to a newly allocated string that represents the directory path of the executable.
- *         Returns NULL if the path could not be retrieved or if memory allocation fails.
- */
-char *GetImageDirectoryPath(void);
-
-/**
  * GetTempDirectoryPath - Retrieves the path of the temporary directory for the current user.
  *
  * @return A pointer to a newly allocated string that represents the path of the temporary directory.

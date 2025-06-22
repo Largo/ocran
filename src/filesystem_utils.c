@@ -436,30 +436,6 @@ cleanup:
     return image_path_utf8;
 }
 
-// Retrieves the directory path of the executable file of the current process.
-char *GetImageDirectoryPath(void) {
-    char *image_path = GetImagePath();
-    if (image_path == NULL) {
-        APP_ERROR("Failed to get executable name (%lu)", GetLastError());
-        return NULL;
-    }
-
-    char *image_dir = GetParentPath(image_path);
-    if (!image_dir) {
-        APP_ERROR("Failed to get parent path");
-        free(image_path);
-        return NULL;
-    }
-    if (image_dir[0] == '\0') {
-        APP_ERROR("Executable path does not contain a directory");
-        free(image_dir);
-        free(image_path);
-        return NULL;
-    }
-
-    return image_dir;
-}
-
 // Retrieves the path to the temporary directory for the current user.
 char *GetTempDirectoryPath(void)
 {
