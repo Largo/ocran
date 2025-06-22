@@ -67,12 +67,18 @@ bool DeleteInstDir(void);
 #define PLACEHOLDER '|'
 
 /**
- * ReplaceInstDirPlaceholder - Replaces placeholders in a string with the installation directory path.
+ * @brief Replace placeholders in a template string
+ *        with the installation directory path.
  *
- * @param str The string containing placeholders to be replaced with the installation directory path.
- * @return A new string with placeholders replaced by the installation directory path, NULL on failure.
+ * @param tmpl
+ *   The template string containing placeholder characters defined by the
+ *   PLACEHOLDER macro, which will be replaced by the installation directory
+ *   path.
+ * @return
+ *   A newly allocated string with all PLACEHOLDER occurrences replaced by the
+ *   installation directory path. Returns NULL on failure.
  */
-char *ReplaceInstDirPlaceholder(const char *str);
+char *ReplaceInstDirPlaceholder(const char *tmpl);
 
 /**
  * @brief   Retrieve the working directory to use when spawning the

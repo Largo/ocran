@@ -147,39 +147,38 @@ bool DeleteInstDir(void)
 }
 
 // Replaces placeholders in a string with the installation directory path.
-char *ReplaceInstDirPlaceholder(const char *str)
+char *ReplaceInstDirPlaceholder(const char *tmpl)
 {
     if (!IsInstDirSet()) {
         APP_ERROR("Installation directory has not been set");
         return NULL;
     }
 
-    int InstDirLen = strlen(InstDir);
-    const char *p;
-    int c = 0;
+    const char *replacement = InstDir;
+    size_t replacement_len = strlen(replacement);
+    size_t c = 0;
 
-    for (p = str; *p; p++) { if (*p == PLACEHOLDER) c++; }
-    SIZE_T out_len = strlen(str) - c + InstDirLen * c + 1;
-    char *out = calloc(1, out_len);
-    if (!out) {
-        APP_ERROR("Failed to allocate memory");
+    for (const char *p = tmpl; *p; p++) { if (*p == PLACEHOLDER) c++; }
+    size_t replaced_len = strlen(tmpl) - c + replacement_len * c + 1;
+    char *replaced = calloc(replaced_len, sizeof(*replaced));
+    if (!replaced) {
+        APP_ERROR("Memory allocation failed for placeholder replacement");
         return NULL;
     }
 
-    char *out_p = out;
-
-    for (p = str; *p; p++) {
-        if (*p == PLACEHOLDER) {
-            memcpy(out_p, InstDir, InstDirLen);
-            out_p += InstDirLen;
+    char *out = replaced;
+    for (const char *in = tmpl; *in; in++) {
+        if (*in == PLACEHOLDER) {
+            memcpy(out, replacement, replacement_len);
+            out += replacement_len;
         } else {
-            *out_p = *p;
-            out_p++;
+            *out = *in;
+            out++;
         }
     }
-    *out_p = '\0';
+    *out = '\0';
 
-    return out;
+    return replaced;
 }
 
 char *GetScriptWorkingDirectoryPath(void)
