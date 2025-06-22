@@ -21,20 +21,27 @@
 const char *CreateInstDir(bool is_extract_to_exe_dir);
 
 /**
- * FreeInstDir - Frees the allocated memory for the installation directory path and resets the pointer to NULL.
+ * @brief Free the allocated installation directory path
+ *        and reset the internal pointer to NULL.
+ *
+ * Frees memory previously allocated for the installation directory path
+ * and clears the stored pointer so that GetInstDir() returns NULL until
+ * a new directory is set.
  */
 void FreeInstDir(void);
 
 /**
- * GetInstDir - Returns the path to the installation directory.
+ * @brief Get the current installation directory path.
  *
- * @return A pointer to the installation directory path if set, NULL otherwise.
+ * @return
+ *   A pointer to the installation directory path if set, or NULL if the
+ *   directory has not been initialized or has been freed.
  */
 const char *GetInstDir(void);
 
 /**
- * ExpandInstDirPath - Concatenates the installation directory path with a given
- * relative path.
+ * @brief Concatenates the installation directory path with a given
+ *        relative path.
  *
  * This function guarantees that the resulting path will not escape the
  * installation directory. It will fail and return NULL if any of the following
@@ -56,7 +63,7 @@ const char *GetInstDir(void);
 char *ExpandInstDirPath(const char *rel_path);
 
 /**
- * DeleteInstDir - Deletes the installation directory and its contents.
+ * @brief Deletes the installation directory and its contents.
  *
  * @return true if the directory and its contents were deleted successfully,
  *         false otherwise.
@@ -95,31 +102,32 @@ char *ReplaceInstDirPlaceholder(const char *tmpl);
 char *GetScriptWorkingDirectoryPath(void);
 
 /**
- * ChangeDirectoryToScriptDirectory - Change the current working directory to the script's directory.
+ * @brief Change the current working directory to the script’s directory.
  *
- * This function attempts to change the process's current working directory to the directory
- * where the script is located. This is typically used to ensure that relative paths
+ * This function attempts to change the process’s current working directory
+ * to the directory where the script is located, ensuring that relative paths
  * in script operations resolve correctly.
  *
- * @return bool Returns true if the directory change was successful, otherwise false.
+ * @return
+ *   true if the directory change was successful, false otherwise.
  */
 bool ChangeDirectoryToScriptDirectory(void);
 
 /**
- * ChangeDirectoryToSafeDirectory - Change the current working directory to a predefined safe directory.
+ * @brief Change the current working directory to a predefined safe directory.
  *
- * This function is used to switch the current working directory to a safe location, typically
- * used to prevent any operations that could interfere with user data or system operations.
- * This is particularly useful during cleanup operations or when the application needs to
- * ensure it operates in a controlled environment.
+ * This function switches the current working directory to a safe location,
+ * typically to prevent operations from interfering with user data or system
+ * operations. It is particularly useful during cleanup operations or when the
+ * application needs to operate in a controlled environment.
  *
- * @return bool Returns true if the directory change was successful, otherwise false.
+ * @return
+ *   true if the directory change was successful, false otherwise.
  */
 bool ChangeDirectoryToSafeDirectory(void);
 
 /**
- * CreateDirectoryUnderInstDir - Recursively create a directory under the
- * installation directory.
+ * @brief Recursively create a directory under the installation directory.
  *
  * This function ensures that a directory exists at the specified relative
  * path under the installation directory. An empty rel_path is treated as
@@ -139,7 +147,7 @@ bool ChangeDirectoryToSafeDirectory(void);
 bool CreateDirectoryUnderInstDir(const char *rel_path);
 
 /**
- * ExportFileToInstDir - Atomically write a file under the installation dir.
+ * @brief Atomically write a file under the installation dir.
  *
  * This function writes the given buffer as a file at the specified
  * relative path under the installation directory. It validates rel_path
