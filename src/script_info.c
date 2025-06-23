@@ -203,7 +203,7 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     char *command_line = NULL;
     size_t argc;
     const char **argv = NULL;
-    char **t_arg = NULL;
+    char **script_argv = NULL;
     bool result = false;
 
     argc = split_strings_to_array(args, args_size, NULL, 0);
@@ -243,13 +243,13 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     }
 
     // Set Script_CommandLine
-    t_arg = transform_argv((int)argc, argv);
-    if (!t_arg) {
+    script_argv = transform_argv((int)argc, argv);
+    if (!script_argv) {
         APP_ERROR("Failed to transform argv");
         goto cleanup;
     }
 
-    command_line = argv_to_command_line((int)argc, t_arg);
+    command_line = argv_to_command_line((int)argc, script_argv);
     if (!command_line) {
         APP_ERROR("Failed to build command line");
         goto cleanup;
@@ -265,10 +265,12 @@ cleanup:
         free(command_line);
     }
     free(argv);
-    if (t_arg) {
-        for (int i = 0; i < argc; i++) free(t_arg[i]);
+    if (script_argv) {
+        for (char **p = script_argv; *p; p++) {
+            free(*p);
+        }
+        free(script_argv);
     }
-    free(t_arg);
     return result;
 }
 
