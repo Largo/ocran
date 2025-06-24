@@ -180,8 +180,9 @@ static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
 
 static char *Script_ApplicationName = NULL;
 static char *Script_CommandLine = NULL;
+static char **ScriptARGV = NULL;
 
-#define HAS_SCRIPT_INFO (Script_ApplicationName && Script_CommandLine)
+#define HAS_SCRIPT_INFO (Script_ApplicationName && ScriptARGV)
 
 bool GetScriptInfo(const char **app_name, char **cmd_line)
 {
@@ -202,7 +203,6 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     }
 
     char *application_name = NULL;
-    char *command_line = NULL;
     size_t argc;
     const char **argv = NULL;
     char **script_argv = NULL;
@@ -251,28 +251,22 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
         goto cleanup;
     }
 
-    command_line = argv_to_command_line(script_argv);
-    if (!command_line) {
-        APP_ERROR("Failed to build command line");
-        goto cleanup;
-    }
-
+    ScriptARGV = script_argv;
     Script_ApplicationName = application_name;
-    Script_CommandLine = command_line;
     result = true;
 
 cleanup:
     if (!result) {
         free(application_name);
-        free(command_line);
+
+        if (script_argv) {
+            for (char **p = script_argv; *p; p++) {
+                free(*p);
+            }
+            free(script_argv);
+        }
     }
     free(argv);
-    if (script_argv) {
-        for (char **p = script_argv; *p; p++) {
-            free(*p);
-        }
-        free(script_argv);
-    }
     return result;
 }
 
@@ -331,6 +325,13 @@ bool RunScript(int argc, char *argv[], int *exit_code)
     char *extra_args = NULL;
     char *cmd_line = NULL;
     bool result = false;
+    char *script_args = NULL;
+
+    script_args = argv_to_command_line(ScriptARGV);
+    if (!script_args) {
+        APP_ERROR("Failed to build command line");
+        goto cleanup;
+    }
 
     if (argc > 1) {
         extra_args = argv_to_command_line(argv + 1);
@@ -342,7 +343,7 @@ bool RunScript(int argc, char *argv[], int *exit_code)
         goto cleanup;
     }
 
-    cmd_line = concat_with_space(Script_CommandLine, extra_args);
+    cmd_line = concat_with_space(script_args, extra_args);
     if (!cmd_line) {
         APP_ERROR("Failed to build command line for script execution");
         goto cleanup;
@@ -353,5 +354,6 @@ bool RunScript(int argc, char *argv[], int *exit_code)
 cleanup:
     free(extra_args);
     free(cmd_line);
+    free(script_args);
     return result;
 }
