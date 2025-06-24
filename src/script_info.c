@@ -92,20 +92,23 @@ cleanup:
     return NULL;
 }
 
-static char **transform_argv(int argc, const char *argv[])
+static char **transform_argv(const char *argv[])
 {
+    size_t argc = 0;
+    for (const char **p = argv; *p; p++) argc++;
+
     if (argc <= 0) {
         APP_ERROR("No arguments to transform");
         return NULL;
     }
 
-    char **out_argv = calloc((size_t)argc + 1, sizeof(*out_argv));
+    char **out_argv = calloc(argc + 1, sizeof(*out_argv));
     if (!out_argv) {
         APP_ERROR("Memory allocation failed in transform_argv");
         return NULL;
     }
 
-    for (int i = 0; i < argc; i++) {
+    for (size_t i = 0; i < argc; i++) {
         char *str;
         switch (i) {
             case 0:
@@ -131,7 +134,7 @@ static char **transform_argv(int argc, const char *argv[])
     return out_argv;
 
 cleanup:
-    for (int j = 0; j < argc; j++) free(out_argv[j]);
+    for (size_t j = 0; j < argc; j++) free(out_argv[j]);
     free(out_argv);
     return NULL;
 }
@@ -242,7 +245,7 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     }
 
     // Set Script_CommandLine
-    script_argv = transform_argv((int)argc, argv);
+    script_argv = transform_argv(argv);
     if (!script_argv) {
         APP_ERROR("Failed to transform argv");
         goto cleanup;
