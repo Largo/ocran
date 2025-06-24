@@ -43,29 +43,28 @@ static char *EscapeAndQuoteCmdArg(const char* arg)
     return sanitized;
 }
 
-static char *argv_to_command_line(int argc, char *argv[])
+static char *argv_to_command_line(char *argv[])
 {
-    if (argc < 0) {
-        APP_ERROR("Invalid argument count %d", argc);
-        return NULL;
-    }
+    size_t argc = 0;
+    for (char **p = argv; *p; p++) argc++;
 
-    char **quoted = calloc((size_t)argc, sizeof(*quoted));
+    char **quoted = calloc(argc + 1, sizeof(*quoted));
     if (!quoted) {
         APP_ERROR("Memory allocation failed in argv_to_command_line (quoted array)");
         return NULL;
     }
+    quoted[argc] = NULL;
 
     size_t total_len = 0;
-    for (int i = 0; i < argc; i++) {
+    for (size_t i = 0; i < argc; i++) {
         quoted[i] = EscapeAndQuoteCmdArg(argv[i]);
         if (!quoted[i]) {
-            APP_ERROR("Failed to quote arg at index %d", i);
+            APP_ERROR("Failed to quote arg at index %zu", i);
             goto cleanup;
         }
         total_len += strlen(quoted[i]);
     }
-    total_len += (size_t)(argc > 0 ? argc - 1 : 0);
+    total_len += (argc > 0 ? argc - 1 : 0);
 
     char *command_line = calloc(total_len + 1, sizeof(*command_line));
     if (!command_line) {
@@ -73,22 +72,22 @@ static char *argv_to_command_line(int argc, char *argv[])
         goto cleanup;
     }
 
-    char *p = command_line;
-    for (int i = 0; i < argc; i++) {
-        if (i > 0) *p++ = ' ';
+    char *dst = command_line;
+    for (size_t i = 0; i < argc; i++) {
+        if (i > 0) *dst++ = ' ';
 
         size_t len = strlen(quoted[i]);
-        memcpy(p, quoted[i], len);
-        p += len;
+        memcpy(dst, quoted[i], len);
+        dst += len;
     }
-    *p = '\0';
+    *dst = '\0';
 
-    for (int i = 0; i < argc; i++) free(quoted[i]);
+    for (size_t i = 0; i < argc; i++) free(quoted[i]);
     free(quoted);
     return command_line;
 
 cleanup:
-    for (int j = 0; j < argc; j++) free(quoted[j]);
+    for (size_t j = 0; j < argc; j++) free(quoted[j]);
     free(quoted);
     return NULL;
 }
@@ -249,7 +248,7 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
         goto cleanup;
     }
 
-    command_line = argv_to_command_line((int)argc, script_argv);
+    command_line = argv_to_command_line(script_argv);
     if (!command_line) {
         APP_ERROR("Failed to build command line");
         goto cleanup;
@@ -331,7 +330,7 @@ bool RunScript(int argc, char *argv[], int *exit_code)
     bool result = false;
 
     if (argc > 1) {
-        extra_args = argv_to_command_line(argc - 1, argv + 1);
+        extra_args = argv_to_command_line(argv + 1);
     } else {
         extra_args = calloc(1, 1);
     }
