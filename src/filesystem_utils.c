@@ -763,3 +763,119 @@ bool SetEnvVar(const char *name, const char *value)
     }
     return true;
 }
+
+static char *EscapeAndQuoteCmdArg(const char* arg)
+{
+    size_t arg_len = strlen(arg);
+    size_t count = 0;
+    for (size_t i = 0; i < arg_len; i++) { if (arg[i] == '\"') count++; }
+    char *sanitized = calloc(1, arg_len + count * 2 + 3);
+    if (!sanitized) {
+        APP_ERROR("Failed to allocate memory");
+        return NULL;
+    }
+
+    char *p = sanitized;
+    *p++ = '\"';
+    for (size_t i = 0; i < arg_len; i++) {
+        if (arg[i] == '\"') { *p++ = '\\'; }
+        *p++ = arg[i];
+    }
+    *p++ = '\"';
+    *p = '\0';
+
+    return sanitized;
+}
+
+static char *argv_to_command_line(char *argv[])
+{
+    size_t argc = 0;
+    for (char **p = argv; *p; p++) argc++;
+
+    char **quoted = calloc(argc + 1, sizeof(*quoted));
+    if (!quoted) {
+        APP_ERROR("Memory allocation failed in argv_to_command_line (quoted array)");
+        return NULL;
+    }
+    quoted[argc] = NULL;
+
+    size_t total_len = 0;
+    for (size_t i = 0; i < argc; i++) {
+        quoted[i] = EscapeAndQuoteCmdArg(argv[i]);
+        if (!quoted[i]) {
+            APP_ERROR("Failed to quote arg at index %zu", i);
+            goto cleanup;
+        }
+        total_len += strlen(quoted[i]);
+    }
+    total_len += (argc > 0 ? argc - 1 : 0);
+
+    char *command_line = calloc(total_len + 1, sizeof(*command_line));
+    if (!command_line) {
+        APP_ERROR("Memory allocation failed in argv_to_command_line (command_line)");
+        goto cleanup;
+    }
+
+    char *dst = command_line;
+    for (size_t i = 0; i < argc; i++) {
+        if (i > 0) *dst++ = ' ';
+
+        size_t len = strlen(quoted[i]);
+        memcpy(dst, quoted[i], len);
+        dst += len;
+    }
+    *dst = '\0';
+
+    for (size_t i = 0; i < argc; i++) free(quoted[i]);
+    free(quoted);
+    return command_line;
+
+cleanup:
+    for (size_t j = 0; j < argc; j++) free(quoted[j]);
+    free(quoted);
+    return NULL;
+}
+
+bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
+{
+    PROCESS_INFORMATION pi = { 0 };
+    STARTUPINFO         si = { .cb = sizeof(si) };
+    bool result = false;
+    char *cmd_line = argv_to_command_line(argv);
+    if (!cmd_line) {
+        APP_ERROR("Failed to build command line for CreateProcess()");
+        goto cleanup;
+    }
+
+    DEBUG("ApplicationName=%s", app_name);
+    DEBUG("CommandLine=%s", cmd_line);
+
+    if (!CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+        APP_ERROR("Failed to create process (%lu)", GetLastError());
+        goto cleanup;
+    }
+
+    if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) {
+        APP_ERROR("Failed to wait script process (%lu)", GetLastError());
+        goto cleanup;
+    }
+
+    if (!GetExitCodeProcess(pi.hProcess, (LPDWORD)exit_code)) {
+        APP_ERROR("Failed to get exit status (%lu)", GetLastError());
+        goto cleanup;
+    }
+
+    result = true;
+
+cleanup:
+    if (cmd_line) {
+        free(cmd_line);
+    }
+    if (pi.hProcess && pi.hProcess != INVALID_HANDLE_VALUE) {
+        CloseHandle(pi.hProcess);
+    }
+    if (pi.hThread && pi.hThread != INVALID_HANDLE_VALUE) {
+        CloseHandle(pi.hThread);
+    }
+    return result;
+}

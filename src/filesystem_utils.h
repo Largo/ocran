@@ -204,3 +204,19 @@ bool InitializeSignalHandling(void);
  * @return true if the operation succeeded; false otherwise.
  */
 bool SetEnvVar(const char *name, const char *value);
+
+/**
+ * @brief Launches the specified application with given arguments,
+ *        waits for it to finish, and retrieves its exit code.
+ *
+ * @param app_name
+ *   Path of the executable to run.
+ * @param argv
+ *   NULL-terminated array of argument strings; each element is one argument.
+ * @param exit_code
+ *   Pointer to an int where the child process’s exit code will be stored.
+ * @return
+ *   True if the process was successfully created, waited on, and its exit
+ *   code retrieved; false otherwise.
+ */
+bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code);
