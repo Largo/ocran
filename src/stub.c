@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
        and then overwrites it with the external script’s return code.
     */
     DEBUG("Run application script");
-    if (!RunScript(argc, argv, &status)) {
+    if (!RunScript(argv, &status)) {
         FATAL("Failed to run script");
         goto cleanup;
     }

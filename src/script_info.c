@@ -225,10 +225,15 @@ static char **shallow_merge_argv(char *argv1[], char *argv2[])
     return outv;
 }
 
-bool RunScript(int argc, char *argv[], int *exit_code)
+bool RunScript(char *argv[], int *exit_code)
 {
     if (!HAS_SCRIPT_INFO) {
         APP_ERROR("Script info is not initialized");
+        return false;
+    }
+
+    if (!argv || !*argv) {
+        APP_ERROR("argv is NULL or empty");
         return false;
     }
 
