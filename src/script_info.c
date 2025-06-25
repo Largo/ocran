@@ -185,11 +185,23 @@ cleanup:
 
 void FreeScriptInfo(void)
 {
-    free(Script_ApplicationName);
-    Script_ApplicationName = NULL;
+    if (Script_ApplicationName) {
+        free(Script_ApplicationName);
+        Script_ApplicationName = NULL;
+    }
 
-    free(Script_CommandLine);
-    Script_CommandLine = NULL;
+    if (Script_CommandLine) {
+        free(Script_CommandLine);
+        Script_CommandLine = NULL;
+    }
+
+    if (ScriptARGV) {
+        for (char **p = ScriptARGV; *p; p++) {
+            free(*p);
+        }
+        free(ScriptARGV);
+        ScriptARGV = NULL;
+    }
 }
 
 static char **shallow_merge_argv(char *argv1[], char *argv2[])
