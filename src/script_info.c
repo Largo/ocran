@@ -92,7 +92,6 @@ static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
 }
 
 static char *Script_ApplicationName = NULL;
-static char *Script_CommandLine = NULL;
 static char **ScriptARGV = NULL;
 
 #define HAS_SCRIPT_INFO (Script_ApplicationName && ScriptARGV)
@@ -101,7 +100,7 @@ bool GetScriptInfo(const char **app_name, char **cmd_line)
 {
     if (HAS_SCRIPT_INFO) {
         *app_name = Script_ApplicationName;
-        *cmd_line = Script_CommandLine;
+        *cmd_line = NULL;
         return true;
     } else {
         return false;
@@ -188,11 +187,6 @@ void FreeScriptInfo(void)
     if (Script_ApplicationName) {
         free(Script_ApplicationName);
         Script_ApplicationName = NULL;
-    }
-
-    if (Script_CommandLine) {
-        free(Script_CommandLine);
-        Script_CommandLine = NULL;
     }
 
     if (ScriptARGV) {
