@@ -5,21 +5,6 @@
 #include "filesystem_utils.h"
 #include "inst_dir.h"
 
-// concat_with_space - join two strings with a single space between
-static char *concat_with_space(const char *a, const char *b)
-{
-    size_t len = strlen(a) + 1 + strlen(b) + 1;
-    char *out = calloc(len, sizeof(*out));
-    if (!out) {
-        APP_ERROR("Memory allocation failed in concat_with_space");
-        return NULL;
-    }
-
-    snprintf(out, len, "%s %s", a, b);
-
-    return out;
-}
-
 static char *EscapeAndQuoteCmdArg(const char* arg)
 {
     size_t arg_len = strlen(arg);
@@ -279,11 +264,16 @@ void FreeScriptInfo(void)
     Script_CommandLine = NULL;
 }
 
-static bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, int *exit_code)
+static bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
 {
     PROCESS_INFORMATION pi = { 0 };
     STARTUPINFO         si = { .cb = sizeof(si) };
     bool result = false;
+    char *cmd_line = argv_to_command_line(argv);
+    if (!cmd_line) {
+        APP_ERROR("Failed to build command line for CreateProcess()");
+        goto cleanup;
+    }
 
     DEBUG("ApplicationName=%s", app_name);
     DEBUG("CommandLine=%s", cmd_line);
@@ -306,6 +296,9 @@ static bool CreateAndWaitForProcess(const char *app_name, char *cmd_line, int *e
     result = true;
 
 cleanup:
+    if (cmd_line) {
+        free(cmd_line);
+    }
     if (pi.hProcess && pi.hProcess != INVALID_HANDLE_VALUE) {
         CloseHandle(pi.hProcess);
     }
@@ -315,6 +308,27 @@ cleanup:
     return result;
 }
 
+static char **shallow_merge_argv(char *argv1[], char *argv2[])
+{
+    size_t c1 = 0;
+    for (char **p = argv1; *p; p++) c1++;
+
+    size_t c2 = 0;
+    for (char **p = argv2; *p; p++) c2++;
+
+    size_t outc = c1 + c2;
+    char **outv = calloc(outc + 1, sizeof(*outv));
+    if (!outv) {
+        APP_ERROR("Memory allocation failed for merged argv");
+        return NULL;
+    }
+
+    memcpy(outv,      argv1, sizeof(*outv) * c1);
+    memcpy(outv + c1, argv2, sizeof(*outv) * c2);
+    outv[outc] = NULL;
+    return outv;
+}
+
 bool RunScript(int argc, char *argv[], int *exit_code)
 {
     if (!HAS_SCRIPT_INFO) {
@@ -322,38 +336,17 @@ bool RunScript(int argc, char *argv[], int *exit_code)
         return false;
     }
 
-    char *extra_args = NULL;
-    char *cmd_line = NULL;
     bool result = false;
-    char *script_args = NULL;
 
-    script_args = argv_to_command_line(ScriptARGV);
-    if (!script_args) {
-        APP_ERROR("Failed to build command line");
+    char **merged_argv = shallow_merge_argv(ScriptARGV, argv + 1);
+    if (!merged_argv) {
+        APP_ERROR("Failed to merge script arguments with extra arguments");
         goto cleanup;
     }
 
-    if (argc > 1) {
-        extra_args = argv_to_command_line(argv + 1);
-    } else {
-        extra_args = calloc(1, 1);
-    }
-    if (!extra_args) {
-        APP_ERROR("Failed to build extra_args");
-        goto cleanup;
-    }
-
-    cmd_line = concat_with_space(script_args, extra_args);
-    if (!cmd_line) {
-        APP_ERROR("Failed to build command line for script execution");
-        goto cleanup;
-    }
-
-    result = CreateAndWaitForProcess(Script_ApplicationName, cmd_line, exit_code);
+    result = CreateAndWaitForProcess(Script_ApplicationName, merged_argv, exit_code);
 
 cleanup:
-    free(extra_args);
-    free(cmd_line);
-    free(script_args);
+    free(merged_argv);
     return result;
 }
