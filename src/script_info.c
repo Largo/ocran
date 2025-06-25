@@ -91,15 +91,14 @@ static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
     return needed;
 }
 
-static char *Script_ApplicationName = NULL;
 static char **ScriptARGV = NULL;
 
-#define HAS_SCRIPT_INFO (Script_ApplicationName && ScriptARGV)
+#define HAS_SCRIPT_INFO (ScriptARGV)
 
 bool GetScriptInfo(const char **app_name, char **cmd_line)
 {
     if (HAS_SCRIPT_INFO) {
-        *app_name = Script_ApplicationName;
+        *app_name = NULL;
         *cmd_line = NULL;
         return true;
     } else {
@@ -114,7 +113,6 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
         return false;
     }
 
-    char *application_name = NULL;
     size_t argc;
     const char **argv = NULL;
     char **script_argv = NULL;
@@ -149,13 +147,6 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
         goto cleanup;
     }
 
-    // Set Script_ApplicationName
-    application_name = ExpandInstDirPath(argv[0]);
-    if (!application_name) {
-        APP_ERROR("Failed to expand application name to installation directory");
-        goto cleanup;
-    }
-
     // Set Script_CommandLine
     script_argv = transform_argv(argv);
     if (!script_argv) {
@@ -164,13 +155,10 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
     }
 
     ScriptARGV = script_argv;
-    Script_ApplicationName = application_name;
     result = true;
 
 cleanup:
     if (!result) {
-        free(application_name);
-
         if (script_argv) {
             for (char **p = script_argv; *p; p++) {
                 free(*p);
@@ -184,11 +172,6 @@ cleanup:
 
 void FreeScriptInfo(void)
 {
-    if (Script_ApplicationName) {
-        free(Script_ApplicationName);
-        Script_ApplicationName = NULL;
-    }
-
     if (ScriptARGV) {
         for (char **p = ScriptARGV; *p; p++) {
             free(*p);
@@ -232,16 +215,29 @@ bool RunScript(char *argv[], int *exit_code)
     }
 
     bool result = false;
+    char *app_name = NULL;
+    char **merged_argv = NULL;
 
-    char **merged_argv = shallow_merge_argv(ScriptARGV, argv + 1);
+    app_name = ExpandInstDirPath(ScriptARGV[0]);
+    if (!app_name) {
+        APP_ERROR("Failed to expand application name to installation directory");
+        goto cleanup;
+    }
+
+    merged_argv = shallow_merge_argv(ScriptARGV, argv + 1);
     if (!merged_argv) {
         APP_ERROR("Failed to merge script arguments with extra arguments");
         goto cleanup;
     }
 
-    result = CreateAndWaitForProcess(Script_ApplicationName, merged_argv, exit_code);
+    result = CreateAndWaitForProcess(app_name, merged_argv, exit_code);
 
 cleanup:
-    free(merged_argv);
+    if (app_name) {
+        free(app_name);
+    }
+    if (merged_argv) {
+        free(merged_argv);
+    }
     return result;
 }
