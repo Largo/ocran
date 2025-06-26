@@ -5,10 +5,10 @@
 #include "filesystem_utils.h"
 #include "inst_dir.h"
 
-static char **transform_argv(const char *argv[])
+static char **transform_argv(char *argv[])
 {
     size_t argc = 0;
-    for (const char **p = argv; *p; p++) argc++;
+    for (char **p = argv; *p; p++) argc++;
 
     if (argc <= 0) {
         APP_ERROR("No arguments to transform");
@@ -106,7 +106,7 @@ bool GetScriptInfo(const char **app_name, char **cmd_line)
     }
 }
 
-bool InitializeScriptInfo(const char *args, size_t args_size)
+bool InitializeScriptInfo(const char *info, size_t info_size)
 {
     if (HAS_SCRIPT_INFO) {
         APP_ERROR("Script info is already set");
@@ -115,8 +115,15 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
 
     size_t argc;
     const char **argv = NULL;
-    char **script_argv = NULL;
-    bool result = false;
+    char *args = NULL;
+    size_t args_size = info_size;
+
+    args = malloc(info_size);
+    if (!args) {
+        APP_ERROR("Memory allocation failed for args");
+        goto cleanup;
+    }
+    memcpy(args, info, info_size);
 
     argc = split_strings_to_array(args, args_size, NULL, 0);
 
@@ -147,35 +154,23 @@ bool InitializeScriptInfo(const char *args, size_t args_size)
         goto cleanup;
     }
 
-    // Set Script_CommandLine
-    script_argv = transform_argv(argv);
-    if (!script_argv) {
-        APP_ERROR("Failed to transform argv");
-        goto cleanup;
-    }
-
-    ScriptARGV = script_argv;
-    result = true;
+    ScriptARGV = (char **)argv;
+    return true;
 
 cleanup:
-    if (!result) {
-        if (script_argv) {
-            for (char **p = script_argv; *p; p++) {
-                free(*p);
-            }
-            free(script_argv);
-        }
+    if (argv) {
+        free(argv);
     }
-    free(argv);
-    return result;
+    if (args) {
+        free(args);
+    }
+    return false;
 }
 
 void FreeScriptInfo(void)
 {
     if (ScriptARGV) {
-        for (char **p = ScriptARGV; *p; p++) {
-            free(*p);
-        }
+        free(*ScriptARGV);
         free(ScriptARGV);
         ScriptARGV = NULL;
     }
@@ -216,6 +211,7 @@ bool RunScript(char *argv[], int *exit_code)
 
     bool result = false;
     char *app_name = NULL;
+    char **script_argv = NULL;
     char **merged_argv = NULL;
 
     app_name = ExpandInstDirPath(ScriptARGV[0]);
@@ -224,7 +220,13 @@ bool RunScript(char *argv[], int *exit_code)
         goto cleanup;
     }
 
-    merged_argv = shallow_merge_argv(ScriptARGV, argv + 1);
+    script_argv = transform_argv(ScriptARGV);
+    if (!script_argv) {
+        APP_ERROR("Failed to transform argv");
+        goto cleanup;
+    }
+
+    merged_argv = shallow_merge_argv(script_argv, argv + 1);
     if (!merged_argv) {
         APP_ERROR("Failed to merge script arguments with extra arguments");
         goto cleanup;
@@ -235,6 +237,12 @@ bool RunScript(char *argv[], int *exit_code)
 cleanup:
     if (app_name) {
         free(app_name);
+    }
+    if (script_argv) {
+        for (char **p = script_argv; *p; p++) {
+            free(*p);
+        }
+        free(script_argv);
     }
     if (merged_argv) {
         free(merged_argv);
