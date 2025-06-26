@@ -91,6 +91,28 @@ static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
     return needed;
 }
 
+static char **info_to_argv(const char *info, size_t info_size)
+{
+    size_t argc = split_strings_to_array(info, info_size, NULL, 0);
+    size_t argv_size = (argc + 1) * sizeof(char *);
+    void *base = malloc(argv_size + info_size);
+    if (!base) {
+        APP_ERROR("Memory allocation failed for argv");
+        return NULL;
+    }
+    char **argv = (char **)base;
+    char  *args = (char *) base + argv_size;
+    memcpy(args, info, info_size);
+
+    size_t stored = split_strings_to_array(args, info_size, (const char **)argv, argc);
+    if (stored != argc) {
+        APP_ERROR("Argument count mismatch");
+        free(base);
+        return NULL;
+    }
+    return argv;
+}
+
 static char **ScriptARGV = NULL;
 
 #define HAS_SCRIPT_INFO (ScriptARGV)
@@ -113,34 +135,16 @@ bool InitializeScriptInfo(const char *info, size_t info_size)
         return false;
     }
 
-    size_t argc;
-    const char **argv = NULL;
-    char *args = NULL;
-    size_t args_size = info_size;
-
-    args = malloc(info_size);
-    if (!args) {
-        APP_ERROR("Memory allocation failed for args");
-        goto cleanup;
-    }
-    memcpy(args, info, info_size);
-
-    argc = split_strings_to_array(args, args_size, NULL, 0);
-
+    char **argv = NULL;
+    size_t argc = split_strings_to_array(info, info_size, NULL, 0);
     if (argc < 2) {
         APP_ERROR("Insufficient arguments expected at least application and script name");
         goto cleanup;
     }
 
-    argv = calloc(argc + 1, sizeof(*argv));
+    argv = info_to_argv(info, info_size);
     if (!argv) {
-        APP_ERROR("Memory allocation failed for argv");
-        goto cleanup;
-    }
-
-    size_t needed = split_strings_to_array(args, args_size, argv, argc);
-    if (needed != argc) {
-        APP_ERROR("Argument count mismatch");
+        APP_ERROR("Failed to convert script info to argv");
         goto cleanup;
     }
 
@@ -154,15 +158,12 @@ bool InitializeScriptInfo(const char *info, size_t info_size)
         goto cleanup;
     }
 
-    ScriptARGV = (char **)argv;
+    ScriptARGV = argv;
     return true;
 
 cleanup:
     if (argv) {
         free(argv);
-    }
-    if (args) {
-        free(args);
     }
     return false;
 }
@@ -170,7 +171,6 @@ cleanup:
 void FreeScriptInfo(void)
 {
     if (ScriptARGV) {
-        free(*ScriptARGV);
         free(ScriptARGV);
         ScriptARGV = NULL;
     }
