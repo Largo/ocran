@@ -138,6 +138,11 @@ bool InitializeScriptInfo(const char *info, size_t info_size)
         return false;
     }
 
+    if (!info) {
+        APP_ERROR("info is NULL");
+        return false;
+    }
+
     if (info_size < 2
         || info[info_size - 1] != '\0'
         || info[info_size - 2] != '\0') {
