@@ -66,7 +66,7 @@ cleanup:
  *                    terminator).
  */
 static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
-                                     const char **array, size_t array_count)
+                                     char **array, size_t array_count)
 {
     size_t needed   = 0;
     size_t stored   = 0;
@@ -79,7 +79,7 @@ static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
             break;
         }
         if (array && stored < array_count) {
-            array[stored++] = p;
+            array[stored++] = (char *)p;
         }
         needed++;
         p = nul + 1;
@@ -104,7 +104,7 @@ static char **info_to_argv(const char *info, size_t info_size)
     char  *args = (char *) base + argv_size;
     memcpy(args, info, info_size);
 
-    size_t stored = split_strings_to_array(args, info_size, (const char **)argv, argc);
+    size_t stored = split_strings_to_array(args, info_size, argv, argc);
     if (stored != argc) {
         APP_ERROR("Argument count mismatch");
         free(base);
