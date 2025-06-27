@@ -83,6 +83,9 @@ static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
         }
         needed++;
         p = nul + 1;
+        if (*p == '\0') {
+            break;
+        }
     }
 
     if (array && array_count > 0) {
@@ -132,6 +135,13 @@ bool InitializeScriptInfo(const char *info, size_t info_size)
 {
     if (HAS_SCRIPT_INFO) {
         APP_ERROR("Script info is already set");
+        return false;
+    }
+
+    if (info_size < 2
+        || info[info_size - 1] != '\0'
+        || info[info_size - 2] != '\0') {
+        APP_ERROR("Script info not double-NULL terminated");
         return false;
     }
 

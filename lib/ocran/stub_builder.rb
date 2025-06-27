@@ -191,6 +191,15 @@ module Ocran
 
     def write_string_array(*str_array)
       ary = str_array.map(&:to_s)
+
+      if ary.any?(&:empty?)
+         raise ArgumentError, "Argument list must not contain empty strings"
+      end
+
+      # Append an empty string so that when joined with "\0", the final buffer
+      # ends in two consecutive NUL bytes (double–NUL terminator) to mark end-of-list.
+      ary << ""
+
       size = ary.sum(0) { |s| s.bytesize + 1 }
       write_size(size)
       ary.each_slice(1) { |a| @of << a.pack("Z*") }
