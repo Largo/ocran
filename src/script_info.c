@@ -118,10 +118,10 @@ static char **info_to_argv(const char *info, size_t info_size)
     return argv;
 }
 
-static char **ScriptARGV = NULL;
+static char **ScriptInfo = NULL;
 
 static inline bool IsScriptInfoSet(void) {
-    return ScriptARGV != NULL;
+    return ScriptInfo != NULL;
 }
 
 bool GetScriptInfo(const char **app_name, char **cmd_line)
@@ -182,15 +182,15 @@ bool SetScriptInfo(const char *info, size_t info_size)
         return false;
     }
 
-    ScriptARGV = argv;
+    ScriptInfo = argv;
     return true;
 }
 
 void FreeScriptInfo(void)
 {
-    if (ScriptARGV) {
-        free(ScriptARGV);
-        ScriptARGV = NULL;
+    if (ScriptInfo) {
+        free(ScriptInfo);
+        ScriptInfo = NULL;
     }
 }
 
@@ -232,13 +232,13 @@ bool RunScript(char *argv[], int *exit_code)
     char **script_argv = NULL;
     char **merged_argv = NULL;
 
-    app_name = ExpandInstDirPath(ScriptARGV[0]);
+    app_name = ExpandInstDirPath(ScriptInfo[0]);
     if (!app_name) {
         APP_ERROR("Failed to expand application name to installation directory");
         goto cleanup;
     }
 
-    script_argv = transform_argv(ScriptARGV);
+    script_argv = transform_argv(ScriptInfo);
     if (!script_argv) {
         APP_ERROR("Failed to transform argv");
         goto cleanup;
