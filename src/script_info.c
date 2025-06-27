@@ -1,9 +1,11 @@
-#include <windows.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 #include "error.h"
 #include "filesystem_utils.h"
 #include "inst_dir.h"
+#include "script_info.h"
 
 static char **transform_argv(char *argv[])
 {
