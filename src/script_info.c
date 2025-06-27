@@ -120,11 +120,13 @@ static char **info_to_argv(const char *info, size_t info_size)
 
 static char **ScriptARGV = NULL;
 
-#define HAS_SCRIPT_INFO (ScriptARGV)
+static inline bool IsScriptInfoSet(void) {
+    return ScriptARGV != NULL;
+}
 
 bool GetScriptInfo(const char **app_name, char **cmd_line)
 {
-    if (HAS_SCRIPT_INFO) {
+    if (IsScriptInfoSet()) {
         *app_name = NULL;
         *cmd_line = NULL;
         return true;
@@ -135,7 +137,7 @@ bool GetScriptInfo(const char **app_name, char **cmd_line)
 
 bool SetScriptInfo(const char *info, size_t info_size)
 {
-    if (HAS_SCRIPT_INFO) {
+    if (IsScriptInfoSet()) {
         APP_ERROR("Script info is already set");
         return false;
     }
@@ -215,7 +217,7 @@ static char **shallow_merge_argv(char *argv1[], char *argv2[])
 
 bool RunScript(char *argv[], int *exit_code)
 {
-    if (!HAS_SCRIPT_INFO) {
+    if (!IsScriptInfoSet()) {
         APP_ERROR("Script info is not initialized");
         return false;
     }
