@@ -147,7 +147,7 @@ static bool process_opcode(UnpackReader *reader, Opcode opcode)
             }
             const char *args = (const char *)bytes;
             DEBUG("OP_SET_SCRIPT");
-            return InitializeScriptInfo(args, size);
+            return SetScriptInfo(args, size);
         }
 
         default: {

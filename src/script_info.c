@@ -133,7 +133,7 @@ bool GetScriptInfo(const char **app_name, char **cmd_line)
     }
 }
 
-bool InitializeScriptInfo(const char *info, size_t info_size)
+bool SetScriptInfo(const char *info, size_t info_size)
 {
     if (HAS_SCRIPT_INFO) {
         APP_ERROR("Script info is already set");
