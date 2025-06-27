@@ -145,37 +145,36 @@ bool InitializeScriptInfo(const char *info, size_t info_size)
         return false;
     }
 
-    char **argv = NULL;
-    size_t argc = split_strings_to_array(info, info_size, NULL, 0);
-    if (argc < 2) {
-        APP_ERROR("Insufficient arguments expected at least application and script name");
-        goto cleanup;
+    const char *argv0 = info;
+    if (*argv0 == '\0') {
+        APP_ERROR("Application name is empty");
+        return false;
     }
 
-    argv = info_to_argv(info, info_size);
+    if (!IsCleanRelativePath(argv0)) {
+        APP_ERROR("Application name contains prohibited relative path elements");
+        return false;
+    }
+
+    const char *argv1 = argv0 + strlen(info) + 1;
+    if (*argv1 == '\0') {
+        APP_ERROR("Script name is empty");
+        return false;
+    }
+
+    if (!IsCleanRelativePath(argv1)) {
+        APP_ERROR("Script name contains prohibited relative path elements");
+        return false;
+    }
+
+    char **argv = info_to_argv(info, info_size);
     if (!argv) {
         APP_ERROR("Failed to convert script info to argv");
-        goto cleanup;
-    }
-
-    if (!IsCleanRelativePath(argv[0])) {
-        APP_ERROR("Application name contains prohibited relative path elements like '.' or '..'");
-        goto cleanup;
-    }
-
-    if (!IsCleanRelativePath(argv[1])) {
-        APP_ERROR("Script name contains prohibited relative path elements like '.' or '..'");
-        goto cleanup;
+        return false;
     }
 
     ScriptARGV = argv;
     return true;
-
-cleanup:
-    if (argv) {
-        free(argv);
-    }
-    return false;
 }
 
 void FreeScriptInfo(void)
