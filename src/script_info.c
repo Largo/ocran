@@ -124,15 +124,29 @@ static inline bool IsScriptInfoSet(void) {
     return ScriptInfo != NULL;
 }
 
-bool GetScriptInfo(const char **app_name, char **cmd_line)
+char **GetScriptInfo(void)
 {
-    if (IsScriptInfoSet()) {
-        *app_name = NULL;
-        *cmd_line = NULL;
-        return true;
-    } else {
-        return false;
+    if (!IsScriptInfoSet()) {
+        return NULL;
     }
+
+    size_t stored = 0;
+    for (char **p = ScriptInfo; *p; p++) stored++;
+    if (stored == 0) {
+        APP_ERROR("ScriptInfo is empty");
+        return NULL;
+    }
+    char *last = ScriptInfo[stored - 1];
+
+    char *end = last + strlen(last) + 1 + 1;  // double-NULL terminated
+    size_t infov_size = end - (char *)ScriptInfo;
+    char **argv = malloc(infov_size);
+    if (!argv) {
+        APP_ERROR("Memory allocation failed for GetScriptInfo");
+        return NULL;
+    }
+    memcpy(argv, ScriptInfo, infov_size);
+    return argv;
 }
 
 bool SetScriptInfo(const char *info, size_t info_size)
@@ -183,6 +197,7 @@ bool SetScriptInfo(const char *info, size_t info_size)
     }
 
     ScriptInfo = argv;
+    GetScriptInfo();
     return true;
 }
 
