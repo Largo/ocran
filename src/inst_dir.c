@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "error.h"
-#include "filesystem_utils.h"
+#include "system_utils.h"
 #include "inst_dir.h"
 
 // Static variable to hold the installation directory path.

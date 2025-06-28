@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "error.h"
-#include "filesystem_utils.h"
+#include "system_utils.h"
 #include "inst_dir.h"
 #include "script_info.h"
 #include "unpack.h"

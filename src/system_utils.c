@@ -1,7 +1,7 @@
 #include <windows.h>
 #include <stdbool.h>
 #include "error.h"
-#include "filesystem_utils.h"
+#include "system_utils.h"
 
 /*
  * Returns true if `path` is a “clean” relative path:
