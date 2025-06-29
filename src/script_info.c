@@ -230,7 +230,7 @@ static char **shallow_merge_argv(char *argv1[], char *argv2[])
     return outv;
 }
 
-bool RunScript(char *argv[], int *exit_code)
+bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
 {
     if (!IsScriptInfoSet()) {
         APP_ERROR("Script info is not initialized");
@@ -246,6 +246,7 @@ bool RunScript(char *argv[], int *exit_code)
     char *app_name = NULL;
     char **script_argv = NULL;
     char **merged_argv = NULL;
+    char *script_dir = NULL;
 
     app_name = ExpandInstDirPath(ScriptInfo[0]);
     if (!app_name) {
@@ -265,6 +266,26 @@ bool RunScript(char *argv[], int *exit_code)
         goto cleanup;
     }
 
+    if (is_chdir_to_script_dir) {
+        script_dir = GetParentPath(script_argv[1]);
+        if (!script_dir) {
+            APP_ERROR("Failed to build path for script directory");
+            goto cleanup;
+        }
+
+        DEBUG(
+            "Changing working directory to script directory '%s'",
+            script_dir
+        );
+        if (!ChangeWorkingDirectory(script_dir)) {
+            APP_ERROR(
+                "Failed to change directory to script directory '%s'",
+                script_dir
+            );
+            goto cleanup;
+        }
+    }
+
     result = CreateAndWaitForProcess(app_name, merged_argv, exit_code);
 
 cleanup:
@@ -279,6 +300,9 @@ cleanup:
     }
     if (merged_argv) {
         free(merged_argv);
+    }
+    if (script_dir) {
+        free(script_dir);
     }
     return result;
 }

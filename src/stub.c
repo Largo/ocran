@@ -81,13 +81,6 @@ int main(int argc, char *argv[])
     /* Launching the script, provided there are no errors in file extraction from the image */
     DEBUG("*** Starting application script in %s", extract_dir);
 
-    if (IsChdirBeforeScript(op_modes)) {
-        DEBUG("Change directory to the script location before running the script");
-        if (!ChangeDirectoryToScriptDirectory()) {
-            FATAL("Failed to change directory to the script location");
-            goto cleanup;
-        }
-    }
     DEBUG("Set the 'OCRAN_EXECUTABLE' environment variable to %s", image_path);
     if (!SetEnvVar("OCRAN_EXECUTABLE", image_path)) {
         FATAL("The script cannot be launched due to a configuration error");
@@ -99,7 +92,7 @@ int main(int argc, char *argv[])
        and then overwrites it with the external script’s return code.
     */
     DEBUG("Run application script");
-    if (!RunScript(argv, &status)) {
+    if (!RunScript(argv, IsChdirBeforeScript(op_modes), &status)) {
         FATAL("Failed to run script");
         goto cleanup;
     }
