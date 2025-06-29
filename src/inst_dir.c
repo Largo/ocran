@@ -182,46 +182,6 @@ char *ReplaceInstDirPlaceholder(const char *tmpl)
     return replaced;
 }
 
-char *GetScriptWorkingDirectoryPath(void)
-{
-    if (!IsInstDirSet()) {
-        APP_ERROR("Installation directory has not been set");
-        return NULL;
-    }
-
-    char *working_dir = ExpandInstDirPath("src");
-    if (!working_dir) {
-        APP_ERROR("Failed to build path for working directory");
-        return NULL;
-    }
-    return working_dir;
-}
-
-// Changes the working directory to the directory where the script is located.
-bool ChangeDirectoryToScriptDirectory(void)
-{
-    if (!IsInstDirSet()) {
-        APP_ERROR("Installation directory has not been set");
-        return false;
-    }
-
-    char *script_dir = GetScriptWorkingDirectoryPath();
-    if (script_dir == NULL) {
-        APP_ERROR("Failed to build path for CWD");
-        return false;
-    }
-
-    DEBUG("Changing CWD to unpacked directory %s", script_dir);
-
-    bool changed = ChangeWorkingDirectory(script_dir);
-    if (!changed) {
-        APP_ERROR("Failed to change CWD");
-    }
-    free(script_dir);
-
-    return changed;
-}
-
 #ifdef _WIN32
 #define FALLBACK_DIRECTORY_PATH "\\"
 #else
