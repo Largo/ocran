@@ -31,7 +31,7 @@ static char **transform_argv(char *argv[])
                 break;
 
             case 1:
-                str = ExpandInstDirPath(argv[1]);
+                str = strdup(argv[1]);
                 break;
 
             default:
@@ -243,18 +243,28 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
     }
 
     bool result = false;
+    char **script_info = GetScriptInfo();
     char *app_name = NULL;
+    char *script_name = NULL;
     char **script_argv = NULL;
     char **merged_argv = NULL;
     char *script_dir = NULL;
 
-    app_name = ExpandInstDirPath(ScriptInfo[0]);
+    app_name = ExpandInstDirPath(script_info[0]);
     if (!app_name) {
         APP_ERROR("Failed to expand application name to installation directory");
         goto cleanup;
     }
 
-    script_argv = transform_argv(ScriptInfo);
+    script_name = ExpandInstDirPath(script_info[1]);
+    if (!script_name) {
+        APP_ERROR("Failed to expand script name to installation directory");
+        goto cleanup;
+    }
+
+    script_info[1] = script_name;
+
+    script_argv = transform_argv(script_info);
     if (!script_argv) {
         APP_ERROR("Failed to transform argv");
         goto cleanup;
@@ -267,7 +277,7 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
     }
 
     if (is_chdir_to_script_dir) {
-        script_dir = GetParentPath(script_argv[1]);
+        script_dir = GetParentPath(script_name);
         if (!script_dir) {
             APP_ERROR("Failed to build path for script directory");
             goto cleanup;
@@ -289,8 +299,14 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
     result = CreateAndWaitForProcess(app_name, merged_argv, exit_code);
 
 cleanup:
+    if (script_info) {
+        free(script_info);
+    }
     if (app_name) {
         free(app_name);
+    }
+    if (script_name) {
+        free(script_name);
     }
     if (script_argv) {
         for (char **p = script_argv; *p; p++) {
