@@ -5,6 +5,7 @@ CFLAGS          := -Wall -O2 -DWITH_LZMA -Ilzma
 STUB_CFLAGS     := $(CFLAGS) -D_CONSOLE
 STUBW_CFLAGS    := $(CFLAGS)
 LDFLAGS         := -s
+LDLIBS          := -lbcrypt
 GUI_LDFLAGS     := -mwindows
 
 BINDIR          := $(CURDIR)/../share/ocran
@@ -37,10 +38,10 @@ stub.res: stub.rc
 	windres -i stub.rc -O coff -o stub.res
 
 stub$(EXEEXT): $(COMMON_OBJS) $(CONSOLE_OBJS)
-	$(CC) $(LDFLAGS) $^ -o $@
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 stubw$(EXEEXT): $(COMMON_OBJS) $(WINDOW_OBJS)
-	$(CC) $(LDFLAGS) $(GUI_LDFLAGS) $^ -o $@
+	$(CC) $(LDFLAGS) $(GUI_LDFLAGS) $^ $(LDLIBS) -o $@
 
 edicon$(EXEEXT): edicon.o
 	$(CC) $(LDFLAGS) $^ -o $@

@@ -71,23 +71,18 @@ bool CreateDirectoriesRecursively(const char *dir);
  */
 bool DeleteRecursively(const char *path);
 
-// Defines the length of the unique identifier used in the directory name.
-#define UID_LENGTH 12
-// Defines the maximum number of attempts to create a unique directory.
-#define MAX_RETRY_CREATE_UNIQUE_DIR 20U
-
 /**
- * CreateUniqueDirectory - Creates a unique directory within a base path, using a specified prefix for the directory name.
- * This function attempts to generate a directory name that does not already exist by appending a unique identifier
- * to the provided prefix. The unique identifier is generated based on a performance counter and has a fixed length.
+ * @brief Windows-side replacement for POSIX mkdtemp().
  *
- * @param base_path The base path where the unique directory will be created.
- * @param prefix The prefix to use for the directory name. The final directory name will be formed by concatenating
- *               this prefix with a unique identifier.
- * @return A pointer to a newly allocated string that represents the full path of the created directory.
- *         Returns NULL if the directory could not be created due to an error or if all attempts fail.
+ * The string \t tmpl must end with at least six ’X’ characters.
+ * Those X’s are replaced with random portable-filename characters and
+ * the function tries to create the directory.  
+ *
+ * @param tmpl  Writable, NUL-terminated buffer ending in “XXXXXX”.
+ * @return      tmpl on success (now holding the new path), or NULL on error
+ *              with errno set.
  */
-char *CreateUniqueDirectory(const char *base_path, const char *prefix);
+char *CreateUniqueDirectory(char *tmpl);
 
 /**
  * GetImagePath - Retrieves the full path of the executable file of the current process.

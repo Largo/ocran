@@ -20,7 +20,12 @@ static inline bool IsInstDirSet(void)
 // Creates an installation directory with a unique name in the specified target directory.
 static char *create_uniq_dir(const char *target_dir)
 {
-    return CreateUniqueDirectory(target_dir, "ocran");
+    char *base_path = JoinPath(target_dir, "ocran" "XXXXXX");
+    if (!base_path) {
+        APP_ERROR("Failed to construct a base path");
+        return NULL;
+    }
+    return CreateUniqueDirectory(base_path);
 }
 
 // Creates a debug installation directory next to the executable.

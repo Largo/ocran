@@ -1,4 +1,7 @@
 #include <windows.h>
+#include <ntstatus.h>
+#include <ntdef.h>
+#include <bcrypt.h>
 #include <stdbool.h>
 #include "error.h"
 #include "system_utils.h"
@@ -316,75 +319,71 @@ bool DeleteRecursively(const char *path)
     return true;
 }
 
-char *GenerateUniqueName(const char *prefix)
+static bool generate_unique_name(char *buffer, size_t buffer_size)
 {
-    if (!prefix) {
-        APP_ERROR("prefix is NULL");
-        return NULL;
+    char base32[] = "0123456789ABCDEF"
+                    "GHIJKLMNOPQRSTUV"
+    ;
+
+    NTSTATUS b = BCryptGenRandom(
+        0,
+        (PUCHAR)buffer,
+        buffer_size,
+        BCRYPT_USE_SYSTEM_PREFERRED_RNG
+    );
+    if (!NT_SUCCESS(b)) {
+        return false;
     }
 
-    size_t prefix_len = strlen(prefix);
-    char *name = malloc(prefix_len + UID_LENGTH + 1);
-    if (!name) {
-        APP_ERROR("Memory allocation failed for unique name");
-        return NULL;
+    for (size_t i = 0; i < buffer_size; i++) {
+        buffer[i] = base32[buffer[i] & 0x1F];
     }
-    memcpy(name, prefix, prefix_len);
-
-    LARGE_INTEGER time;
-    // This function always succeeds on Windows XP and later
-    QueryPerformanceCounter(&time);
-    unsigned long long timestamp = time.QuadPart;
-    char hex[] = "0123456789ABCDEF";
-    char *t = name + prefix_len;
-    for (int i = 0; i < UID_LENGTH; i++) {
-        t[i] = hex[(timestamp >> (4 * (UID_LENGTH - 1 - i))) & 0xF];
-    }
-    t[UID_LENGTH] = '\0';
-
-    return name;
+    return true;
 }
 
+// Defines the maximum number of attempts to create a unique directory.
+#define MAX_RETRY_CREATE_UNIQUE_DIR 20U
+
 // Generates a unique directory within a specified base path using a prefix.
-char *CreateUniqueDirectory(const char *base_path, const char *prefix)
+char *CreateUniqueDirectory(char *tmpl)
 {
-    if (!base_path) {
-        APP_ERROR("base_path is NULL");
+    if (!tmpl || !*tmpl) {
+        APP_ERROR("template is NULL or empty");
         return NULL;
     }
 
-    size_t retry_limit = MAX_RETRY_CREATE_UNIQUE_DIR;
-    for (size_t retry = 0; retry < retry_limit; retry++) {
-        char *temp_name = GenerateUniqueName(prefix);
-        if (!temp_name) {
-            APP_ERROR("Failed to generate a unique name");
-            return NULL;
-        }
+    size_t tmpl_len = strlen(tmpl);
+    char  *tmpl_end = tmpl + tmpl_len;
+    char  *x_str = tmpl_end;
+    size_t x_len = 0;
+    while (x_str > tmpl && *--x_str == 'X') {
+        x_len++;
+    }
+    if (x_len < 6) {
+        APP_ERROR("Template must end with at least six 'X's");
+        return NULL;
+    }
+    char *x_head = tmpl_end - x_len;
 
-        char *full_path = JoinPath(base_path, temp_name);
-        free(temp_name);
-        if (!full_path) {
+    for (size_t retry = 0; retry < MAX_RETRY_CREATE_UNIQUE_DIR; retry++) {
+        if (!generate_unique_name(x_head, x_len)) {
             APP_ERROR("Failed to construct a unique directory path");
             return NULL;
         }
 
-        if (CreateDirectory(full_path, NULL)) {
-            return full_path;
+        if (CreateDirectory(tmpl, NULL)) {
+            return tmpl;
         }
         DWORD err = GetLastError();
-        free(full_path);
         if (err != ERROR_ALREADY_EXISTS) {
             APP_ERROR("Failed to create a unique directory, Error=%lu", err);
             return NULL;
         }
-
-        /* To avoid sequential generation and prevent name duplication. */
-        Sleep(10); 
     }
 
     APP_ERROR(
         "Failed to create a unique directory after %u retries",
-        retry_limit
+        MAX_RETRY_CREATE_UNIQUE_DIR
     );
     return NULL;
 }
