@@ -137,14 +137,6 @@ char *GetParentPath(const char *path)
  */
 static char *utf16_to_utf8(const wchar_t *utf16)
 {
-    char *utf8 = NULL;
-
-    if (!utf16) {
-        APP_ERROR("utf16 is NULL");
-
-        goto cleanup;
-    }
-
     int utf8_size = WideCharToMultiByte(
         CP_UTF8,
         WC_ERR_INVALID_CHARS,
@@ -156,17 +148,14 @@ static char *utf16_to_utf8(const wchar_t *utf16)
             "Failed to calculate buffer size for UTF-8 conversion, Error=%lu",
             err
         );
-
-        goto cleanup;
+        return NULL;
     }
 
-    utf8 = malloc((size_t)utf8_size);
+    char *utf8 = calloc((size_t)utf8_size, sizeof(*utf8));
     if (!utf8) {
-        APP_ERROR("Memory allocation failed for utf8");
-        
-        goto cleanup;
+        APP_ERROR("Memory allocation failed for UTF-8 conversion");
+        return NULL;
     }
-    utf8[utf8_size - 1] = '\0';
 
     int written = WideCharToMultiByte(
         CP_UTF8,
@@ -176,24 +165,10 @@ static char *utf16_to_utf8(const wchar_t *utf16)
     if (written == 0) {
         DWORD err = GetLastError();
         APP_ERROR("Failed to convert UTF-16 to UTF-8, Error=%lu", err);
-
-        goto cleanup;
-    } else if (written != utf8_size) {
-        APP_ERROR(
-            "Unexpected UTF-8 length: expected=%d, written=%d",
-             utf8_size, written
-        );
-
-        goto cleanup;
-    }
-
-    return utf8;
-
-cleanup:
-    if (utf8) {
         free(utf8);
+        return NULL;
     }
-    return NULL;
+    return utf8;
 }
 
 // Recursively creates a directory and all its parent directories.
