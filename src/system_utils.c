@@ -763,76 +763,78 @@ bool SetEnvVar(const char *name, const char *value)
     return true;
 }
 
-static char *EscapeAndQuoteCmdArg(const char* arg)
+static size_t quoted_arg(char *quoted, const char* arg)
 {
-    size_t arg_len = strlen(arg);
     size_t count = 0;
-    for (size_t i = 0; i < arg_len; i++) { if (arg[i] == '\"') count++; }
-    char *sanitized = calloc(1, arg_len + count * 2 + 3);
-    if (!sanitized) {
-        APP_ERROR("Failed to allocate memory");
-        return NULL;
+
+    count++;
+    if (quoted) {
+        *quoted++ = '"';
     }
 
-    char *p = sanitized;
-    *p++ = '\"';
-    for (size_t i = 0; i < arg_len; i++) {
-        if (arg[i] == '\"') { *p++ = '\\'; }
-        *p++ = arg[i];
+    for (const char *p = arg; *p; p++) {
+        switch (*p) {
+            case '\\': {
+                size_t trail = 1;
+                while (*++p == '\\') {
+                    trail++;
+                }
+                if (*p == '"' || *p == '\0') {
+                    trail *= 2;
+                }
+                count += trail;
+                if (quoted) {
+                    while (trail--) *quoted++ = '\\';
+                }
+                p--;
+                break;
+            }
+            case '"':
+                count += 2;
+                if (quoted) {
+                    *quoted++ = '\\';
+                    *quoted++ = '"';
+                }
+                break;
+            default:
+                count++;
+                if (quoted) {
+                    *quoted++ = *p;
+                }
+                break;
+        }
     }
-    *p++ = '\"';
-    *p = '\0';
 
-    return sanitized;
+    count++;
+    if (quoted) {
+        *quoted++ = '"';
+        *quoted   = '\0';
+    }
+    return count;
 }
 
-static char *argv_to_command_line(char *argv[])
+static size_t quoted_args(char *args, char *argv[])
 {
-    size_t argc = 0;
-    for (char **p = argv; *p; p++) argc++;
+    size_t args_len = 0;
 
-    char **quoted = calloc(argc + 1, sizeof(*quoted));
-    if (!quoted) {
-        APP_ERROR("Memory allocation failed in argv_to_command_line (quoted array)");
-        return NULL;
-    }
-    quoted[argc] = NULL;
-
-    size_t total_len = 0;
-    for (size_t i = 0; i < argc; i++) {
-        quoted[i] = EscapeAndQuoteCmdArg(argv[i]);
-        if (!quoted[i]) {
-            APP_ERROR("Failed to quote arg at index %zu", i);
-            goto cleanup;
+    for (char **p = argv; *p; p++) {
+        if (args_len > 0) {
+            if (args) {
+                args[args_len] = ' ';    
+            }
+            args_len++;
         }
-        total_len += strlen(quoted[i]);
-    }
-    total_len += (argc > 0 ? argc - 1 : 0);
-
-    char *command_line = calloc(total_len + 1, sizeof(*command_line));
-    if (!command_line) {
-        APP_ERROR("Memory allocation failed in argv_to_command_line (command_line)");
-        goto cleanup;
+        if (args) {
+            args_len += quoted_arg(&args[args_len], *p);
+        } else {
+            args_len += quoted_arg(NULL, *p);
+        }
     }
 
-    char *dst = command_line;
-    for (size_t i = 0; i < argc; i++) {
-        if (i > 0) *dst++ = ' ';
-
-        size_t len = strlen(quoted[i]);
-        memcpy(dst, quoted[i], len);
-        dst += len;
+    if (args) {
+        args[args_len] = '\0';
     }
-    *dst = '\0';
-
-    for (size_t i = 0; i < argc; i++) free(quoted[i]);
-    free(quoted);
-    return command_line;
-
-cleanup:
-    for (size_t j = 0; j < argc; j++) free(quoted[j]);
-    free(quoted);
-    return NULL;
+    return args_len;
 }
 
 bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
@@ -840,11 +842,12 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
     PROCESS_INFORMATION pi = { 0 };
     STARTUPINFO         si = { .cb = sizeof(si) };
     bool result = false;
-    char *cmd_line = argv_to_command_line(argv);
+    char *cmd_line = calloc(quoted_args(NULL, argv) + 1, sizeof(*cmd_line));
     if (!cmd_line) {
         APP_ERROR("Failed to build command line for CreateProcess()");
         goto cleanup;
     }
+    quoted_args(cmd_line, argv);
 
     DEBUG("ApplicationName=%s", app_name);
     DEBUG("CommandLine=%s", cmd_line);
