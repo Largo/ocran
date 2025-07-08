@@ -363,51 +363,47 @@ char *CreateUniqueDirectory(char *tmpl)
     return NULL;
 }
 
-// MAX_EXTENDED_PATH_LENGTH: Maximum path length in Windows (32,767 chars).
-#define MAX_EXTENDED_PATH_LENGTH 32767U
+// Maximum path length in Windows (32,767 chars).
+#define MAX_LONG_PATH 32767U
 
 // Retrieves the full path to the executable file of the current process
 char *GetImagePath(void)
 {
-    char *image_path_utf8 = NULL;
+    char *image_path = NULL;
 
-    wchar_t *image_path_w = calloc(MAX_EXTENDED_PATH_LENGTH,
-                                   sizeof(*image_path_w));
-    if (!image_path_w) {
+    wchar_t *wimage_path = calloc(MAX_LONG_PATH, sizeof(*wimage_path));
+    if (!wimage_path) {
         APP_ERROR("Memory allocation failed for image path");
 
         goto cleanup;
     }
 
-    DWORD copied = GetModuleFileNameW(
-        NULL,                           // current exe path
-        image_path_w,                   // wide-char buffer for path
-        MAX_EXTENDED_PATH_LENGTH        // buffer size in WCHARs
-    );
+    DWORD copied = GetModuleFileNameW(NULL, wimage_path, MAX_LONG_PATH);
     if (copied == 0) {
         DWORD err = GetLastError();
         APP_ERROR("GetModuleFileNameW failed, Error=%lu", err);
 
         goto cleanup;
     }
-    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
+    if (copied == MAX_LONG_PATH
+        && GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
         APP_ERROR("Image path truncated; buffer too small");
         
         goto cleanup;
     }
 
-    image_path_utf8 = utf16_to_utf8(image_path_w);
-    if (!image_path_utf8) {
+    image_path = utf16_to_utf8(wimage_path);
+    if (!image_path) {
         APP_ERROR("Failed to convert image path to UTF-8");
 
         goto cleanup;
     }
 
 cleanup:
-    if (image_path_w) {
-        free(image_path_w);
+    if (wimage_path) {
+        free(wimage_path);
     }
-    return image_path_utf8;
+    return image_path;
 }
 
 // Retrieves the path to the temporary directory for the current user.
