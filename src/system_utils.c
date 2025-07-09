@@ -409,18 +409,18 @@ cleanup:
 // Retrieves the path to the temporary directory for the current user.
 char *GetTempDirectoryPath(void)
 {
-    char *temp_dir = calloc(1, MAX_PATH);
+    char *temp_dir = calloc(MAX_PATH, sizeof(*temp_dir));
     if (!temp_dir) {
-        APP_ERROR("Failed to memory allocate for get temp directory");
+        APP_ERROR("Memory allocation failed for temp directory");
         return NULL;
     }
 
     if (!GetTempPath(MAX_PATH, temp_dir)) {
-        APP_ERROR("Failed to get temp path (%lu)", GetLastError());
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to get temp path, Error=%lu", err);
         free(temp_dir);
         return NULL;
     }
-
     return temp_dir;
 }
 
