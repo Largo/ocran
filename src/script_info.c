@@ -7,53 +7,6 @@
 #include "inst_dir.h"
 #include "script_info.h"
 
-static char **transform_argv(char *argv[])
-{
-    size_t argc = 0;
-    for (char **p = argv; *p; p++) argc++;
-
-    if (argc <= 0) {
-        APP_ERROR("No arguments to transform");
-        return NULL;
-    }
-
-    char **out_argv = calloc(argc + 1, sizeof(*out_argv));
-    if (!out_argv) {
-        APP_ERROR("Memory allocation failed in transform_argv");
-        return NULL;
-    }
-
-    for (size_t i = 0; i < argc; i++) {
-        char *str;
-        switch (i) {
-            case 0:
-                str = strdup(argv[0]);
-                break;
-
-            case 1:
-                str = strdup(argv[1]);
-                break;
-
-            default:
-                str = ReplaceInstDirPlaceholder(argv[i]);
-                break;
-        }
-        if (!str) {
-            APP_ERROR("Failed to transform argv[%d]", i);
-            goto cleanup;
-        }
-        out_argv[i] = str;
-    }
-
-    out_argv[argc] = NULL;
-    return out_argv;
-
-cleanup:
-    for (size_t j = 0; j < argc; j++) free(out_argv[j]);
-    free(out_argv);
-    return NULL;
-}
-
 /**
  * Splits the NULL-delimited strings in buffer and stores pointers in array.
  *
@@ -246,7 +199,6 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
     char **script_info = GetScriptInfo();
     char *app_name = NULL;
     char *script_name = NULL;
-    char **script_argv = NULL;
     char **merged_argv = NULL;
     char *script_dir = NULL;
 
@@ -264,13 +216,7 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
 
     script_info[1] = script_name;
 
-    script_argv = transform_argv(script_info);
-    if (!script_argv) {
-        APP_ERROR("Failed to transform argv");
-        goto cleanup;
-    }
-
-    merged_argv = shallow_merge_argv(script_argv, argv + 1);
+    merged_argv = shallow_merge_argv(script_info, argv + 1);
     if (!merged_argv) {
         APP_ERROR("Failed to merge script arguments with extra arguments");
         goto cleanup;
@@ -307,12 +253,6 @@ cleanup:
     }
     if (script_name) {
         free(script_name);
-    }
-    if (script_argv) {
-        for (char **p = script_argv; *p; p++) {
-            free(*p);
-        }
-        free(script_argv);
     }
     if (merged_argv) {
         free(merged_argv);
