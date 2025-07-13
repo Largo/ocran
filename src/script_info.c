@@ -233,13 +233,15 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
             "Changing working directory to script directory '%s'",
             script_dir
         );
-        if (!ChangeWorkingDirectory(script_dir)) {
-            APP_ERROR(
-                "Failed to change directory to script directory '%s'",
-                script_dir
-            );
+
+        char *ruby_optv[5] = { script_info[0], "-C", script_dir, "--", NULL };
+        char **new_argv = shallow_merge_argv(ruby_optv, merged_argv + 1);
+        if (!new_argv) {
+            APP_ERROR("Failed to merge script arguments with extra arguments");
             goto cleanup;
         }
+        free(merged_argv);
+        merged_argv = new_argv;
     }
 
     result = CreateAndWaitForProcess(app_name, merged_argv, exit_code);
