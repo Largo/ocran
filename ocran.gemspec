@@ -14,7 +14,7 @@ Gem::Specification.new do |spec|
   spec.description = "OCRAN (One-Click Ruby Application Next) builds Windows executables from Ruby source code. 
   The executable is a self-extracting, self-running executable that contains the Ruby interpreter, your source code and any additionally needed ruby libraries or DLL.
   
-  This is a fork of OCRA that is compatible with ruby version after 3.0.
+  This is a fork of OCRA that is compatible with ruby version after 3.2.
   Migration guide: make sure to write ocran instead of ocra in your code. For instance: OCRAN_EXECUTABLE
 
   usage: 
@@ -26,7 +26,7 @@ Gem::Specification.new do |spec|
   This gem contains executables. We plan to build them on github actions for security.
   "
   spec.homepage = "https://github.com/largo/ocran"
-  spec.required_ruby_version = ">= 3.0.0"
+  spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/largo/ocran"
