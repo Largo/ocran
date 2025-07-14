@@ -131,7 +131,6 @@ bool SetScriptInfo(const char *info, size_t info_size)
     }
 
     ScriptInfo = argv;
-    GetScriptInfo();
     return true;
 }
 
