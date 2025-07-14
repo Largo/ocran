@@ -4,6 +4,9 @@
 - No longer create a marker file when the stub fails to delete the installation directory during cleanup.
 - stub: During cleanup, switch to a safer working directory before removing the extraction directory.
 - stub: Truncate error messages originating from the stub to a fixed maximum length.
+- stub: Changed the name of the extraction directory to follow the mkdtemp style. The name is now generated using secure random numbers.
+- stub: Disabled path expansion of template characters for additional options passed to the script.
+- stub: Changed the script’s working directory switch to use Ruby’s `-C` option.
 
 === 1.3.17
 - Modified `rake test` to no longer build stubs during test execution. Use `rake build_stub` when stub generation is necessary.
