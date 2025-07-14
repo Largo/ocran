@@ -424,24 +424,6 @@ char *GetTempDirectoryPath(void)
     return temp_dir;
 }
 
-bool ChangeWorkingDirectory(const char* path)
-{
-    if (!path || !*path) {
-        APP_ERROR("path is NULL or empty");
-        return false;
-    }
-
-    if (!SetCurrentDirectory(path)) {
-        DWORD err = GetLastError();
-        APP_ERROR(
-            "Failed to change working dir to \"%s\", Error=%lu",
-            path, err
-        );
-        return false;
-    }
-    return true;
-}
-
 bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
 {
     bool   result  = false;

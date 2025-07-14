@@ -88,19 +88,6 @@ bool DeleteInstDir(void);
 char *ReplaceInstDirPlaceholder(const char *tmpl);
 
 /**
- * @brief Change the current working directory to a predefined safe directory.
- *
- * This function switches the current working directory to a safe location,
- * typically to prevent operations from interfering with user data or system
- * operations. It is particularly useful during cleanup operations or when the
- * application needs to operate in a controlled environment.
- *
- * @return
- *   true if the directory change was successful, false otherwise.
- */
-bool ChangeDirectoryToSafeDirectory(void);
-
-/**
  * @brief Recursively create a directory under the installation directory.
  *
  * This function ensures that a directory exists at the specified relative

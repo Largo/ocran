@@ -187,52 +187,6 @@ char *ReplaceInstDirPlaceholder(const char *tmpl)
     return replaced;
 }
 
-#ifdef _WIN32
-#define FALLBACK_DIRECTORY_PATH "\\"
-#else
-#define FALLBACK_DIRECTORY_PATH "/"
-#endif
-
-// Moves the application to a safe directory.
-bool ChangeDirectoryToSafeDirectory(void)
-{
-    if (!IsInstDirSet()) {
-        APP_ERROR("Installation directory has not been set");
-        return false;
-    }
-
-    bool changed = false;
-    char *working_dir = NULL;
-
-    working_dir = GetParentPath(InstDir);
-    if (!working_dir) {
-        APP_ERROR("Failed to get parent path");
-
-        goto cleanup;
-    }
-
-    changed = ChangeWorkingDirectory(working_dir);
-    if (changed) {
-        goto cleanup;
-    }
-
-    DEBUG("Failed to change to safe directory. Trying fallback directory");
-
-    changed = ChangeWorkingDirectory(FALLBACK_DIRECTORY_PATH);
-    if (!changed) {
-        APP_ERROR(
-            "Failed to change to fallback directory \"%s\"",
-            FALLBACK_DIRECTORY_PATH
-        );
-    }
-
-cleanup:
-    if (working_dir) {
-        free(working_dir);
-    }
-    return changed;
-}
-
 bool CreateDirectoryUnderInstDir(const char *rel_path)
 {
     if (!IsInstDirSet()) {
