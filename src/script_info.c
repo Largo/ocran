@@ -11,47 +11,34 @@
  * Splits the NULL-delimited strings in buffer and stores pointers in array.
  *
  * @param buffer      Pointer to data containing NULL-delimited strings.
- * @param buffer_size Size in bytes of buffer.
+ *                    The buffer must be terminated by a double NULL character.
  * @param array       Array to receive string pointers. If NULL, only counting
  *                    is performed.
- * @param array_count Number of elements array can hold (excluding the NULL
- *                    terminator). Caller must allocate with
- *                    calloc(array_count + 1, sizeof(*array)).
  * @return            Number of strings in buffer (excluding the NULL
  *                    terminator).
  */
-static size_t split_strings_to_array(const char *buffer, size_t buffer_size,
-                                     char **array, size_t array_count)
+static size_t split_strings_to_array(const char *buffer, char **array)
 {
-    size_t needed   = 0;
-    size_t stored   = 0;
-    const char *p   = buffer;
-    const char *end = buffer + buffer_size;
+    size_t count = 0;
 
-    while (p < end) {
-        const char *nul = memchr(p, '\0', (size_t)(end - p));
-        if (!nul) {
-            break;
+    for (const char *p = buffer; *p; p++) {
+        if (array) {
+            array[count] = (char *)p;
         }
-        if (array && stored < array_count) {
-            array[stored++] = (char *)p;
-        }
-        needed++;
-        p = nul + 1;
-        if (*p == '\0') {
-            break;
-        }
+        count++;
+
+        while (*p) p++;
     }
 
-    if (array && array_count > 0) {
-        array[stored] = NULL;
+    if (array) {
+        array[count] = NULL;
     }
-    return needed;
+    return count;
 }
 
 static char **info_to_argv(const char *info, size_t info_size)
 {
-    size_t argc = split_strings_to_array(info, info_size, NULL, 0);
+    size_t argc = split_strings_to_array(info, NULL);
     size_t argv_size = (argc + 1) * sizeof(char *);
     void *base = malloc(argv_size + info_size);
     if (!base) {
@@ -62,7 +49,7 @@ static char **info_to_argv(const char *info, size_t info_size)
     char  *args = (char *) base + argv_size;
     memcpy(args, info, info_size);
 
-    size_t stored = split_strings_to_array(args, info_size, argv, argc);
+    size_t stored = split_strings_to_array(args, argv);
     if (stored != argc) {
         APP_ERROR("Argument count mismatch");
         free(base);
