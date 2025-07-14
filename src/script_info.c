@@ -48,13 +48,7 @@ static char **info_to_argv(const char *info, size_t info_size)
     char **argv = (char **)base;
     char  *args = (char *) base + argv_size;
     memcpy(args, info, info_size);
-
-    size_t stored = split_strings_to_array(args, argv);
-    if (stored != argc) {
-        APP_ERROR("Argument count mismatch");
-        free(base);
-        return NULL;
-    }
+    split_strings_to_array(args, argv);
     return argv;
 }
 
