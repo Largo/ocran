@@ -211,12 +211,13 @@ module Ocran
         say "Will include all ruby core libraries"
         all_core_dir.each do |path|
           # Match the load path against standard library, site_ruby, and vendor_ruby paths
-          path.to_posix.match(RUBY_LIBRARY_PATH_REGEX) do |m|
-            subdir = m[1]
-            path.find.each do |src|
-              next if src.directory?
-              builder.copy_to_lib(src, Pathname(subdir) / src.relative_path_from(path))
-            end
+          unless (subdir = path.to_posix.match(RUBY_LIBRARY_PATH_REGEX)&.[](1))
+            raise "Unexpected library path format (does not match core dirs): #{path}"
+          end
+          path.find.each do |src|
+            next if src.directory?
+            a = Pathname(subdir) / src.relative_path_from(path)
+            builder.copy_to_lib(src, Pathname(subdir) / src.relative_path_from(path))
           end
         end
       end
