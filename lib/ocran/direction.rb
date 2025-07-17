@@ -209,8 +209,7 @@ module Ocran
       # If requested, add all ruby standard libraries
       if @option.add_all_core?
         say "Will include all ruby core libraries"
-        @pre_env.load_path.each do |load_path|
-          path = Pathname.new(load_path)
+        all_core_dir.each do |path|
           # Match the load path against standard library, site_ruby, and vendor_ruby paths
           path.to_posix.match(RUBY_LIBRARY_PATH_REGEX) do |m|
             subdir = m[1]

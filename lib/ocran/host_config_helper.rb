@@ -33,5 +33,12 @@ module Ocran
     def ruby_exe
       @ruby_exe ||= (RbConfig::CONFIG["ruby_install_name"] || "ruby") + exe_extname
     end
+
+    def all_core_dir
+      RbConfig::CONFIG
+          .slice("rubylibdir", "sitelibdir", "vendorlibdir")
+          .values
+          .map { |path| Pathname.new(path) }
+    end
   end
 end
