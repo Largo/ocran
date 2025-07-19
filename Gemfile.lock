@@ -5,7 +5,7 @@ GEM
     hoe (4.2.3)
       rake (>= 0.8, < 15.0)
     minitest (5.25.5)
-    rake (13.2.1)
+    rake (13.3.0)
 
 PLATFORMS
   x64-mingw-ucrt
@@ -18,4 +18,4 @@ DEPENDENCIES
   minitest (~> 5.23)
 
 BUNDLED WITH
-   2.5.23
+   2.6.7
