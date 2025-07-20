@@ -102,13 +102,17 @@ class TestOcran < Minitest::Test
     end
   end
 
-  # Should be able to build executables with LZMA compression
-  def test_lzma
-    with_fixture 'helloworld' do
-      assert system("ruby", ocran, "helloworld.rb", "--quiet", "--lzma")
-      assert File.exist?("helloworld.exe")
-      pristine_env "helloworld.exe" do
-        assert system("helloworld.exe")
+  # Should be able to build executable when specifying absolute path
+  # to the script from somewhere else.
+  def test_abspath
+    with_fixture "helloworld" do
+      script_path = File.expand_path("helloworld.rb")
+      with_tmpdir do
+        assert system("ruby", ocran, script_path, *DefaultArgs)
+        assert File.exist?("helloworld.exe")
+        pristine_env "helloworld.exe" do
+          assert system("helloworld.exe")
+        end
       end
     end
   end
