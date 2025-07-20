@@ -20,6 +20,8 @@ jobs:
           bundler-cache: true
 
       - name: Build stub and run tests
+        env:
+          OCRAN_VERBOSE_TEST: 1
         run: |
           bundle exec rake build
           bundle exec rake test
