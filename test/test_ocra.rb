@@ -140,7 +140,7 @@ class TestOcran < Minitest::Test
     with_fixture "helloworld" do
       script_path = File.expand_path("helloworld.rb")
       with_tmpdir do
-        assert system("ruby", ocran, script_path, *(DefaultArgs + ["--debug"]))
+        assert system("ruby", ocran, script_path, *DefaultArgs)
         assert File.exist?("helloworld.exe")
         pristine_env "helloworld.exe" do
           assert system("helloworld.exe")
