@@ -1,0 +1,10 @@
+# Ignore any generated executables from manual testing
+*.exe
+
+# Ignore any certificates or certificate-related files
+*.pfx
+*.cer
+*.pvk
+
+# Ignore temporary test output
+*.log

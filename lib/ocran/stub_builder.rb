@@ -28,6 +28,34 @@ module Ocran
 
     attr_reader :data_size
 
+    # Clear invalid security directory entries from PE executables
+    # This is necessary because some linkers may set non-zero values in the
+    # security directory even when there is no actual digital signature
+    def self.clear_invalid_security_entry(file_path)
+      data = File.binread(file_path)
+      return unless data.size > 64 # Minimum PE header size
+
+      # Read DOS header to find PE header offset
+      e_lfanew_offset = 60
+      pe_offset = data[e_lfanew_offset, 4].unpack1("L")
+      return if pe_offset + 160 > data.size # Not enough room for headers
+
+      # Calculate security directory offset
+      # PE signature (4) + FILE_HEADER (20) + partial OPTIONAL_HEADER to DataDirectory
+      security_entry_offset = pe_offset + 4 + 20 + 128
+
+      # Read security directory entry (VirtualAddress and Size)
+      sec_addr = data[security_entry_offset, 4].unpack1("L")
+      sec_size = data[security_entry_offset + 4, 4].unpack1("L")
+
+      # Check if security entry is invalid (points beyond file or size is 0)
+      if sec_size != 0 && (sec_addr == 0 || sec_addr >= data.size || sec_addr + sec_size > data.size)
+        # Clear the invalid security entry
+        data[security_entry_offset, 8] = "\x00" * 8
+        File.binwrite(file_path, data)
+      end
+    end
+
     # chdir_before:
     # When set to true, the working directory is changed to the application's
     # deployment location at runtime.
@@ -64,6 +92,9 @@ module Ocran
       stub = Tempfile.new("", File.dirname(path))
       IO.copy_stream(gui_mode ? STUBW_PATH : STUB_PATH, stub)
       stub.close
+
+      # Clear any invalid security directory entries from the stub
+      self.class.clear_invalid_security_entry(stub.path)
 
       if icon_path
         system(EDICON_PATH, stub.path, icon_path.to_s, exception: true)

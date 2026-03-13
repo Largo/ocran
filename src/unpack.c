@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <windows.h>
 #include "error.h"
 #include "system_utils.h"
 #include "inst_dir.h"
@@ -264,14 +265,92 @@ static void *DecompressLzmaData(const void *data, size_t data_size,
 
 const uint8_t Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 
+/** Manages digital signatures **/
+
+/* see https://en.wikipedia.org/wiki/Portable_Executable for explanation of these header fields */
+#define SECURITY_ENTRY(header) ((header)->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY])
+
+/* The NTHeader is another name for the PE header. It is the 'modern' executable header
+   as opposed to the DOS_HEADER which exists for legacy reasons */
+static PIMAGE_NT_HEADERS retrieveNTHeader(const void *ptr) {
+  PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)ptr;
+
+  /* e_lfanew is an RVA (relative virtual address, i.e offset) to the NTHeader
+   to get a usable pointer we add the RVA to the base address */
+  return (PIMAGE_NT_HEADERS)((DWORD_PTR)dosHeader + (DWORD)dosHeader->e_lfanew);
+}
+
+/* Check whether there's an embedded digital signature */
+static bool isDigitallySigned(const void *ptr, size_t buffer_size) {
+  PIMAGE_NT_HEADERS ntHeader = retrieveNTHeader(ptr);
+  DWORD securityAddr = SECURITY_ENTRY(ntHeader).VirtualAddress;
+  DWORD securitySize = SECURITY_ENTRY(ntHeader).Size;
+
+  /* A valid digital signature must have non-zero size and the address must be within the file bounds */
+  if (securitySize == 0) {
+    return false;
+  }
+
+  /* Check if the security entry points to a valid location within the file */
+  if (securityAddr == 0 || securityAddr >= buffer_size) {
+    return false;
+  }
+
+  /* Check if the entire security entry fits within the file */
+  if (securityAddr + securitySize > buffer_size) {
+    return false;
+  }
+
+  return true;
+}
+
 static const void *find_signature(const void *buffer, size_t buffer_size)
 {
-    // Currently, the signature is being searched for at the end of the file.
-    const void *sig = (const uint8_t *)buffer + buffer_size - sizeof(Signature);
-    if (memcmp(sig, Signature, sizeof(Signature))) {
-        return NULL;
+    // Check if the executable is digitally signed
+    if (!isDigitallySigned(buffer, buffer_size)) {
+        // No digital signature, use the original logic
+        const void *sig = (const uint8_t *)buffer + buffer_size - sizeof(Signature);
+        if (memcmp(sig, Signature, sizeof(Signature))) {
+            return NULL;
+        }
+        return sig;
     }
-    return sig;
+    else {
+        // Executable is digitally signed
+        PIMAGE_NT_HEADERS ntHeader = retrieveNTHeader(buffer);
+        DWORD securityAddr = SECURITY_ENTRY(ntHeader).VirtualAddress;
+
+        if (securityAddr == 0 || securityAddr > buffer_size) {
+            DEBUG("Invalid security address: %lu", (unsigned long)securityAddr);
+            return NULL;
+        }
+
+        DWORD offset = securityAddr - 1;
+        const char *searchPtr = (const char *)buffer;
+
+        /* There is unfortunately a 'buffer' of null bytes between the
+           ocraSignature and the digital signature. This buffer appears to be random
+           in size, so the only way we can account for it is to search backwards
+           for the first non-null byte.
+           NOTE: this means that the hard-coded Ocra signature cannot end with a null byte.
+        */
+        while(offset > sizeof(Signature) && !searchPtr[offset])
+            offset--;
+
+        /* -3 because we're already at the first byte and we need to go back 4 bytes */
+        if (offset < sizeof(Signature)) {
+            DEBUG("Signature search went out of bounds");
+            return NULL;
+        }
+
+        const void *sig = (const void *)&searchPtr[offset - 3];
+
+        if (memcmp(sig, Signature, sizeof(Signature))) {
+            DEBUG("Signature mismatch in signed executable");
+            return NULL;
+        }
+        return sig;
+    }
 }
 
 typedef uint8_t OperationModesType;
