@@ -916,13 +916,44 @@ class TestOcran < Minitest::Test
     end
   end
 
-  # Tests that a script using net/http HTTPS works correctly when packaged.
+  # Tests that a script using net/http HTTPS works correctly when packaged and
+  # that OCRAN bundles the SSL certificate into the extraction directory.
+  # OCRAN automatically sets SSL_CERT_FILE to the extracted cert path, so the
+  # fixture writes the effective cert path to cert_path.txt for verification.
   def test_openssl_https
     with_fixture 'openssl_https' do
       assert system("ruby", ocran, "openssl_https.rb", *DefaultArgs)
       assert File.exist?("openssl_https.exe")
       pristine_env "openssl_https.exe" do
         assert system("openssl_https.exe")
+        cert_path = File.read("cert_path.txt")
+        # OCRAN extracts to a temp directory named ocranXXXXXX; the bundled
+        # cert is placed there and SSL_CERT_FILE is set to that path.
+        assert cert_path.include?("ocran"),
+               "SSL cert should be loaded from the OCRAN extraction dir, got: #{cert_path}"
+      end
+    end
+  end
+
+  # Tests that a script can use a custom cacert.pem placed next to the exe.
+  # The cacert.pem is downloaded from curl.se and included alongside the exe;
+  # the fixture sets SSL_CERT_FILE to that file before OpenSSL is loaded.
+  # Also verifies that a non-existent/invalid cert causes an SSL error.
+  def test_openssl_https_cacert
+    with_fixture 'openssl_https_cacert' do
+      assert system("ruby", ocran, "openssl_https_cacert.rb", *DefaultArgs)
+      assert File.exist?("openssl_https_cacert.exe")
+
+      pristine_env "openssl_https_cacert.exe", "cacert.pem" do
+        assert system("openssl_https_cacert.exe")
+      end
+
+      # With an invalid cert file SSL verification must fail, confirming the
+      # fixture actually uses cacert.pem rather than the system cert store.
+      pristine_env "openssl_https_cacert.exe" do
+        File.write("cacert.pem", "not a valid certificate")
+        refute system("openssl_https_cacert.exe"),
+               "Expected SSL failure when cacert.pem is invalid"
       end
     end
   end

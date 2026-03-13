@@ -19,7 +19,15 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
 
+      - name: Cache Inno Setup
+        id: cache-innosetup
+        uses: actions/cache@v4
+        with:
+          path: C:\Program Files (x86)\Inno Setup 6
+          key: innosetup-6.7.1
+
       - name: Install Inno Setup
+        if: steps.cache-innosetup.outputs.cache-hit != 'true'
         shell: pwsh
         env:
           INNOSETUP_VERSION: "6.7.1"
@@ -28,7 +36,7 @@ jobs:
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           Invoke-WebRequest `
             -UseBasicParsing `
-            -Uri "https://files.jrsoftware.org/is/6/innosetup-$($env:INNOSETUP_VERSION).exe" `
+            -Uri "https://github.com/jrsoftware/issrc/releases/download/is-$($env:INNOSETUP_VERSION -replace '\.','_')/innosetup-$($env:INNOSETUP_VERSION).exe" `
             -OutFile innosetup.exe
           $actual = (Get-FileHash innosetup.exe -Algorithm SHA256).Hash
           if ($actual -ne $env:INNOSETUP_SHA256) {
@@ -36,9 +44,12 @@ jobs:
             exit 1
           }
           Write-Host "SHA256 OK"
-          Start-Process -FilePath innosetup.exe -ArgumentList '/verysilent', '/allusers' -Wait
+          .\innosetup.exe /verysilent /allusers /suppressmsgboxes /norestart
           Remove-Item innosetup.exe
-          echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+
+      - name: Add Inno Setup to PATH
+        shell: pwsh
+        run: echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
 
       - name: Build stub and run tests
         run: |
