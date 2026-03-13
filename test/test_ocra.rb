@@ -916,6 +916,19 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Regression test: zlib.so has a companion zlib.so-assembly.manifest and
+  # zlib1.dll in archdir. Without them the SxS activation context fails with
+  # error 14001 at runtime. Verifies that compress/decompress round-trips work.
+  def test_zlib
+    with_fixture 'zlib' do
+      assert system("ruby", ocran, "zlib.rb", *DefaultArgs)
+      assert File.exist?("zlib.exe")
+      pristine_env "zlib.exe" do
+        assert system("zlib.exe")
+      end
+    end
+  end
+
   # Tests that a script using net/http HTTPS works correctly when packaged and
   # that OCRAN bundles the SSL certificate into the extraction directory.
   # OCRAN automatically sets SSL_CERT_FILE to the extracted cert path, so the
