@@ -144,10 +144,26 @@ module Ocran
         end
       end
 
-      # Add external manifest files
+      # Add external manifest and builtin DLLs
       if (manifest = ruby_builtin_manifest)
-        say "Adding external manifest #{manifest}"
-        builder.duplicate_to_exec_prefix(manifest)
+        manifest.dirname.each_child do |path|
+          next if path.directory?
+          say "Adding builtin DLL/manifest #{path}"
+          builder.duplicate_to_exec_prefix(path)
+        end
+      end
+
+      # Include SxS assembly manifests for native extensions.
+      # Each .so file may have an embedded manifest referencing a companion
+      # *.so-assembly.manifest file in the same directory. Without these
+      # manifests the SxS activation context fails (error 14001) at runtime.
+      archdir = Pathname(RbConfig::CONFIG["archdir"])
+      if archdir.exist? && archdir.subpath?(exec_prefix)
+        archdir.each_child do |path|
+          next unless path.extname == ".manifest"
+          say "Adding native extension assembly manifest #{path}"
+          builder.duplicate_to_exec_prefix(path)
+        end
       end
 
       # Add extra DLLs specified on the command line
