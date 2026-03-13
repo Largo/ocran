@@ -45,7 +45,6 @@ jobs:
           }
           Write-Host "SHA256 OK"
           .\innosetup.exe /verysilent /allusers /suppressmsgboxes /norestart
-          Remove-Item innosetup.exe
 
       - name: Add Inno Setup to PATH
         shell: pwsh
