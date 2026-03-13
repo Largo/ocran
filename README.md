@@ -35,9 +35,11 @@ the issue tracker on GitHub (http://github.com/largo/ocran/issues).
 
 ## Safety
 
-As this gem comes with binaries, we have taken actions to insure your safety.
-The gem releases are built on Github Actions. Feel free verify that it matches the version on rubygems.
-It ships with seb.exe and LZMA.exe in this repository, which come from official sources.
+As this gem comes with binary blobs, we have taken actions to insure your safety.
+The gem releases are securely built on Github Actions. Feel free verify that it matches the version on rubygems.
+This repository ships with LZMA.exe from [The official release of ip7z/7zip](https://github.com/ip7z/7zip/releases): Version 22.01 from lzma2201.7z
+The LZMA.exe is used to compress the executable.
+Other files such as stub.exe, stubw.exe and edicon.exe are built from source code in the repository.
 
 ## Installation
 

@@ -1,4 +1,5 @@
 === 1.3.18
+- Support shipping IRB as .exe File
 - Fix SxS error 14001 when loading native extensions (e.g. openssl.so, date_core.so) at runtime. Each .so file may have a companion *.so-assembly.manifest in archdir defining its private SxS assembly; these manifests are now included alongside the .so files. All files in ruby_builtin_dlls/ (DLLs and manifest) are now included rather than the manifest alone.
 - Support for Ruby 4.0.
 - Include cacert.pem in the exe file to avoid SSL certificate verification issues.

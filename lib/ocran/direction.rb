@@ -157,9 +157,19 @@ module Ocran
       # Each .so file may have an embedded manifest referencing a companion
       # *.so-assembly.manifest file in the same directory. Without these
       # manifests the SxS activation context fails (error 14001) at runtime.
+      # Scan archdir and the extension dirs of all loaded gems.
+      sxs_manifest_dirs = []
       archdir = Pathname(RbConfig::CONFIG["archdir"])
-      if archdir.exist? && archdir.subpath?(exec_prefix)
-        archdir.each_child do |path|
+      sxs_manifest_dirs << archdir if archdir.exist? && archdir.subpath?(exec_prefix)
+      if defined?(Gem)
+        Gem.loaded_specs.each_value do |spec|
+          next if spec.extensions.empty?
+          ext_dir = Pathname(spec.extension_dir)
+          sxs_manifest_dirs << ext_dir if ext_dir.exist? && ext_dir.subpath?(exec_prefix)
+        end
+      end
+      sxs_manifest_dirs.each do |dir|
+        dir.each_child do |path|
           next unless path.extname == ".manifest"
           say "Adding native extension assembly manifest #{path}"
           builder.duplicate_to_exec_prefix(path)

@@ -1,15 +1,36 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    date (3.5.1)
     drb (2.2.3)
+    erb (6.0.2)
     fiddle (1.1.8)
     hoe (4.6.1)
       rake (~> 13.0)
+    io-console (0.8.2)
+    irb (1.16.0)
+      pp (>= 0.6.0)
+      rdoc (>= 4.0.0)
+      reline (>= 0.4.2)
     minitest (6.0.2)
       drb (~> 2.0)
       prism (~> 1.5)
+    pp (0.6.3)
+      prettyprint
+    prettyprint (0.2.0)
     prism (1.9.0)
+    psych (5.3.1)
+      date
+      stringio
     rake (13.3.1)
+    rdoc (7.2.0)
+      erb
+      psych (>= 4.0.0)
+      tsort
+    reline (0.6.3)
+      io-console (~> 0.5)
+    stringio (3.2.0)
+    tsort (0.2.0)
 
 PLATFORMS
   x64-mingw-ucrt
@@ -19,7 +40,8 @@ PLATFORMS
 DEPENDENCIES
   fiddle (~> 1.0)
   hoe (~> 4.6)
+  irb (~> 1.16.0)
   minitest (~> 6.0)
 
 BUNDLED WITH
-   4.0.8
+  4.0.8

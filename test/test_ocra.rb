@@ -892,14 +892,32 @@ class TestOcran < Minitest::Test
   end
 
 
+  # Tests that a packaged IRB session starts and exits cleanly.
+  # The fixture requires irb (for dependency detection) then starts an IRB
+  # session; the test pipes "exit" to stdin so IRB terminates immediately.
+  # --gem-full=irb is required because IRB lazy-loads many of its files at
+  # runtime, so normal dependency detection misses them.
+  def test_irb
+    with_fixture 'irb' do
+      assert system("ruby", ocran, "irb.rb", *DefaultArgs, "--gem-full=irb", "--gem-full=pp", "--gem-full=prettyprint")
+      assert File.exist?("irb.exe")
+      pristine_env "irb.exe" do
+        IO.popen([File.expand_path("irb.exe")], "r+") do |io|
+          io.write("exit\n")
+          io.close_write
+          io.read
+        end
+        assert $?.success?
+      end
+    end
+  end
+
   # Tests that a script using net/http HTTPS works correctly when packaged.
-  # The fixture sets SSL_CERT_FILE via OCRAN_EXECUTABLE so cacert.pem is found
-  # next to the exe at runtime.
   def test_openssl_https
     with_fixture 'openssl_https' do
       assert system("ruby", ocran, "openssl_https.rb", *DefaultArgs)
       assert File.exist?("openssl_https.exe")
-      pristine_env "openssl_https.exe", "cacert.pem" do
+      pristine_env "openssl_https.exe" do
         assert system("openssl_https.exe")
       end
     end
