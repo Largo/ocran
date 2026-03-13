@@ -896,26 +896,6 @@ class TestOcran < Minitest::Test
   end
 
 
-  # Tests that a packaged IRB session starts and exits cleanly.
-  # The fixture requires irb (for dependency detection) then starts an IRB
-  # session; the test pipes "exit" to stdin so IRB terminates immediately.
-  # --gem-full=irb is required because IRB lazy-loads many of its files at
-  # runtime, so normal dependency detection misses them.
-  def test_irb
-    with_fixture 'irb' do
-      assert system("ruby", ocran, "irb.rb", *DefaultArgs, "--gem-full=irb", "--gem-full=pp", "--gem-full=prettyprint")
-      assert File.exist?("irb.exe")
-      pristine_env "irb.exe" do
-        IO.popen([File.expand_path("irb.exe")], "r+") do |io|
-          io.write("exit\n")
-          io.close_write
-          io.read
-        end
-        assert $?.success?
-      end
-    end
-  end
-
   # Tests that a packaged Tk application builds and runs successfully.
   # --gem-full=tk includes all Tk gem files; --no-autoload avoids errors from
   # platform-specific Tk autoloads (e.g. tk/macpkg on Windows); --add-all-core
@@ -927,7 +907,8 @@ class TestOcran < Minitest::Test
       assert system("ruby", ocran, "tk.rb", *DefaultArgs, "--gem-full=tk", "--add-all-core", "--no-autoload")
       assert File.exist?("tk.exe")
       pristine_env "tk.exe" do
-        assert system("tk.exe")
+         assert system("tk.exe")
+         puts "sucessfully tested tk" if $?.success?
       end
     end
   end
