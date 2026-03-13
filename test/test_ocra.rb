@@ -890,4 +890,17 @@ class TestOcran < Minitest::Test
       end
     end
   end
+
+  # Tests that a script using net/http HTTPS works correctly when packaged.
+  # The fixture sets SSL_CERT_FILE via OCRAN_EXECUTABLE so cacert.pem is found
+  # next to the exe at runtime.
+  def test_openssl_https
+    with_fixture 'openssl_https' do
+      assert system("ruby", ocran, "openssl_https.rb", *DefaultArgs)
+      assert File.exist?("openssl_https.exe")
+      pristine_env "openssl_https.exe", "cacert.pem" do
+        assert system("openssl_https.exe")
+      end
+    end
+  end
 end

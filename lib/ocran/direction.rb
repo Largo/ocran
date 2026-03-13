@@ -312,6 +312,26 @@ module Ocran
         end
       end
 
+      # Bundle SSL certificates if OpenSSL was loaded (e.g. via net/http HTTPS)
+      if defined?(OpenSSL)
+        cert_file = Pathname(OpenSSL::X509::DEFAULT_CERT_FILE)
+        if cert_file.file? && cert_file.subpath?(exec_prefix)
+          say "Adding SSL certificate file #{cert_file}"
+          builder.duplicate_to_exec_prefix(cert_file)
+          builder.export("SSL_CERT_FILE", File.join(EXTRACT_ROOT, cert_file.relative_path_from(exec_prefix).to_posix))
+        end
+
+        cert_dir = Pathname(OpenSSL::X509::DEFAULT_CERT_DIR)
+        if cert_dir.directory? && cert_dir.subpath?(exec_prefix)
+          say "Adding SSL certificate directory #{cert_dir}"
+          cert_dir.find.each do |path|
+            next if path.directory?
+            builder.duplicate_to_exec_prefix(path)
+          end
+          builder.export("SSL_CERT_DIR", File.join(EXTRACT_ROOT, cert_dir.relative_path_from(exec_prefix).to_posix))
+        end
+      end
+
       # Set environment variable
       builder.export("RUBYOPT", rubyopt)
       # Add the load path that are required with the correct path after
