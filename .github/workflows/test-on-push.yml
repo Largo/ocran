@@ -19,6 +19,27 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
 
+      - name: Install Inno Setup
+        shell: pwsh
+        env:
+          INNOSETUP_VERSION: "6.7.1"
+          INNOSETUP_SHA256: "4D11E8050B6185E0D49BD9E8CC661A7A59F44959A621D31D11033124C4E8A7B0"
+        run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Invoke-WebRequest `
+            -UseBasicParsing `
+            -Uri "https://files.jrsoftware.org/is/6/innosetup-$($env:INNOSETUP_VERSION).exe" `
+            -OutFile innosetup.exe
+          $actual = (Get-FileHash innosetup.exe -Algorithm SHA256).Hash
+          if ($actual -ne $env:INNOSETUP_SHA256) {
+            Write-Error "Hash mismatch: expected $($env:INNOSETUP_SHA256), got $actual"
+            exit 1
+          }
+          Write-Host "SHA256 OK"
+          Start-Process -FilePath innosetup.exe -ArgumentList '/verysilent', '/allusers' -Wait
+          Remove-Item innosetup.exe
+          echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+
       - name: Build stub and run tests
         run: |
           bundle exec rake build

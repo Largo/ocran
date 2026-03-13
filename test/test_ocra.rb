@@ -785,7 +785,11 @@ class TestOcran < Minitest::Test
 
   # Should be able to build an installer using Inno Setup.
   def test_innosetup
-    skip unless system("where ISCC >NUL 2>&1")
+    if ENV["GITHUB_ACTIONS"]
+      assert system("where ISCC >NUL 2>&1"), "ISCC not found in PATH; InnoSetup install step may have failed"
+    else
+      skip unless system("where ISCC >NUL 2>&1")
+    end
     with_fixture 'innosetup' do
       icon_file = File.join(OcranRoot, 'src', 'vit-ruby.ico')
       assert system("ruby", ocran, "innosetup.rb", '--icon', icon_file, "--quiet",
