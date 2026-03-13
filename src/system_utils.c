@@ -521,16 +521,23 @@ cleanup:
 // Retrieves the path to the temporary directory for the current user.
 char *GetTempDirectoryPath(void)
 {
-    char *temp_dir = calloc(MAX_PATH, sizeof(*temp_dir));
-    if (!temp_dir) {
+    wchar_t *wtemp_dir = calloc(MAX_PATH, sizeof(*wtemp_dir));
+    if (!wtemp_dir) {
         APP_ERROR("Memory allocation failed for temp directory");
         return NULL;
     }
 
-    if (!GetTempPath(MAX_PATH, temp_dir)) {
+    if (!GetTempPathW(MAX_PATH, wtemp_dir)) {
         DWORD err = GetLastError();
         APP_ERROR("Failed to get temp path, Error=%lu", err);
-        free(temp_dir);
+        free(wtemp_dir);
+        return NULL;
+    }
+
+    char *temp_dir = utf16_to_utf8(wtemp_dir);
+    free(wtemp_dir);
+    if (!temp_dir) {
+        APP_ERROR("Failed to convert temp path to UTF-8");
         return NULL;
     }
     return temp_dir;
@@ -930,11 +937,15 @@ static size_t quoted_args(char *args, char *argv[])
 bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
 {
     PROCESS_INFORMATION pi = { 0 };
-    STARTUPINFO         si = { .cb = sizeof(si) };
+    STARTUPINFOW        si = { .cb = sizeof(si) };
     bool result = false;
-    char *cmd_line = calloc(quoted_args(NULL, argv) + 1, sizeof(*cmd_line));
+    char    *cmd_line  = NULL;
+    wchar_t *wapp_name = NULL;
+    wchar_t *wcmd_line = NULL;
+
+    cmd_line = calloc(quoted_args(NULL, argv) + 1, sizeof(*cmd_line));
     if (!cmd_line) {
-        APP_ERROR("Failed to build command line for CreateProcess()");
+        APP_ERROR("Failed to build command line for CreateProcessW()");
         goto cleanup;
     }
     quoted_args(cmd_line, argv);
@@ -942,7 +953,19 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
     DEBUG("ApplicationName=%s", app_name);
     DEBUG("CommandLine=%s", cmd_line);
 
-    if (!CreateProcess(app_name, cmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+    wapp_name = utf8_to_utf16(app_name);
+    if (!wapp_name) {
+        APP_ERROR("Failed to convert application name to UTF-16");
+        goto cleanup;
+    }
+
+    wcmd_line = utf8_to_utf16(cmd_line);
+    if (!wcmd_line) {
+        APP_ERROR("Failed to convert command line to UTF-16");
+        goto cleanup;
+    }
+
+    if (!CreateProcessW(wapp_name, wcmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
         APP_ERROR("Failed to create process (%lu)", GetLastError());
         goto cleanup;
     }
@@ -962,6 +985,12 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
 cleanup:
     if (cmd_line) {
         free(cmd_line);
+    }
+    if (wapp_name) {
+        free(wapp_name);
+    }
+    if (wcmd_line) {
+        free(wcmd_line);
     }
     if (pi.hProcess && pi.hProcess != INVALID_HANDLE_VALUE) {
         CloseHandle(pi.hProcess);
