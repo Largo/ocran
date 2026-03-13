@@ -916,6 +916,39 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Tests that a packaged Tk application builds and runs successfully.
+  # --gem-full=tk includes all Tk gem files; --no-autoload avoids errors from
+  # platform-specific Tk autoloads (e.g. tk/macpkg on Windows); --add-all-core
+  # ensures runtime Ruby core coverage. The fixture exits immediately at runtime
+  # so we can verify a clean exit without needing a display or user interaction.
+  def test_tk
+    skip "tk gem not available" unless Gem::Specification.find_all_by_name("tk").any?
+    with_fixture "tk" do
+      assert system("ruby", ocran, "tk.rb", *DefaultArgs, "--gem-full=tk", "--add-all-core", "--no-autoload")
+      assert File.exist?("tk.exe")
+      pristine_env "tk.exe" do
+        assert system("tk.exe")
+      end
+    end
+  end
+
+  # Tests that a packaged Glimmer DSL for LibUI application builds and runs
+  # successfully. libui ships its own libui.dll in the gem's vendor/ directory
+  # and loads it via Fiddle; OCRAN detects it through DLL scanning because the
+  # gem lives under exec_prefix. --gem-full=libui ensures the vendor/libui.dll
+  # is included. The fixture exits immediately at runtime so we can verify a
+  # clean exit without needing a display or user interaction.
+  def test_glimmer_libui
+    skip "glimmer-dsl-libui gem not available" unless Gem::Specification.find_all_by_name("glimmer-dsl-libui").any?
+    with_fixture "glimmer_libui" do
+      assert system("ruby", ocran, "glimmer_libui.rb", *DefaultArgs)
+      assert File.exist?("glimmer_libui.exe")
+      pristine_env "glimmer_libui.exe" do
+        assert system("glimmer_libui.exe")
+      end
+    end
+  end
+
   # Regression test: zlib.so has a companion zlib.so-assembly.manifest and
   # zlib1.dll in archdir. Without them the SxS activation context fails with
   # error 14001 at runtime. Verifies that compress/decompress round-trips work.
