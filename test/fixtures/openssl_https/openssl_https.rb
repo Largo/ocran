@@ -7,5 +7,5 @@ require "uri"
 
 uri = URI("https://www.google.com")
 response = Net::HTTP.get_response(uri)
-raise "HTTPS request failed with status #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-puts "SSL connection to #{uri.host} succeeded (HTTP #{response.code})"
+raise "HTTPS request failed with status #{response.code}" unless response.is_a?(Net::HTTPSuccess) 
+puts "SSL connection to #{uri.host} succeeded (HTTP #{response.code})" unless defined?(Ocran)
