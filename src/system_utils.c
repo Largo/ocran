@@ -171,6 +171,54 @@ static char *utf16_to_utf8(const wchar_t *utf16)
     return utf8;
 }
 
+/**
+ * Converts a NULL-terminated UTF-8 string to a malloc-allocated UTF-16 string.
+ *
+ * @param utf8 Pointer to a NULL-terminated UTF-8 (char*) input string.
+ * @return malloc-allocated UTF-16 string on success (caller must free()),
+ *         or NULL on failure (error logged via APP_ERROR).
+ */
+static wchar_t *utf8_to_utf16(const char *utf8)
+{
+    if (!utf8) {
+        APP_ERROR("utf8 is NULL");
+        return NULL;
+    }
+
+    int utf16_size = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        utf8, -1, NULL, 0
+    );
+    if (utf16_size == 0) {
+        DWORD err = GetLastError();
+        APP_ERROR(
+            "Failed to calculate buffer size for UTF-16 conversion, Error=%lu",
+            err
+        );
+        return NULL;
+    }
+
+    wchar_t *utf16 = calloc((size_t)utf16_size, sizeof(*utf16));
+    if (!utf16) {
+        APP_ERROR("Memory allocation failed for UTF-16 conversion");
+        return NULL;
+    }
+
+    int written = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        utf8, -1, utf16, utf16_size
+    );
+    if (written == 0) {
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to convert UTF-8 to UTF-16, Error=%lu", err);
+        free(utf16);
+        return NULL;
+    }
+    return utf16;
+}
+
 // Recursively creates a directory and all its parent directories.
 bool CreateDirectoriesRecursively(const char *dir)
 {
@@ -180,12 +228,13 @@ bool CreateDirectoriesRecursively(const char *dir)
     }
 
     bool result = false;
+    wchar_t *wpath = NULL;
 
     size_t path_len = strlen(dir);
     char *path = malloc(path_len + 1);
     if (!path) {
         APP_ERROR("Memory allocation failed for path");
-        
+
         goto cleanup;
     }
     memcpy(path, dir, path_len);
@@ -193,13 +242,21 @@ bool CreateDirectoriesRecursively(const char *dir)
 
     char *p = path + path_len;
     do {
-        DWORD path_attr = GetFileAttributes(path);
+        // Convert to UTF-16 for API call
+        wpath = utf8_to_utf16(path);
+        if (!wpath) {
+            APP_ERROR("Failed to convert path to UTF-16");
+            goto cleanup;
+        }
+
+        DWORD path_attr = GetFileAttributesW(wpath);
         if (path_attr != INVALID_FILE_ATTRIBUTES) {
             if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
+                free(wpath);
+                wpath = NULL;
                 break;
             } else {
                 APP_ERROR("Directory name conflicts with a file(%s)", path);
-
                 goto cleanup;
             }
         } else {
@@ -208,10 +265,12 @@ bool CreateDirectoriesRecursively(const char *dir)
                 // continue;
             } else {
                 APP_ERROR("Cannot access the directory, Error=%lu", err);
-
                 goto cleanup;
             }
         }
+
+        free(wpath);
+        wpath = NULL;
 
         while (p > path && !is_path_separator(*p)) {
             p--;
@@ -225,17 +284,29 @@ bool CreateDirectoriesRecursively(const char *dir)
 
         *p = PATH_SEPARATOR;
 
-        if (!CreateDirectory(path, NULL)) {
-            DWORD err = GetLastError();
-            APP_ERROR("Failed to create directory '%s', Error=%lu", path, err);
-
+        // Convert to UTF-16 for API call
+        wpath = utf8_to_utf16(path);
+        if (!wpath) {
+            APP_ERROR("Failed to convert path to UTF-16");
             goto cleanup;
         }
+
+        if (!CreateDirectoryW(wpath, NULL)) {
+            DWORD err = GetLastError();
+            APP_ERROR("Failed to create directory '%s', Error=%lu", path, err);
+            goto cleanup;
+        }
+
+        free(wpath);
+        wpath = NULL;
     }
 
     result = true;
 
 cleanup:
+    if (wpath) {
+        free(wpath);
+    }
     if (path) {
         free(path);
     }
@@ -256,41 +327,73 @@ bool DeleteRecursively(const char *path)
         return false;
     }
 
-    WIN32_FIND_DATA findData;
-    HANDLE handle = FindFirstFile(findPath, &findData);
+    wchar_t *wfindPath = utf8_to_utf16(findPath);
+    free(findPath);
+    if (!wfindPath) {
+        APP_ERROR("Failed to convert find path to UTF-16");
+        return false;
+    }
+
+    WIN32_FIND_DATAW findData;
+    HANDLE handle = FindFirstFileW(wfindPath, &findData);
+    free(wfindPath);
+
     if (handle != INVALID_HANDLE_VALUE) {
         do {
-            const char *name = findData.cFileName;
-            if ( name[0]=='.' && (!name[1] || (name[1]=='.' && !name[2])) ) {
+            const wchar_t *wname = findData.cFileName;
+            if ( wname[0]==L'.' && (!wname[1] || (wname[1]==L'.' && !wname[2])) ) {
+                continue;
+            }
+
+            // Convert filename from UTF-16 to UTF-8
+            char *name = utf16_to_utf8(wname);
+            if (!name) {
+                APP_ERROR("Failed to convert filename to UTF-8");
                 continue;
             }
 
             char *subPath = JoinPath(path, name);
+            free(name);
             if (!subPath) {
                 APP_ERROR("Failed to build delete file path");
                 break;
             }
 
-            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-                DeleteRecursively(subPath);
-            } else if (!DeleteFile(subPath)) {
-                DWORD err = GetLastError();
-                APP_ERROR("Failed to delete file, Error=%lu", err);
-                MoveFileEx(subPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+            wchar_t *wsubPath = utf8_to_utf16(subPath);
+            if (!wsubPath) {
+                APP_ERROR("Failed to convert subpath to UTF-16");
+                free(subPath);
+                continue;
             }
 
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                DeleteRecursively(subPath);
+            } else if (!DeleteFileW(wsubPath)) {
+                DWORD err = GetLastError();
+                APP_ERROR("Failed to delete file, Error=%lu", err);
+                MoveFileExW(wsubPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+            }
+
+            free(wsubPath);
             free(subPath);
-        } while (FindNextFile(handle, &findData));
+        } while (FindNextFileW(handle, &findData));
         FindClose(handle);
     }
-    free(findPath);
 
-    if (!RemoveDirectory(path)) {
-        DWORD err = GetLastError();
-        APP_ERROR("Failed to delete directory, Error=%lu", err);
-        MoveFileEx(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+    wchar_t *wpath = utf8_to_utf16(path);
+    if (!wpath) {
+        APP_ERROR("Failed to convert path to UTF-16");
         return false;
     }
+
+    if (!RemoveDirectoryW(wpath)) {
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to delete directory, Error=%lu", err);
+        MoveFileExW(wpath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+        free(wpath);
+        return false;
+    }
+    free(wpath);
     return true;
 }
 
@@ -346,10 +449,19 @@ char *CreateUniqueDirectory(char *tmpl)
             return NULL;
         }
 
-        if (CreateDirectory(tmpl, NULL)) {
+        wchar_t *wtmpl = utf8_to_utf16(tmpl);
+        if (!wtmpl) {
+            APP_ERROR("Failed to convert template path to UTF-16");
+            return NULL;
+        }
+
+        BOOL created = CreateDirectoryW(wtmpl, NULL);
+        DWORD err = GetLastError();
+        free(wtmpl);
+
+        if (created) {
             return tmpl;
         }
-        DWORD err = GetLastError();
         if (err != ERROR_ALREADY_EXISTS) {
             APP_ERROR("Failed to create a unique directory, Error=%lu", err);
             return NULL;
@@ -426,10 +538,11 @@ char *GetTempDirectoryPath(void)
 
 bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
 {
-    bool   result  = false;
-    char  *parent  = NULL;
-    HANDLE hFile   = INVALID_HANDLE_VALUE;
-    DWORD  written = 0;
+    bool     result  = false;
+    char    *parent  = NULL;
+    wchar_t *wpath   = NULL;
+    HANDLE   hFile   = INVALID_HANDLE_VALUE;
+    DWORD    written = 0;
 
     if (buffer_size > MAXDWORD) {
         APP_ERROR(
@@ -449,12 +562,19 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
 
     if (!CreateDirectoriesRecursively(parent)) {
         APP_ERROR("ExportFile: Failed to create parent directory for %s", path);
-        
+
         goto cleanup;
     }
 
-    hFile = CreateFile(
-        path,                       // file path
+    // Convert UTF-8 path to UTF-16 for proper multibyte support
+    wpath = utf8_to_utf16(path);
+    if (!wpath) {
+        APP_ERROR("ExportFile: Failed to convert path to UTF-16");
+        goto cleanup;
+    }
+
+    hFile = CreateFileW(
+        wpath,                      // file path (UTF-16)
         GENERIC_WRITE,              // write-only access (like O_WRONLY)
         0,                          // no sharing (exclusive)
         NULL,                       // default security
@@ -464,7 +584,7 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
     );
     if (hFile == INVALID_HANDLE_VALUE) {
         DWORD err = GetLastError();
-        APP_ERROR("ExportFile: CreateFile failed, Error=%u", err);
+        APP_ERROR("ExportFile: CreateFileW failed, Error=%u", err);
 
         goto cleanup;
     }
@@ -490,6 +610,9 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size)
 cleanup:
     if (parent) {
         free(parent);
+    }
+    if (wpath) {
+        free(wpath);
     }
     if (hFile != INVALID_HANDLE_VALUE) {
         CloseHandle(hFile);
@@ -518,18 +641,26 @@ MemoryMap *CreateMemoryMap(const char *path)
     HANDLE hFile = INVALID_HANDLE_VALUE;
     HANDLE hMapping = NULL;  // section object handle for mapping
     LPVOID base = NULL;
+    wchar_t *wpath = NULL;
 
     /*
      * Open the target file for memory mapping:
      *   - Read-only access; write and delete operations are denied.
      *   - Allows other processes to open the file for read-only access.
      *   - Fails if the file does not exist.
-     *   - Sets the file’s attribute to read-only.
+     *   - Sets the file's attribute to read-only.
      *   - Hints OS to optimize for sequential access after initial random read.
      */
 
-    hFile = CreateFile(
-        path,                           // path to existing file
+    // Convert UTF-8 path to UTF-16 for proper multibyte support
+    wpath = utf8_to_utf16(path);
+    if (!wpath) {
+        APP_ERROR("CreateMemoryMap: Failed to convert path to UTF-16");
+        goto cleanup;
+    }
+
+    hFile = CreateFileW(
+        wpath,                          // path to existing file (UTF-16)
         GENERIC_READ,                   // read-only access
         FILE_SHARE_READ,                // share read, deny write/delete
         NULL,                           // default security
@@ -541,7 +672,7 @@ MemoryMap *CreateMemoryMap(const char *path)
     if (hFile == INVALID_HANDLE_VALUE) {
         DWORD err = GetLastError();
         APP_ERROR(
-            "CreateMemoryMap: CreateFile(\"%s\") failed, Error=%lu",
+            "CreateMemoryMap: CreateFileW(\"%s\") failed, Error=%lu",
             path, err
         );
 
@@ -620,6 +751,9 @@ MemoryMap *CreateMemoryMap(const char *path)
     hMapping = NULL;
 
     map->base = base;
+    if (wpath) {
+        free(wpath);
+    }
     return map;
 
 cleanup:
@@ -631,6 +765,9 @@ cleanup:
     }
     if (hFile != INVALID_HANDLE_VALUE) {
         CloseHandle(hFile);
+    }
+    if (wpath) {
+        free(wpath);
     }
     free(map);
     return NULL;
