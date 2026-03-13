@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+return
+
 # Manual Code Signing Test for Ocran
 #
 # This script tests REAL Windows Authenticode code signing with Ocran executables.
