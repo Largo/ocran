@@ -1,11 +1,15 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    drb (2.2.3)
     fiddle (1.1.8)
-    hoe (4.2.3)
-      rake (>= 0.8, < 15.0)
-    minitest (5.25.5)
-    rake (13.3.0)
+    hoe (4.6.1)
+      rake (~> 13.0)
+    minitest (6.0.2)
+      drb (~> 2.0)
+      prism (~> 1.5)
+    prism (1.9.0)
+    rake (13.3.1)
 
 PLATFORMS
   x64-mingw-ucrt
@@ -14,8 +18,8 @@ PLATFORMS
 
 DEPENDENCIES
   fiddle (~> 1.0)
-  hoe (~> 4.2)
-  minitest (~> 5.23)
+  hoe (~> 4.6)
+  minitest (~> 6.0)
 
 BUNDLED WITH
-   2.6.7
+   4.0.8

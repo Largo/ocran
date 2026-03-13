@@ -177,7 +177,7 @@ class TestOcran < Minitest::Test
   def test_nodeprun
     with_fixture 'writefile' do
       assert system("ruby", ocran, "writefile.rb", *(DefaultArgs + ["--no-dep-run"]))
-      assert !File.exist?("output.txt")
+      refute File.exist?("output.txt")
       pristine_env "writefile.exe" do
         assert File.exist?("writefile.exe")
         assert system("writefile.exe")
@@ -228,7 +228,7 @@ class TestOcran < Minitest::Test
   def test_output_option
     with_fixture 'helloworld' do
       assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output", "goodbyeworld.exe"]))
-      assert !File.exist?("helloworld.exe")
+      refute File.exist?("helloworld.exe")
       assert File.exist?("goodbyeworld.exe")
     end
   end
@@ -557,7 +557,7 @@ class TestOcran < Minitest::Test
     with_fixture 'exception' do
       system("ruby \"#{ocran}\" exception.rb #{DefaultArgs.join(' ')} 2>NUL")
       assert $?.exitstatus != 0
-      assert !File.exist?("exception.exe")
+      refute File.exist?("exception.exe")
     end
   end
 
@@ -724,17 +724,17 @@ class TestOcran < Minitest::Test
       # Control test; make sure the writefile script works as expected under default options
       assert system("ruby", ocran, "writefile.rb", *(DefaultArgs))
       pristine_env "writefile.exe" do
-        assert !File.exist?("output.txt")
+        refute File.exist?("output.txt")
         assert system("writefile.exe")
         assert File.exist?("output.txt")
       end
 
       assert system("ruby", ocran, "writefile.rb", *(DefaultArgs + ["--chdir-first"]))
       pristine_env "writefile.exe" do
-        assert !File.exist?("output.txt")
+        refute File.exist?("output.txt")
         assert system("writefile.exe")
         # If the script ran in its inst directory, then our working dir still shouldn't have any output.txt
-        assert !File.exist?("output.txt")
+        refute File.exist?("output.txt")
       end
     end
   end

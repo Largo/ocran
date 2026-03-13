@@ -2,8 +2,8 @@
 
 source "https://rubygems.org"
 
-gem "hoe", "~> 4.2"
+gem "hoe", "~> 4.6"
 
-gem "minitest", "~> 5.23"
+gem "minitest", "~> 6.0"
 
 gem "fiddle", "~> 1.0"

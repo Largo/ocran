@@ -8,6 +8,7 @@ Hoe.spec "ocran" do
   developer "Lars Christensen", "larsch@belunktum.dk"
   developer "Andi Idogawa", "andi@idogawa.com"
   license "MIT"
+  self.history_file = "CHANGELOG.txt"
 end
 
 STUB_NAMES = %w[stub stubw edicon]
