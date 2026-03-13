@@ -80,11 +80,26 @@ BOOL UpdateIcon(LPTSTR ExecutableFileName, LPTSTR IconFileName)
    
    IconFileHeader* header = (IconFileHeader*)Data;
    IconDirectoryEntry* entries = (IconDirectoryEntry*)(header + 1);
-   
+
+   /* Validate that all directory entries fit within the file */
+   DWORD entriesEnd = sizeof(IconFileHeader) + header->ImageCount * sizeof(IconDirectoryEntry);
+   if (entriesEnd > Size)
+   {
+      fprintf(stderr, "Icon file too small for declared ImageCount.\n");
+      LocalFree(Data);
+      return FALSE;
+   }
+
    /* Create the RT_ICON resources */
    int i;
    for (i = 0; i < header->ImageCount; ++i)
    {
+      if (entries[i].ImageOffset + entries[i].ImageSize > Size)
+      {
+         fprintf(stderr, "Icon entry %d exceeds file bounds.\n", i);
+         LocalFree(Data);
+         return FALSE;
+      }
       BOOL b = UpdateResource(h, MAKEINTRESOURCE(RT_ICON), MAKEINTRESOURCE(101 + i), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Data + entries[i].ImageOffset, entries[i].ImageSize);
       if (!b)
       {

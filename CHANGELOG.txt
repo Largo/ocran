@@ -1,4 +1,7 @@
 === 1.3.18
+- Fix incorrect buffer size passed to GetModuleFileNameW in LibraryDetector (passed bytesize instead of character count).
+- Fix pointer subtraction underflow in stub unpacker when a tampered offset places head past tail.
+- Add bounds checking for icon file entries in edicon to prevent out-of-bounds reads from malformed .ico files.
 - Support for Ruby 3.2 and above. Drop ruby 3.0 and 3.1 support.
 - Suppress user notifications during stub cleanup and log errors to DEBUG output
 - Fixes issue where two MessageBox dialogs appeared in GUI mode when a signature was not found.

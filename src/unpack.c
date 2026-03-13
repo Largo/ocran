@@ -354,10 +354,11 @@ UnpackContext *OpenPackFile(const char *self_path)
     const void *head = (const uint8_t *)map_base + offset;
 
     /* Verify that the header fits immediately before the offset */
-    if ((size_t)((const uint8_t *)tail - (const uint8_t *)head)
-        < sizeof(OperationModesType)) {
+    if (head > tail
+        || (size_t)((const uint8_t *)tail - (const uint8_t *)head)
+           < sizeof(OperationModesType)) {
         APP_ERROR("Not enough space for header before offset");
-        
+
         goto cleanup;
     }
     context->modes = get_operation_modes(&head);

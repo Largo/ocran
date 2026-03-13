@@ -49,7 +49,7 @@ module Ocran
                   end
         str = "\x00".encode("UTF-16LE") * MAX_PATH
         handles.map do |handle|
-          length = GetModuleFileNameW(handle, str, str.bytesize)
+          length = GetModuleFileNameW(handle, str, str.bytesize / 2)
           if length == 0
             raise "GetModuleFileNameW failed with error code #{GetLastError()}"
           end
