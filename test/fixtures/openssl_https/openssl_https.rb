@@ -1,6 +1,6 @@
 # encoding: UTF-8
 # Set the cert file, so openssl calls work. This needs to be before openssl
-ENV['SSL_CERT_FILE'] = File.join(File.dirname(ENV["OCRAN_EXECUTABLE"].to_s), 'cacert.pem')
+#ENV['SSL_CERT_FILE'] = File.join(File.dirname(ENV["OCRAN_EXECUTABLE"].to_s), 'cacert.pem')
 
 require "net/http"
 require "uri"

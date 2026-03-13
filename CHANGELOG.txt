@@ -1,4 +1,9 @@
 === 1.3.18
+- Fix SxS error 14001 when loading native extensions (e.g. openssl.so, date_core.so) at runtime. Each .so file may have a companion *.so-assembly.manifest in archdir defining its private SxS assembly; these manifests are now included alongside the .so files. All files in ruby_builtin_dlls/ (DLLs and manifest) are now included rather than the manifest alone.
+- Support for Ruby 4.0.
+- Include cacert.pem in the exe file to avoid SSL certificate verification issues.
+- Use wide (UTF-16) Win32 APIs throughout system_utils.c (CreateFileW, CreateDirectoryW, DeleteFileW, FindFirstFileW/FindNextFileW, RemoveDirectoryW, GetFileAttributesW, MoveFileExW, GetTempPathW, CreateProcessW) to correctly handle multibyte (UTF-8) file and directory paths in the stub.
+- Add Windows Authenticode code signing support. The stub now detects and skips PE security directory entries when searching for the OCRAN signature, so signed executables unpack correctly. Build time clears invalid security directory entries from PE headers to allow subsequent signing.
 - Fix incorrect buffer size passed to GetModuleFileNameW in LibraryDetector (passed bytesize instead of character count).
 - Fix pointer subtraction underflow in stub unpacker when a tampered offset places head past tail.
 - Add bounds checking for icon file entries in edicon to prevent out-of-bounds reads from malformed .ico files.

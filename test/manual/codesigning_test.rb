@@ -1,8 +1,6 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-return
-
 # Manual Code Signing Test for Ocran
 #
 # This script tests REAL Windows Authenticode code signing with Ocran executables.
@@ -72,7 +70,7 @@ def install_sdk
     puts "Installing only the signing tools to minimize installation size."
     # Silent install with only the signing tools
     install_command = "\"#{installer_path}\" /q /norestart /features OptionId.SigningTools"
-    stdout, stderr, status = Open3.capture3(install_command)
+    _, stderr, status = Open3.capture3(install_command)
 
     unless status.success?
       puts "SDK installation failed. Please try installing it manually."
@@ -90,7 +88,7 @@ end
 # Check if certificate already exists
 def certificate_exists?
   ps_command = "Get-ChildItem -Path Cert:\\CurrentUser\\My | Where-Object { $_.Subject -match '#{CERT_NAME}' } | Select-Object -First 1"
-  stdout, stderr, status = Open3.capture3("powershell -command \"#{ps_command}\"")
+  stdout, _, status = Open3.capture3("powershell -command \"#{ps_command}\"")
   status.success? && !stdout.strip.empty?
 end
 
@@ -103,11 +101,11 @@ def create_certificate
 
   puts "Creating a self-signed certificate..."
   ps_command = "New-SelfSignedCertificate -DnsName '#{CERT_NAME}' -Type CodeSigning -CertStoreLocation Cert:\\CurrentUser\\My"
-  stdout, stderr, status = Open3.capture3("powershell -command \"#{ps_command}\"")
+  status = Open3.capture3("powershell -command \"#{ps_command}\"")
 
   unless status.success?
     puts "Certificate creation failed."
-    puts "Error: #{stderr}"
+    puts "Error: #{status[1]}"
     puts "\nNote: You may need to run this script as Administrator."
     exit 1
   end
@@ -321,4 +319,4 @@ else
   exit 1
 end
 
-end # if __FILE__ == $0
+end if __FILE__ == $0

@@ -66,3 +66,13 @@ lib\ruby\site_ruby\3.2.0\ruby_installer\runtime
 https://stackoverflow.com/questions/37524839/msys2-statically-link-output-binary
 
 [Add compat with RubyInstaller-2.4.1 #368](https://github.com/rails-sqlserver/tiny_tds/pull/368)
+
+## Cacert.pem
+
+The cacert.pem file is used by openssl to verify SSL certificates. It is included in the ocran gem and is used by default.
+If you want to use a different cacert.pem file, you can set the SSL_CERT_FILE environment variable to point to your own file.
+The root certificates expire sometimes, so this is recommended for application that are not updated often.
+
+```ruby
+ENV['SSL_CERT_FILE'] = File.join(File.dirname(ENV["OCRAN_EXECUTABLE"].to_s), 'cacert.pem')
+```
