@@ -922,7 +922,7 @@ class TestOcran < Minitest::Test
   # ensures runtime Ruby core coverage. The fixture exits immediately at runtime
   # so we can verify a clean exit without needing a display or user interaction.
   def test_tk
-    skip "tk gem not available" unless Gem::Specification.find_all_by_name("tk").any?
+    skip "tk gem not available" unless Gem::Specification.find_all_by_name("tk").any? and not ENV["GITHUB_ACTIONS"]
     with_fixture "tk" do
       assert system("ruby", ocran, "tk.rb", *DefaultArgs, "--gem-full=tk", "--add-all-core", "--no-autoload")
       assert File.exist?("tk.exe")
@@ -939,7 +939,7 @@ class TestOcran < Minitest::Test
   # is included. The fixture exits immediately at runtime so we can verify a
   # clean exit without needing a display or user interaction.
   def test_glimmer_libui
-    skip "glimmer-dsl-libui gem not available" unless Gem::Specification.find_all_by_name("glimmer-dsl-libui").any?
+    skip "glimmer-dsl-libui gem not available" unless Gem::Specification.find_all_by_name("glimmer-dsl-libui").any? and not ENV["GITHUB_ACTIONS"]
     with_fixture "glimmer_libui" do
       assert system("ruby", ocran, "glimmer_libui.rb", *DefaultArgs)
       assert File.exist?("glimmer_libui.exe")

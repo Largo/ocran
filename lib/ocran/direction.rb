@@ -358,6 +358,32 @@ module Ocran
         end
       end
 
+      # Bundle Tcl/Tk library scripts if the Tk extension is loaded.
+      # tcl86.dll and tk86.dll are auto-detected by DLL scanning, but the
+      # Tcl/Tk script libraries (init.tcl etc.) must also be bundled so
+      # that Tcl can find them relative to the DLL at runtime.
+      if defined?(TclTkLib)
+        exec_prefix.glob("**/lib/tcl[0-9]*/init.tcl").each do |init_tcl|
+          tcl_lib_dir = init_tcl.dirname
+          next unless tcl_lib_dir.subpath?(exec_prefix)
+          say "Adding Tcl library files #{tcl_lib_dir}"
+          tcl_lib_dir.find.each do |path|
+            next if path.directory?
+            builder.duplicate_to_exec_prefix(path)
+          end
+        end
+
+        exec_prefix.glob("**/lib/tk[0-9]*/pkgIndex.tcl").each do |pkg_index|
+          tk_lib_dir = pkg_index.dirname
+          next unless tk_lib_dir.subpath?(exec_prefix)
+          say "Adding Tk library files #{tk_lib_dir}"
+          tk_lib_dir.find.each do |path|
+            next if path.directory?
+            builder.duplicate_to_exec_prefix(path)
+          end
+        end
+      end
+
       # Set environment variable
       builder.export("RUBYOPT", rubyopt)
       # Add the load path that are required with the correct path after
