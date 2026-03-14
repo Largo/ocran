@@ -30,6 +30,7 @@ GEM
       rake (~> 13.0)
     libui (0.1.2)
     libui (0.1.2-x64-mingw)
+    logger (1.7.0)
     matrix (0.4.3)
     method_source (1.1.0)
     minitest (6.0.2)
@@ -72,6 +73,7 @@ DEPENDENCIES
   fiddle (~> 1.0)
   glimmer-dsl-libui
   hoe (~> 4.6)
+  logger
   minitest (~> 6.0)
 
 BUNDLED WITH
