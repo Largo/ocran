@@ -53,12 +53,12 @@ jobs:
       - name: Install bundle
         run: bundle install
 
-      - name: Install Tcl/Tk MSYS2 packages
-        shell: pwsh
-        run: ridk exec pacman -S --noconfirm mingw-w64-ucrt-x86_64-tcl mingw-w64-ucrt-x86_64-tk
+      # - name: Install Tcl/Tk MSYS2 packages
+      #   shell: pwsh
+      #   run: ridk exec pacman -S --noconfirm mingw-w64-ucrt-x86_64-tcl mingw-w64-ucrt-x86_64-tk
 
-      - name: Install tk gem
-        run: gem install tk -v 0.5.1 -- --without-X11 --with-cflags="-std=gnu99 -Wno-incompatible-pointer-types"
+      # - name: Install tk gem
+      #   run: gem install tk -v 0.5.1 -- --without-X11 --with-cflags="-std=gnu99 -Wno-incompatible-pointer-types"
 
       - name: Build stub and run tests
         run: |

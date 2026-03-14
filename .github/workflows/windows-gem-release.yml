@@ -12,8 +12,11 @@ jobs:
 
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: 3.3.0
-          bundler-cache: true
+          ruby-version: 4.0
+          bundler-cache: false
+
+      - name: Install bundle
+        run: bundle install
 
       - name: Build stub and run tests 
         run: |

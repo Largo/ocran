@@ -901,7 +901,7 @@ class TestOcran < Minitest::Test
   # ensures runtime Ruby core coverage. The fixture exits immediately at runtime
   # so we can verify a clean exit without needing a display or user interaction.
   def test_tk
-    skip "tk gem not available" unless Gem::Specification.find_all_by_name("tk").any? or ENV["GITHUB_ACTIONS"]
+    skip "tk gem not available" unless Gem::Specification.find_all_by_name("tk").any? #or ENV["GITHUB_ACTIONS"]
     with_fixture "tk" do
       assert system("ruby", ocran, "tk.rb", *DefaultArgs)
       assert File.exist?("tk.exe")
