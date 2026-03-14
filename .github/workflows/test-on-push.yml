@@ -84,6 +84,32 @@ jobs:
           chmod +x zlib_packed
           ./zlib_packed
 
+  test-source-gem-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+
+      - name: Install build dependencies
+        run: sudo apt-get install -y xz-utils gcc make
+
+      - name: Build and install source gem
+        run: |
+          gem build ocran-source.gemspec
+          gem install --local ocran-*.gem
+
+      - name: Build hello world executable via installed gem
+        run: |
+          ocran test/fixtures/helloworld/helloworld.rb --no-lzma
+          ./helloworld
+          cp helloworld /tmp/helloworld_from_source_gem
+
+      - name: Run executable on Debian (no Ruby installed)
+        run: docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/helloworld_from_source_gem
+
   run-tests-windows:
     strategy:
       fail-fast: false
