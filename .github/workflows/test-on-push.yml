@@ -26,6 +26,12 @@ jobs:
           bundle exec rake build
           bundle exec rake test
 
+      - name: Build helloworld for cross-distro test
+        run: ruby -Ilib exe/ocran test/fixtures/helloworld/helloworld.rb --output /tmp/helloworld_packed
+
+      - name: Run packed executable on Debian (no Ruby installed)
+        run: docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/helloworld_packed
+
   run-tests-windows:
     strategy:
       fail-fast: false
