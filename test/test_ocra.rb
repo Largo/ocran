@@ -897,14 +897,13 @@ class TestOcran < Minitest::Test
 
 
   # Tests that a packaged Tk application builds and runs successfully.
-  # --gem-full=tk includes all Tk gem files; --no-autoload avoids errors from
-  # platform-specific Tk autoloads (e.g. tk/macpkg on Windows); --add-all-core
+  # --gem-full=tk includes all Tk gem files; --add-all-core
   # ensures runtime Ruby core coverage. The fixture exits immediately at runtime
   # so we can verify a clean exit without needing a display or user interaction.
   def test_tk
     skip "tk gem not available" unless Gem::Specification.find_all_by_name("tk").any? or ENV["GITHUB_ACTIONS"]
     with_fixture "tk" do
-      assert system("ruby", ocran, "tk.rb", *DefaultArgs, "--gem-full=tk", "--add-all-core", "--no-autoload")
+      assert system("ruby", ocran, "tk.rb", *DefaultArgs, "--gem-full=tk", "--add-all-core")
       assert File.exist?("tk.exe")
       pristine_env "tk.exe" do
          assert system("tk.exe")
