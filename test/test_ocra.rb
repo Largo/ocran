@@ -134,11 +134,14 @@ class TestOcran < Minitest::Test
       yield(*args)
     end
 
-    # In parent directory of first file
-    basedir = basedir.parent
-    args = files.map{|p| relative_or_absolute_path(basedir, p) }
-    cd basedir do
-      yield(*args)
+    # In parent directory of first file (skip on Linux: output name can collide
+    # with the script's parent directory since there is no .exe extension)
+    if Gem.win_platform?
+      basedir = basedir.parent
+      args = files.map{|p| relative_or_absolute_path(basedir, p) }
+      cd basedir do
+        yield(*args)
+      end
     end
 
     # In a completely different directory
@@ -751,7 +754,8 @@ class TestOcran < Minitest::Test
       assert File.exist?(exe)
       pristine_env exe do
         exe_path = File.expand_path(exe)
-        cd ENV["SystemRoot"] do
+        systemRoot = Gem.win_platform? ? ENV["SystemRoot"] : "/"
+        cd systemRoot do
           assert system(exe_path)
         end
       end
@@ -766,7 +770,8 @@ class TestOcran < Minitest::Test
       assert File.exist?(exe)
       pristine_env exe do
         exe_path = File.expand_path(exe)
-        cd ENV["SystemRoot"] do
+        systemRoot = Gem.win_platform? ? ENV["SystemRoot"] : "/"
+        cd systemRoot do
           assert system(exe_path)
         end
       end
@@ -842,6 +847,7 @@ class TestOcran < Minitest::Test
 
   # Should be able to build an installer using Inno Setup.
   def test_innosetup
+    skip "InnoSetup not available" unless Gem.win_platform?
     if ENV["GITHUB_ACTIONS"]
       assert system("where ISCC >NUL 2>&1"), "ISCC not found in PATH; InnoSetup install step may have failed"
     else
@@ -896,15 +902,23 @@ class TestOcran < Minitest::Test
   # in its filename. Skipped unless the console code page is UTF-8 (65001),
   # as ruby.exe misinterprets arguments under non-UTF-8 environments.
   def test_multibyte_script_filename
-    cp = `chcp`.force_encoding(Encoding::BINARY)[/\d+/] || "unknown"
-    unless cp == "65001"
-      skip "Skipped: console code page must be UTF-8 (65001), got #{cp}"
+
+    if Gem.win_platform?
+      cp = `chcp`.force_encoding(Encoding::BINARY)[/\d+/] || "unknown"
+      unless cp == "65001"
+        skip "Skipped: console code page must be UTF-8 (65001), got #{cp}"
+      end
+    else
+      unless Encoding.find('locale') == Encoding::UTF_8 || Encoding.default_external == Encoding::UTF_8
+        skip "Skipped: system locale must be UTF-8, got #{Encoding.find('locale')}"
+      end
     end
 
     with_fixture 'multibyte_script' do
       script = "äあ💎.rb"
       assert system("ruby", ocran, script, *DefaultArgs)
-      exe_name = script.sub(/\.rb$/, '.exe')
+      exe_name = script.sub(/\.rb$/, '')
+      exe_name += '.exe' if Gem.win_platform?
       assert File.exist?(exe_name)
       pristine_env exe_name do
         assert system(exe_name)
@@ -938,6 +952,7 @@ class TestOcran < Minitest::Test
 
   # Test that code-signed executables still work
   def test_codesigning_support
+    skip "Only for windows" if Gem.win_platform?
     with_fixture 'helloworld' do
       each_path_combo "helloworld.rb" do |script|
         assert system("ruby", ocran, script, *DefaultArgs)

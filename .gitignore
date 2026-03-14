@@ -6,3 +6,5 @@ pkg
 README.txt
 *.tmp
 *.res
+share/ocran/stub
+src/stub

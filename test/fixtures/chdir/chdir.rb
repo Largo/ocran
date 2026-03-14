@@ -1,1 +1,5 @@
-Dir.chdir ENV["SystemRoot"]
+if Gem.win_platform?
+  Dir.chdir ENV["SystemRoot"]
+else
+  Dir.chdir "/"
+end
