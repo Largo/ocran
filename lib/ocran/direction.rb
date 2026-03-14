@@ -145,7 +145,11 @@ module Ocran
 
       # On POSIX systems, set LD_LIBRARY_PATH to find bundled shared libraries
       unless Gem.win_platform?
-        builder.export("LD_LIBRARY_PATH", File.join(EXTRACT_ROOT, BINDIR.to_s))
+        extract_bin = File.join(EXTRACT_ROOT, BINDIR.to_s)
+        builder.export("LD_LIBRARY_PATH", extract_bin)
+        if RUBY_PLATFORM.include?("darwin")
+          builder.export("DYLD_LIBRARY_PATH", extract_bin)
+        end
       end
 
       # Windows-only: Add detected DLLs

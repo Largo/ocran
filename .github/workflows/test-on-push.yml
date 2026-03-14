@@ -54,6 +54,34 @@ jobs:
           bundle exec rake build
           bundle exec rake test
 
+      - name: Build helloworld for cross-system test
+        run: ruby -Ilib exe/ocran test/fixtures/helloworld/helloworld.rb --output helloworld_packed
+
+      - name: Upload packed binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: helloworld-macos-${{ matrix.ruby }}
+          path: helloworld_packed
+          retention-days: 1
+
+  test-macos-portability:
+    needs: run-tests-macos
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+    runs-on: macos-latest
+    steps:
+      - name: Download packed binary
+        uses: actions/download-artifact@v4
+        with:
+          name: helloworld-macos-${{ matrix.ruby }}
+
+      - name: Run packed executable
+        run: |
+          chmod +x helloworld_packed
+          ./helloworld_packed
+
   run-tests-windows:
     strategy:
       fail-fast: false
