@@ -11,9 +11,10 @@ distribution. It bundles your script, the Ruby interpreter, gems, and native
 libraries into a single self-contained artifact that runs without requiring
 Ruby to be installed on the target machine.
 
-OCRAN supports three output formats, all cross-platform:
+OCRAN supports four output formats, all cross-platform:
 
 * **Self-extracting executable** — bundles everything into a single binary that unpacks and runs transparently, with no Ruby installation required. Produces a `.exe` on Windows, and a native executable on Linux and macOS.
+* **macOS app bundle** (`--macosx-bundle`) — wraps the executable in a `.app` bundle for Finder integration, Dock icons, and code signing.
 * **Directory** (`--output-dir`) — copies all files into a folder with a ready-to-run launch script (`.sh` on Linux/macOS, `.bat` on Windows).
 * **Zip archive** (`--output-zip`) — same as directory output, packed into a `.zip`.
 
@@ -38,6 +39,7 @@ bundled Ruby on Linux, macOS, or Windows.
 ## Features
 
 * **Windows/Linux/macOS executable** — self-extracting, self-running executable (primary output)
+* **macOS app bundle** — `.app` bundle with `Info.plist` for Finder/Dock/code-signing (`--macosx-bundle`)
 * **Directory output** — portable directory with a launch script (`--output-dir`)
 * **Zip archive output** — portable zip with a launch script (`--output-zip`)
 * LZMA compression (optional, default on, for `.exe` only)
@@ -85,6 +87,19 @@ DLLs) into `script.exe`.
 
 Copies all files into `myapp/` and writes a `script.sh` (or `script.bat` on
 Windows) launch script.
+
+### Building a macOS app bundle:
+
+    ocran --macosx-bundle script.rb
+
+Produces `script.app/` — a standard macOS `.app` bundle containing the
+self-extracting executable at `Contents/MacOS/script` and an `Info.plist`.
+Open it with `open script.app` or double-click it in Finder.
+
+    ocran --macosx-bundle --output MyApp --bundle-id com.example.myapp --icon icon.icns script.rb
+
+Custom name, bundle identifier and icon (must be `.icns` format). The icon is
+placed at `Contents/Resources/AppIcon.icns` and referenced in `Info.plist`.
 
 ### Building a zip archive:
 
@@ -142,6 +157,8 @@ Fine-tuning flags:
 * `--output <file>`: Name the generated executable. Defaults to `./<scriptname>.exe` on Windows and `./<scriptname>` on Linux/macOS.
 * `--output-dir <dir>`: Output all files to a directory with a launch script instead of building an executable. Works on Linux, macOS, and Windows.
 * `--output-zip <file>`: Output a zip archive containing all files and a launch script. Requires `zip` (Linux/macOS) or PowerShell (Windows).
+* `--macosx-bundle`: Build a macOS `.app` bundle. Use `--output` to set the bundle name (default: `<scriptname>.app`). (macOS)
+* `--bundle-id <id>`: Set the `CFBundleIdentifier` in `Info.plist` (default: `com.example.<appname>`). Used with `--macosx-bundle`.
 * `--no-lzma`: Disable LZMA compression (faster build, larger executable).
 * `--innosetup <file>`: Use an Inno Setup script (`.iss`) to create a Windows installer.
 
@@ -311,6 +328,35 @@ Four modes:
 
 If files are missing from the output, try `--gem-all=gemname` first, then
 `--gem-full=gemname`. Use `--gem-full` to include everything for all gems.
+
+### Code-signing a macOS app bundle
+
+After building with `--macosx-bundle`, sign the bundle with your Developer ID:
+
+    codesign --deep --force --verify --verbose \
+      --sign "Developer ID Application: Your Name (TEAMID)" \
+      MyApp.app
+
+Verify the signature:
+
+    codesign --verify --deep --strict --verbose=2 MyApp.app
+    spctl --assess --type execute --verbose MyApp.app
+
+For distribution outside the Mac App Store, notarize with Apple:
+
+    # Submit for notarization (requires app-specific password or API key)
+    xcrun notarytool submit MyApp.app \
+      --apple-id you@example.com \
+      --team-id TEAMID \
+      --password APP_SPECIFIC_PASSWORD \
+      --wait
+
+    # Staple the notarization ticket so it works offline
+    xcrun stapler staple MyApp.app
+
+Requirements:
+* Xcode Command Line Tools (`xcode-select --install`)
+* An Apple Developer account with a "Developer ID Application" certificate in Keychain
 
 ### Creating a Windows installer
 

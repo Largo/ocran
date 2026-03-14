@@ -12,6 +12,9 @@ module Ocran
         :add_all_encoding? => true,
         :argv => [],
         :auto_detect_dlls? => true,
+        :bundle_identifier => nil,
+        :macosx_bundle => nil,
+        :macosx_bundle? => false,
         :chdir_before? => false,
         :enable_compression? => true,
         :enable_debug_extract? => false,
@@ -87,6 +90,8 @@ Output options:
 --output <file>    Name the exe to generate. Defaults to ./<scriptname>.exe.
 --output-dir <dir> Output all files to a directory with a launch script instead of an exe.
 --output-zip <file> Output a zip archive containing all files and a launch script.
+--macosx-bundle    Build a macOS .app bundle. Use --output to name it (default: <scriptname>.app).
+--bundle-id <id>   Bundle identifier for the macOS app bundle (default: com.example.<appname>).
 --no-lzma          Disable LZMA compression of the executable.
 --innosetup <file> Use given Inno Setup script (.iss) to create an installer.
 
@@ -120,6 +125,10 @@ EOF
         when "--output-zip"
           path = argv.shift
           @options[:output_zip] = Pathname.new(path).expand_path if path
+        when "--macosx-bundle"
+          @options[:macosx_bundle?] = true
+        when "--bundle-id"
+          @options[:bundle_identifier] = argv.shift
         when "--dll"
           path = argv.shift
           @options[:extra_dlls] << path if path
@@ -210,6 +219,11 @@ EOF
           executable.basename.sub_ext(ext).expand_path
         end
 
+      if @options[:macosx_bundle?]
+        bundle_base = output_override || script.basename
+        @options[:macosx_bundle] = Pathname(bundle_base).sub_ext(".app").expand_path
+      end
+
       @options[:use_inno_setup?] = !!inno_setup_script
 
       @options[:verbose?] &&= !quiet?
@@ -233,6 +247,10 @@ EOF
       if output_dir && output_zip
         raise "--output-dir and --output-zip cannot be used together"
       end
+
+      if macosx_bundle && (output_dir || output_zip || inno_setup_script)
+        raise "--macosx-bundle cannot be combined with --output-dir, --output-zip, or --innosetup"
+      end
     end
 
     def add_all_core? = @options[__method__]
@@ -240,6 +258,10 @@ EOF
     def add_all_encoding? = @options[__method__]
 
     def argv = @options[__method__]
+
+    def bundle_identifier = @options[__method__]
+
+    def macosx_bundle = @options[__method__]
 
     def auto_detect_dlls? = @options[__method__]
 

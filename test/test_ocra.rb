@@ -1132,4 +1132,52 @@ class TestOcran < Minitest::Test
       end
     end
   end
+
+  # Tests that --macosx-bundle produces a valid .app bundle structure and
+  # that the executable inside it runs correctly.
+  def test_macosx_bundle
+    skip "macOS app bundle test is macOS-only" unless RUBY_PLATFORM.include?("darwin")
+    with_fixture 'helloworld' do
+      assert system("ruby", ocran, "helloworld.rb", "--macosx-bundle", *DefaultArgs)
+
+      bundle = "helloworld.app"
+      assert Dir.exist?(bundle), "Expected #{bundle} directory to exist"
+      assert File.exist?(File.join(bundle, "Contents", "Info.plist")), "Expected Info.plist"
+
+      exe = File.join(bundle, "Contents", "MacOS", "helloworld")
+      assert File.exist?(exe), "Expected executable at Contents/MacOS/helloworld"
+      assert File.executable?(exe), "Expected Contents/MacOS/helloworld to be executable"
+
+      pristine_env exe do
+        assert system(exe)
+      end
+    end
+  end
+
+  # Tests --macosx-bundle with a custom name, bundle-id, and icon.
+  def test_macosx_bundle_custom
+    skip "macOS app bundle test is macOS-only" unless RUBY_PLATFORM.include?("darwin")
+    with_fixture 'helloworld' do
+      # Create a minimal placeholder .icns file (not a real icon, just tests the copy)
+      File.write("test.icns", "placeholder")
+
+      assert system("ruby", ocran, "helloworld.rb",
+                    "--macosx-bundle",
+                    "--output", "MyApp",
+                    "--bundle-id", "com.example.myapp",
+                    "--icon", "test.icns",
+                    *DefaultArgs)
+
+      bundle = "MyApp.app"
+      assert Dir.exist?(bundle)
+
+      plist = File.read(File.join(bundle, "Contents", "Info.plist"))
+      assert plist.include?("com.example.myapp"), "Expected bundle identifier in Info.plist"
+      assert plist.include?("MyApp"), "Expected app name in Info.plist"
+      assert plist.include?("CFBundleIconFile"), "Expected icon entry in Info.plist"
+
+      assert File.exist?(File.join(bundle, "Contents", "Resources", "AppIcon.icns"))
+      assert File.exist?(File.join(bundle, "Contents", "MacOS", "MyApp"))
+    end
+  end
 end

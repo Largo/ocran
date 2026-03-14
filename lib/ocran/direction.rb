@@ -551,6 +551,63 @@ module Ocran
       say "Finished building #{path} (#{File.size(path)} bytes)"
     end
 
+    def build_macosx_bundle(bundle_path)
+      require_relative "stub_builder"
+      require "fileutils"
+
+      bundle_path  = Pathname(bundle_path)
+      app_name     = bundle_path.basename.sub_ext("").to_s
+      contents_dir = bundle_path / "Contents"
+      macos_dir    = contents_dir / "MacOS"
+      resources_dir = contents_dir / "Resources"
+
+      FileUtils.mkdir_p(macos_dir.to_s)
+
+      executable_path = macos_dir / app_name
+      say "Building app bundle #{bundle_path}"
+
+      StubBuilder.new(executable_path,
+                      chdir_before: @option.chdir_before?,
+                      debug_extract: @option.enable_debug_extract?,
+                      debug_mode: @option.enable_debug_mode?,
+                      enable_compression: @option.enable_compression?,
+                      gui_mode: false,
+                      icon_path: nil,
+                      &to_proc) => builder
+
+      if @option.icon_filename
+        FileUtils.mkdir_p(resources_dir.to_s)
+        icon_dest = resources_dir / "AppIcon#{@option.icon_filename.extname}"
+        FileUtils.cp(@option.icon_filename.to_s, icon_dest.to_s)
+      end
+
+      bundle_id  = @option.bundle_identifier || "com.example.#{app_name}"
+      icon_entry = @option.icon_filename ? "    <key>CFBundleIconFile</key>\n    <string>AppIcon</string>\n" : ""
+
+      File.write(contents_dir / "Info.plist", <<~PLIST)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>CFBundleName</key>
+          <string>#{app_name}</string>
+          <key>CFBundleDisplayName</key>
+          <string>#{app_name}</string>
+          <key>CFBundleIdentifier</key>
+          <string>#{bundle_id}</string>
+          <key>CFBundleVersion</key>
+          <string>1.0</string>
+          <key>CFBundlePackageType</key>
+          <string>APPL</string>
+          <key>CFBundleExecutable</key>
+          <string>#{app_name}</string>
+        #{icon_entry}</dict>
+        </plist>
+      PLIST
+
+      say "Finished building #{bundle_path} (#{builder.data_size} bytes decompressed)"
+    end
+
     def build_stab_exe
       require_relative "stub_builder"
 

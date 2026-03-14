@@ -99,6 +99,8 @@ module Ocran
         else
           raise "Inno Setup is only supported on Windows"
         end
+      elsif @option.macosx_bundle
+        direction.build_macosx_bundle(@option.macosx_bundle)
       elsif @option.output_dir
         direction.build_output_dir(@option.output_dir)
       elsif @option.output_zip
