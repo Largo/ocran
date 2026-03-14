@@ -903,7 +903,7 @@ class TestOcran < Minitest::Test
   def test_tk
     skip "tk gem not available" unless Gem::Specification.find_all_by_name("tk").any? or ENV["GITHUB_ACTIONS"]
     with_fixture "tk" do
-      assert system("ruby", ocran, "tk.rb", *DefaultArgs, "--gem-full=tk", "--add-all-core")
+      assert system("ruby", ocran, "tk.rb", *DefaultArgs)
       assert File.exist?("tk.exe")
       pristine_env "tk.exe" do
          assert system("tk.exe")
