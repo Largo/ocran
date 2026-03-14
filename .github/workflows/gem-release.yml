@@ -48,8 +48,27 @@ jobs:
           name: gem-${{ matrix.os }}
           path: '*.gem'
 
+  build-source-gem:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      - name: Build source gem
+        run: gem build ocran-source.gemspec
+
+      - name: Upload gem artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-source
+          path: '*.gem'
+
   release:
-    needs: build
+    needs: [build, build-source-gem]
     runs-on: ubuntu-latest
     environment: production
     permissions:

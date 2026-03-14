@@ -32,6 +32,7 @@ GEM
     libui (0.1.2)
     libui (0.1.2-arm64-darwin)
     libui (0.1.2-x64-mingw)
+    libui (0.1.2-x86_64-darwin)
     logger (1.7.0)
     matrix (0.4.3)
     method_source (1.1.0)
@@ -70,6 +71,7 @@ PLATFORMS
   arm64-darwin-23
   x64-mingw-ucrt
   x64-mingw32
+  x86_64-darwin-24
   x86_64-linux
 
 DEPENDENCIES
