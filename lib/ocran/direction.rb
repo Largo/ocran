@@ -150,10 +150,10 @@ module Ocran
         libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
         builder.copy_to_bin(libruby_src, libruby_so)
 
-        # On POSIX systems, we also need to copy symlinks (aliases) for libruby.so
+        # On POSIX systems, create symlinks (aliases) for libruby.so
         unless Gem.win_platform?
           libruby_aliases.each do |libruby_alias|
-            builder.copy_to_bin(libdir / libruby_alias, libruby_alias)
+            builder.symlink_in_bin(libruby_so, libruby_alias)
           end
         end
       end

@@ -1,5 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#include <errno.h>
+#endif
 #include "error.h"
 #include "system_utils.h"
 #include "inst_dir.h"
@@ -262,6 +266,53 @@ cleanup:
     }
     return result;
 }
+
+#ifndef _WIN32
+bool CreateSymlinkUnderInstDir(const char *rel_link_path, const char *target)
+{
+    if (!IsInstDirSet()) {
+        APP_ERROR("Installation directory has not been set");
+        return false;
+    }
+
+    if (!rel_link_path || !*rel_link_path) {
+        APP_ERROR("rel_link_path is NULL or empty");
+        return false;
+    }
+
+    if (!target || !*target) {
+        APP_ERROR("target is NULL or empty");
+        return false;
+    }
+
+    char *link_path = ExpandInstDirPath(rel_link_path);
+    if (!link_path) {
+        return false;
+    }
+
+    bool result = false;
+    char *parent = GetParentPath(link_path);
+    if (parent && *parent && !CreateDirectoriesRecursively(parent)) {
+        APP_ERROR("Failed to create parent directory for symlink '%s'", link_path);
+        goto cleanup;
+    }
+
+    if (symlink(target, link_path) < 0) {
+        APP_ERROR("Failed to create symlink '%s' -> '%s': %s", link_path, target, strerror(errno));
+        goto cleanup;
+    }
+
+    DEBUG("CreateSymlinkUnderInstDir: '%s' -> '%s'", link_path, target);
+    result = true;
+
+cleanup:
+    if (parent) {
+        free(parent);
+    }
+    free(link_path);
+    return result;
+}
+#endif /* _WIN32 */
 
 bool SetEnvWithInstDir(const char *name, const char *value)
 {

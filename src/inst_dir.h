@@ -141,3 +141,17 @@ bool ExportFileToInstDir(const char *rel_path, const void *buf, size_t len);
  * @return true on success; false on failure.
  */
 bool SetEnvWithInstDir(const char *name, const char *value);
+
+/**
+ * @brief Create a symlink under the installation directory (POSIX only).
+ *
+ * Creates a symbolic link at rel_link_path that points to target.
+ * Both paths are relative to the installation directory.
+ * The target is treated as a bare filename within the same directory.
+ *
+ * @param rel_link_path  Relative path for the new symlink (e.g. "bin/libruby.so").
+ * @param target         Symlink target filename (e.g. "libruby.so.3.2.0").
+ *
+ * @return true on success; false on failure.
+ */
+bool CreateSymlinkUnderInstDir(const char *rel_link_path, const char *target);

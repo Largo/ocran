@@ -153,6 +153,22 @@ static bool process_opcode(UnpackReader *reader, Opcode opcode)
             return SetScriptInfo(args, size);
         }
 
+        case OP_CREATE_SYMLINK: {
+            if (!read_string(reader, &name)) {
+                return false;
+            }
+            if (!read_string(reader, &value)) {
+                return false;
+            }
+            DEBUG("OP_CREATE_SYMLINK: link='%s', target='%s'", name, value);
+#ifndef _WIN32
+            return CreateSymlinkUnderInstDir(name, value);
+#else
+            DEBUG("OP_CREATE_SYMLINK: skipped on Windows");
+            return true;
+#endif
+        }
+
         default: {
             DEBUG("Invalid opcode: %d", opcode);
             return false;

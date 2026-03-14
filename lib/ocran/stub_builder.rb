@@ -13,6 +13,7 @@ module Ocran
     OP_CREATE_FILE = 2
     OP_SETENV = 3
     OP_SET_SCRIPT = 4
+    OP_CREATE_SYMLINK = 5
 
     DEBUG_MODE          = 0x01
     EXTRACT_TO_EXE_DIR  = 0x02
@@ -152,6 +153,12 @@ module Ocran
 
       write_opcode(OP_CREATE_DIRECTORY)
       write_path(target)
+    end
+
+    def symlink(link_path, target)
+      write_opcode(OP_CREATE_SYMLINK)
+      write_path(link_path)
+      write_string(target.to_s)
     end
 
     def cp(source, target)

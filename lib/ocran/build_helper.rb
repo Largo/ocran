@@ -42,6 +42,11 @@ module Ocran
       cp(source, BINDIR / target)
     end
 
+    def symlink_in_bin(target, link_name)
+      verbose "symlink #{BINDIR / link_name} -> #{target}"
+      symlink(BINDIR / link_name, target.to_s)
+    end
+
     def copy_to_gem(source, target)
       cp(source, GEMDIR / target)
     end

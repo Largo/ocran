@@ -69,66 +69,57 @@ dependencies (gems and DLLs) into an executable named
 
     ocran --help
 
-Ocran options:
+#### Ocran options:
 
-    --help             Display this information.
-    --quiet            Suppress output while building executable.
-    --verbose          Show extra output while building executable.
-    --version          Display version number and exit.
+* `--help`: Display available command-line options and information.
+* `--quiet`: Suppress all output during the build process.
+* `--verbose`: Provide detailed output during the build process, useful for debugging.
+* `--version`: Display the version number of OCRAN and exit.
 
-Packaging options:
+#### Packaging options:
 
-    --dll dllname      Include additional DLLs from the Ruby bindir.
-    --add-all-core     Add all core ruby libraries to the executable.
-    --gemfile <file>   Add all gems and dependencies listed in a Bundler Gemfile.
-    --no-enc           Exclude encoding support files
+* `--dll <dllname>`: Include additional DLLs from the Ruby `bin` directory.
+* `--add-all-core`: Add all standard Ruby core libraries to the executable.
+* `--gemfile <file>`: Include all gems and their dependencies listed in a specified Bundler `Gemfile`.
+* `--no-enc`: Exclude encoding support files to reduce the size of the executable.
 
-Gem content detection modes:
+#### Gem content detection modes:
 
-    --gem-minimal[=gem1,..]  Include only loaded scripts
-    --gem-guess=[gem1,...]   Include loaded scripts & best guess (DEFAULT)
-    --gem-all[=gem1,..]      Include all scripts & files
-    --gem-full[=gem1,..]     Include EVERYTHING
-    --gem-spec[=gem1,..]     Include files in gemspec (Does not work with Rubygems 1.7+)
+These options control which files from the included gems are added to the executable.
 
-    --[no-]gem-scripts[=..]  Other script files than those loaded
-    --[no-]gem-files[=..]    Other files (e.g. data files)
-    --[no-]gem-extras[=..]   Extra files (README, etc.)
+* `--gem-minimal[=gem1,..]`: Include only the scripts that are actually loaded during the dependency run.
+* `--gem-guess[=gem1,..]`: Include loaded scripts and a "best guess" of other necessary files (DEFAULT).
+* `--gem-all[=gem1,..]`: Include all scripts and important files from the gem.
+* `--gem-full[=gem1,..]`: Include every single file found in the gem's directory.
+* `--gem-spec[=gem1,..]`: Include files listed in the gem's gemspec (Note: Compatibility issues with newer RubyGems).
 
-Gem modes:
+You can also fine-tune content inclusion using these flags:
 
-* *minimal*: loaded scripts
-* *guess*: loaded scripts and other files
-* *all*: loaded scripts, other scripts, other files (except extras)
-* *full*: Everything found in the gem directory
+* `--[no-]gem-scripts[=..]`: Include/exclude non-loaded script files (.rb, .rbw).
+* `--[no-]gem-files[=..]`: Include/exclude other files like data files.
+* `--[no-]gem-extras[=..]`: Include/exclude "extra" files like READMEs, tests, and C sources.
 
-File groups:
+#### Auto-detection options:
 
-* *scripts*: .rb/.rbw files  
-* *extras*: C/C++ sources, object files, test, spec, README  
-* *files*: all other files  
+* `--no-dep-run`: Do not run the source script to check for dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies.
+* `--no-autoload`: Do not attempt to load or include `autoload`ed constants.
+* `--no-autodll`: Disable the automatic detection of runtime DLL dependencies.
 
-Auto-detection options:
+#### Output options:
 
-    --no-dep-run       Don't run script.rb to check for dependencies.
-    --no-autoload      Don't load/include script.rb's autoloads.
-    --no-autodll       Disable detection of runtime DLL dependencies.
+* `--output <file>`: Specify the name and path of the generated executable. Defaults to `./<scriptname>.exe`.
+* `--no-lzma`: Disable LZMA compression. This results in faster build times but a significantly larger executable.
+* `--innosetup <file>`: Use the specified Inno Setup script (.iss) to create a Windows installer instead of a single standalone executable.
 
-Output options:
+#### Executable options:
 
-    --output <file>    Name the exe to generate. Defaults to ./<scriptname>.exe.
-    --no-lzma          Disable LZMA compression of the executable.
-    --innosetup <file> Use given Inno Setup script (.iss) to create an installer.
-
-Executable options:
-
-    --windows          Force Windows application (rubyw.exe)  
-    --console          Force console application (ruby.exe)  
-    --chdir-first      When exe starts, change working directory to app dir.  
-    --icon <ico>       Replace icon with a custom one.  
-    --rubyopt <str>    Set the RUBYOPT environment variable when running the executable
-    --debug            Executable will be verbose.  
-    --debug-extract    Executable will unpack to local dir and not delete after.  
+* `--windows`: Force the creation of a Windows GUI application (uses `rubyw.exe`).
+* `--console`: Force the creation of a console application (uses `ruby.exe`).
+* `--chdir-first`: Changes the working directory to the application's temporary extraction directory before the script starts.
+* `--icon <ico>`: Replace the default Ruby icon with a custom `.ico` file.
+* `--rubyopt <str>`: Set the `RUBYOPT` environment variable that will be used when the executable runs.
+* `--debug`: Enables verbose output when the generated executable is run.
+* `--debug-extract`: The executable will unpack its contents to a local directory and will not delete them after execution, which is helpful for troubleshooting extraction issues.
 
   
 ### Compilation:
