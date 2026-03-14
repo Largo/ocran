@@ -1,0 +1,80 @@
+name: Build and Release Gem
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest   # x64-mingw-ucrt
+          - os: ubuntu-latest    # x86_64-linux
+          - os: macos-latest     # arm64-darwin  (Apple Silicon)
+          - os: macos-13         # x86_64-darwin (Intel)
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y xz-utils gcc
+
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: brew install xz
+
+      - name: Build stubs and run tests
+        run: |
+          bundle exec rake build
+          bundle exec rake test
+
+      - name: Build platform gem
+        run: gem build ocran.gemspec
+
+      - name: Upload gem artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-${{ matrix.os }}
+          path: '*.gem'
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all gem artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gem-*
+          merge-multiple: true
+
+      - name: Create GitHub Release and upload gems
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --title "Release ${{ github.ref_name }}" \
+            *.gem
+
+      - name: Push gems to RubyGems
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+        run: |
+          for gem in *.gem; do
+            gem push "$gem"
+          done
