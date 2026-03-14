@@ -121,7 +121,7 @@ jobs:
       - name: Build and run zlib executable (Windows)
         if: runner.os == 'Windows'
         run: |
-          ocran test/fixtures/zlib/zlib.rb --output zlib_from_source_gem.exe
+          ocran test/fixtures/zlib/zlib.rb --no-lzma --output zlib_from_source_gem.exe
           .\zlib_from_source_gem.exe
 
   run-tests-windows:
