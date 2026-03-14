@@ -1,3 +1,17 @@
+=== 1.4.0
+- Add Linux support: build and run self-extracting ELF executables on Linux. The stub compiles and runs natively on Linux using POSIX APIs.
+- Add macOS support: build and run self-extracting Mach-O executables on macOS.
+- Add `--output-dir` option: output all files to a directory with a platform-appropriate launch script (`.sh` on Linux/macOS, `.bat` on Windows) instead of a single executable.
+- Add `--output-zip` option: same as `--output-dir` but packages the result into a zip archive.
+- Add `--macosx-bundle` option: wrap the macOS executable in a `.app` bundle with a generated `Info.plist`, suitable for Finder, the Dock, and Authenticode-style code signing with `codesign` and `xcrun notarytool`. Use `--bundle-id` to set `CFBundleIdentifier` and `--icon` (`.icns`) to set the bundle icon.
+- Use symlinks for shared library aliases on POSIX (e.g. `libruby.so → libruby.so.4.0`) instead of copying files, matching the layout Ruby expects at runtime.
+- Fix crash on cleanup when a symlink target does not exist: `DeleteRecursively` now uses `lstat` instead of `stat` so dangling symlinks are removed correctly.
+- Publish platform-specific gems for Linux, macOS (ARM and Intel), and Windows so `gem install ocran` selects the right pre-built stub automatically.
+- Publish a source gem (`ruby` platform) with `ext/extconf.rb` so users on unlisted platforms can install by compiling the stub from source. Falls back to plain `make` if `ridk exec make` is unavailable on Windows.
+- CI: add GitHub Actions workflow to build and publish per-platform gems on tag push.
+- CI: run the packed Linux executable inside a Debian Docker container to verify cross-distro portability (no Ruby required on target).
+- CI: test against Ruby 3.2, 3.3, 3.4, and 4.0 on Linux, macOS (ARM and Intel), and Windows.
+
 === 1.3.18
 - Support shipping IRB as .exe File
 - Fix SxS error 14001 when loading native extensions (e.g. openssl.so, date_core.so) at runtime. Each .so file may have a companion *.so-assembly.manifest in archdir defining its private SxS assembly; these manifests are now included alongside the .so files. All files in ruby_builtin_dlls/ (DLLs and manifest) are now included rather than the manifest alone.
