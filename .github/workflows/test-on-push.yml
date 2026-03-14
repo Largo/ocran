@@ -8,8 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
-        ruby: ['4.0']
+        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,9 +36,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
-        ruby: ['4.0']
-    runs-on: macos-latest
+        os: [macos-14, macos-15-intel]
+        ruby: ['3.2', '3.3', '3.4', '4.0']
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,7 +61,7 @@ jobs:
       - name: Upload packed binary
         uses: actions/upload-artifact@v4
         with:
-          name: zlib-macos-${{ matrix.ruby }}
+          name: zlib-macos-${{ matrix.os }}-${{ matrix.ruby }}
           path: zlib_packed
           retention-days: 1
 
@@ -71,14 +70,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
-        ruby: ['4.0']
-    runs-on: macos-latest
+        os: [ macos-14, macos-15-intel ]
+        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Download packed binary
         uses: actions/download-artifact@v4
         with:
-          name: zlib-macos-${{ matrix.ruby }}
+          name: zlib-macos-${{ matrix.os }}-${{ matrix.ruby }}
 
       - name: Run packed executable
         run: |
@@ -90,8 +89,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ windows-latest ]
-        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
-        ruby: ['4.0']
+        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -159,8 +157,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ['4.0']
-    runs-on: windows-latest
+        os: [ windows-latest ]
+        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Download packed binary
         uses: actions/download-artifact@v4

@@ -13,8 +13,8 @@ jobs:
         include:
           - os: windows-latest   # x64-mingw-ucrt
           - os: ubuntu-latest    # x86_64-linux
-          - os: macos-latest     # arm64-darwin  (Apple Silicon)
-          - os: macos-13         # x86_64-darwin (Intel)
+          - os: macos-14     # arm64-darwin  (Apple Silicon)
+          - os: macos-15-intel         # x86_64-darwin (Intel)
 
     runs-on: ${{ matrix.os }}
 
