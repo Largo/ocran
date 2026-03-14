@@ -250,6 +250,14 @@ module Ocran
 
         spec.extend(GemSpecQueryable)
 
+        verbose "\tgem_dir: #{spec.gem_dir}"
+        verbose "\tgem_dir exists: #{File.directory?(spec.gem_dir)}"
+        loaded_matches = include.include?(:loaded) ? features.select { |f| f.subpath?(spec.gem_dir) } : []
+        verbose "\t:loaded candidates in features: #{loaded_matches.size}"
+        loaded_matches.each { |f| verbose "\t  loaded: #{f}" }
+        resource_count = include.include?(:files) && File.directory?(spec.gem_dir) ? spec.resource_files.size : 0
+        verbose "\t:files (resource_files) count: #{resource_count}"
+
         actual_files = spec.find_gem_files(include, features)
         say "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
 
@@ -328,23 +336,28 @@ module Ocran
       features.each do |feature|
         load_path = @post_env.find_load_path(feature)
         if load_path.nil?
+          verbose "\tlibfile: #{feature} -> src (no load path)"
           source_files << feature
           next
         end
         abs_load_path = Pathname(@post_env.expand_path(load_path))
         if abs_load_path == pre_working_directory
+          verbose "\tlibfile: #{feature} -> src (pre-working-dir load path)"
           source_files << feature
         elsif feature.subpath?(exec_prefix)
           # Features found in the Ruby installation are put in the
           # temporary Ruby installation.
+          verbose "\tlibfile: #{feature} -> exec_prefix"
           builder.duplicate_to_exec_prefix(feature)
         elsif (gem_path = GemSpecQueryable.find_gem_path(feature))
           # Features found in any other Gem path (e.g. ~/.gems) is put
           # in a special 'gems' folder.
+          verbose "\tlibfile: #{feature} -> gem_home"
           builder.duplicate_to_gem_home(feature, gem_path)
         elsif feature.subpath?(src_prefix) || abs_load_path == working_directory
           # Any feature found inside the src_prefix automatically gets
           # added as a source file (to go in 'src').
+          verbose "\tlibfile: #{feature} -> src (src_prefix/working_dir)"
           source_files << feature
           # Add the load path unless it was added by the script while
           # running (or we assume that the script can also set it up
@@ -354,6 +367,7 @@ module Ocran
           # Any feature that exist in a load path added by the script
           # itself is added as a file to go into the 'src' (src_prefix
           # will be adjusted below to point to the common parent).
+          verbose "\tlibfile: #{feature} -> src (script-added load path)"
           source_files << feature
         else
           # All other feature that can not be resolved go in the the
@@ -439,9 +453,37 @@ module Ocran
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
       load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
+
+      # On POSIX systems, also add the packed Ruby standard library directories
+      # to RUBYLIB. The Ruby binary has a compiled-in prefix pointing to the build
+      # host, which doesn't exist on other systems (e.g., Docker with no Ruby).
+      # By adding the extract-dir equivalents of rubylibdir, sitelibdir, etc. to
+      # RUBYLIB, Ruby can find rubygems and the standard library in the packed tree.
+      unless Gem.win_platform?
+        core_lib_paths = all_core_dir
+          .select { |dir| dir.subpath?(exec_prefix) }
+          .map { |dir| dir.relative_path_from(exec_prefix) }
+        archdir = Pathname(RbConfig::CONFIG["archdir"])
+        if archdir.subpath?(exec_prefix)
+          core_lib_paths << archdir.relative_path_from(exec_prefix)
+        end
+        load_path = core_lib_paths + load_path
+      end
+
       builder.set_env_path("RUBYLIB", *load_path)
       builder.set_env_path("GEM_HOME", GEMDIR)
-      builder.set_env_path("GEM_PATH", GEMDIR)
+
+      gem_paths = [GEMDIR]
+      # On POSIX, default gems (e.g. error_highlight) are stored under the Ruby
+      # installation's gem dir (Gem.default_dir), not in GEMDIR. Include it in
+      # GEM_PATH so RubyGems can find and activate them in the extracted tree.
+      unless Gem.win_platform?
+        default_gem_dir = Pathname(Gem.default_dir)
+        if default_gem_dir.subpath?(exec_prefix)
+          gem_paths << default_gem_dir.relative_path_from(exec_prefix)
+        end
+      end
+      builder.set_env_path("GEM_PATH", *gem_paths)
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / ruby_executable
