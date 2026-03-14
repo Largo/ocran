@@ -250,7 +250,7 @@ class TestOcran < Minitest::Test
   def test_output_option
     with_fixture 'helloworld' do
       assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output", "goodbyeworld.exe"]))
-      refute File.exist?("helloworld.exe")
+      refute File.exist?(exe_name("helloworld"))
       assert File.exist?("goodbyeworld.exe")
     end
   end
@@ -494,7 +494,7 @@ class TestOcran < Minitest::Test
   def test_relative_require_rubylib
     with_fixture 'relloadpath' do
       each_path_combo "bin/external.rb", "lib", "bin/sub" do |script, *loadpaths|
-        with_env 'RUBYLIB' => loadpaths.join(';') do
+        with_env 'RUBYLIB' => loadpaths.join(File::PATH_SEPARATOR) do
           assert system('ruby', ocran, script, *DefaultArgs)
         end
         exe = exe_name('external')
@@ -931,9 +931,10 @@ class TestOcran < Minitest::Test
   def test_multibyte_resource_file
     with_fixture 'multibyte_file' do
       assert system("ruby", ocran, "resource.rb", "äあ💎.txt", *DefaultArgs)
-      assert File.exist?("resource.exe")
-      pristine_env "resource.exe" do
-        assert system("resource.exe")
+      exe = exe_name("resource")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -977,9 +978,10 @@ class TestOcran < Minitest::Test
     skip "tk gem not available" unless Gem::Specification.find_all_by_name("tk").any? #or ENV["GITHUB_ACTIONS"]
     with_fixture "tk" do
       assert system("ruby", ocran, "tk.rb", *DefaultArgs)
-      assert File.exist?("tk.exe")
-      pristine_env "tk.exe" do
-         assert system("tk.exe")
+      exe = exe_name("tk")
+      assert File.exist?(exe)
+      pristine_env exe do
+         assert system(exe)
          puts "sucessfully tested tk" if $?.success?
       end
     end
