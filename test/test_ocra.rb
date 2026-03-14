@@ -615,7 +615,7 @@ class TestOcran < Minitest::Test
         exe = exe_name("environment")
         pristine_env exe do
           assert system(exe)
-          env = Marshal.load(File.open("environment", "rb") { |f| f.read })
+          env = Marshal.load(File.open("environment.out", "rb") { |f| f.read })
           # Verify that the specified RUBYOPT is included in the execution environment.
           # NOTE: In Ruby 3.2 and later, Bundler may add additional options to RUBYOPT.
           assert_includes env['RUBYOPT'], "-rtime"
@@ -636,7 +636,7 @@ class TestOcran < Minitest::Test
         exe = exe_name("environment")
         pristine_env exe do
           assert system(exe)
-          env = Marshal.load(File.open("environment", "rb") { |f| f.read })
+          env = Marshal.load(File.open("environment.out", "rb") { |f| f.read })
           assert_equal specified_rubyopt, env['RUBYOPT']
         end
       end
@@ -660,8 +660,8 @@ class TestOcran < Minitest::Test
       exe = exe_name("environment")
       pristine_env exe do
         assert system(exe)
-        env = Marshal.load(File.open("environment", "rb") { |f| f.read })
-        expected_path = File.expand_path(exe).tr('/','\\')
+        env = Marshal.load(File.open("environment.out", "rb") { |f| f.read })
+        expected_path = Gem.win_platform? ? File.expand_path(exe).tr('/','\\') : File.expand_path(exe)
         assert_equal expected_path, env['OCRAN_EXECUTABLE']
       end
     end
