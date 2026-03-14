@@ -1149,7 +1149,7 @@ class TestOcran < Minitest::Test
       assert File.executable?(exe), "Expected Contents/MacOS/helloworld to be executable"
 
       pristine_env exe do
-        assert system(exe)
+        assert system(File.basename(exe))
       end
     end
   end
