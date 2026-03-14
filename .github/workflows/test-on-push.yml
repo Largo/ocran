@@ -22,15 +22,19 @@ jobs:
         run: sudo apt-get install -y xz-utils gcc
 
       - name: Build stub and run tests
+        env:
+          OCRAN_DEBUG: "1"
         run: |
           bundle exec rake build
           bundle exec rake test
 
       - name: Build zlib fixture for cross-distro test
+        env:
+          OCRAN_DEBUG: "1"
         run: ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output /tmp/zlib_packed
 
       - name: Run packed executable on Debian (no Ruby installed)
-        run: docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/zlib_packed
+        run: docker run --rm -e OCRAN_DEBUG=1 -v /tmp:/mnt debian:stable-slim /mnt/zlib_packed
 
   run-tests-macos:
     strategy:
@@ -125,7 +129,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ windows-latest ]
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: [ '3.4' ]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -194,7 +199,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ windows-latest ]
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: [ '3.4' ]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Download packed binary

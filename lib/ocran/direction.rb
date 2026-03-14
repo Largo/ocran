@@ -98,21 +98,14 @@ module Ocran
       features = @post_env.loaded_features.map { |feature| Pathname(feature) }
 
       # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
-      # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually.
-      # We try to find it relative to rubygems.rb to ensure it's picked up even if it's not in the standard LOAD_PATH.
-      kernel_require = Pathname("rubygems/core_ext/kernel_require.rb")
-      unless features.any? { |f| f.to_s.end_with?(kernel_require.to_s) }
-        rubygems_rb = features.find { |f| f.to_s.end_with?("rubygems.rb") }
-        if rubygems_rb
-          kernel_require_path = rubygems_rb.dirname / kernel_require
-          if kernel_require_path.exist?
-            features.push(kernel_require_path)
-          else
-            features.push(kernel_require)
-          end
-        else
-          features.push(kernel_require)
-        end
+      # rubygems/core_ext/kernel_require.rb is loaded via IO.read+eval rather than require,
+      # so it never appears in $LOADED_FEATURES and must be added manually.
+      # Use RbConfig::CONFIG["rubylibdir"] directly so the path is always correct,
+      # regardless of Ruby version or platform path separator conventions.
+      kernel_require_rel = "rubygems/core_ext/kernel_require.rb"
+      unless features.any? { |f| f.to_posix.end_with?(kernel_require_rel) }
+        kernel_require_path = Pathname(RbConfig::CONFIG["rubylibdir"]) / kernel_require_rel
+        features.push(kernel_require_path) if kernel_require_path.exist?
       end
 
       # Convert all relative paths to absolute paths before building.
