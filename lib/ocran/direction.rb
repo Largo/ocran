@@ -332,9 +332,17 @@ module Ocran
         else
           # All other feature that can not be resolved go in the the
           # Ruby sitelibdir. This is automatically in the load path
-          # when Ruby starts.
-          inst_sitelibdir = sitelibdir.relative_path_from(exec_prefix)
-          builder.cp(feature, inst_sitelibdir / feature.relative_path_from(abs_load_path))
+          # when Ruby starts on Windows.
+          # On Linux the ruby binary has a compile-time prefix so the
+          # extraction dir's sitelibdir is not on the load path; put
+          # the file in src instead and add the load path to RUBYLIB.
+          if Gem.win_platform?
+            inst_sitelibdir = sitelibdir.relative_path_from(exec_prefix)
+            builder.cp(feature, inst_sitelibdir / feature.relative_path_from(abs_load_path))
+          else
+            source_files << feature
+            src_load_path << abs_load_path unless src_load_path.include?(abs_load_path)
+          end
         end
       end
 

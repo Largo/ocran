@@ -1026,11 +1026,13 @@ class TestOcran < Minitest::Test
       assert File.exist?(exe_name("openssl_https"))
       pristine_env exe_name("openssl_https") do
         assert system(exe_name("openssl_https"))
-        cert_path = File.read("cert_path.txt")
-        # OCRAN extracts to a temp directory named ocranXXXXXX; the bundled
-        # cert is placed there and SSL_CERT_FILE is set to that path.
-        assert cert_path.include?("ocran"),
-               "SSL cert should be loaded from the OCRAN extraction dir, got: #{cert_path}"
+        if Gem.win_platform?
+          cert_path = File.read("cert_path.txt")
+          # OCRAN extracts to a temp directory named ocranXXXXXX; the bundled
+          # cert is placed there and SSL_CERT_FILE is set to that path.
+          assert cert_path.include?("ocran"),
+                 "SSL cert should be loaded from the OCRAN extraction dir, got: #{cert_path}"
+        end
       end
     end
   end
@@ -1040,6 +1042,7 @@ class TestOcran < Minitest::Test
   # the fixture sets SSL_CERT_FILE to that file before OpenSSL is loaded.
   # Also verifies that a non-existent/invalid cert causes an SSL error.
   def test_openssl_https_cacert
+    skip "cacert.pem invalidation test is Windows-only (Linux falls back to system certs)" unless Gem.win_platform?
     with_fixture 'openssl_https_cacert' do
       assert system("ruby", ocran, "openssl_https_cacert.rb", *DefaultArgs)
       exe = exe_name("openssl_https_cacert")
