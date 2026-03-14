@@ -5,26 +5,34 @@ require_relative "lib/ocran/version"
 Gem::Specification.new do |spec|
   spec.name = "ocran"
   spec.version = Ocran::VERSION
-  spec.authors = ["Andi Idogawa", "Lars Christensen"]
+  spec.authors = ["Andi Idogawa", "shinokaro", "Lars Christensen"]
   spec.email = ["andi@idogawa.com"]
 
   spec.licenses = ["MIT"]
 
-  spec.summary = "OCRAN (One-Click Ruby Application Next) builds Windows executables from Ruby source code."
-  spec.description = "OCRAN (One-Click Ruby Application Next) builds Windows executables from Ruby source code. 
-  The executable is a self-extracting, self-running executable that contains the Ruby interpreter, your source code and any additionally needed ruby libraries or DLL.
-  
-  This is a fork of OCRA that is compatible with ruby version after 3.2.
-  Migration guide: make sure to write ocran instead of ocra in your code. For instance: OCRAN_EXECUTABLE
+  spec.summary = "OCRAN (One-Click Ruby Application Next) packages Ruby applications for distribution on Windows, Linux, and macOS."
+  spec.description = <<~DESC
+    OCRAN (One-Click Ruby Application Next) packages Ruby applications for
+    distribution. It bundles your script, the Ruby interpreter, gems, and native
+    libraries into a self-contained artifact that runs without requiring Ruby to
+    be installed on the target machine.
 
-  usage: 
-    ocra helloworld.rb
-    helloworld.exe
+    Three output formats are supported on all platforms:
+    - Self-extracting executable (.exe on Windows, native binary on Linux/macOS)
+    - Directory with a launch script (--output-dir)
+    - Zip archive with a launch script (--output-zip)
 
-  See readme at https://github.com/largo/ocran
-  Report problems in the github issues. Contributions welcome.
-  This gem contains executables. We plan to build them on github actions for security.
-  "
+    This is a fork of OCRA maintained for Ruby 3.2+ compatibility.
+    Migration guide: replace OCRA_EXECUTABLE with OCRAN_EXECUTABLE in your code.
+
+    Usage:
+      ocran helloworld.rb          # builds helloworld.exe / helloworld
+      ocran --output-dir out/ app.rb
+      ocran --output-zip app.zip app.rb
+
+    See readme at https://github.com/largo/ocran
+    Report problems at https://github.com/largo/ocran/issues
+  DESC
   spec.homepage = "https://github.com/largo/ocran"
   spec.required_ruby_version = ">= 3.2.0"
 
