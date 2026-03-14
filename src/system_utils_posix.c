@@ -1,3 +1,6 @@
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -357,18 +360,27 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size) {
 /* ===== Path utilities ===== */
 
 char *GetImagePath(void) {
-    /* On Linux, the running executable can be found via /proc/self/exe */
     static char path_buffer[4096];
+#ifdef __APPLE__
+    uint32_t size = sizeof(path_buffer);
+    if (_NSGetExecutablePath(path_buffer, &size) != 0) {
+        FATAL("GetImagePath: _NSGetExecutablePath failed");
+        return NULL;
+    }
+#elif defined(__linux__)
+    /* On Linux, the running executable can be found via /proc/self/exe */
     ssize_t len = readlink("/proc/self/exe", path_buffer, sizeof(path_buffer) - 1);
 
     if (len < 0) {
         FATAL("GetImagePath: readlink(\"/proc/self/exe\") failed: %s", strerror(errno));
         return NULL;
     }
-
     path_buffer[len] = '\0';
+#else
+#error "GetImagePath not implemented for this platform"
+#endif
 
-    char *result = malloc(len + 1);
+    char *result = malloc(strlen(path_buffer) + 1);
     if (!result) {
         FATAL("GetImagePath: malloc failed");
         return NULL;
@@ -398,7 +410,7 @@ char *GetTempDirectoryPath(void) {
 /* ===== Process and signal handling ===== */
 
 bool InitializeSignalHandling(void) {
-    /* On Linux, the parent process ignores SIGINT and SIGTERM during
+    /* On POSIX systems, the parent process ignores SIGINT and SIGTERM during
        initialization and cleanup. The child process will reset these to
        SIG_DFL before execv-ing the target application. */
 

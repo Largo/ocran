@@ -357,7 +357,7 @@ static const void *find_signature(const void *buffer, size_t buffer_size)
         return sig;
     }
 #else
-    // Linux: no PE headers, just check the end of the file
+    // POSIX: no PE headers, just check the end of the file
     if (buffer_size < sizeof(Signature)) {
         return NULL;
     }

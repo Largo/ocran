@@ -66,7 +66,7 @@ module Ocran
       if Gem.win_platform?
         require_relative "library_detector"
       else
-        require_relative "library_detector_linux"
+        require_relative "library_detector_posix"
       end
       LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
     end
@@ -131,12 +131,12 @@ module Ocran
       say "Adding ruby executable #{ruby_executable}"
       builder.copy_to_bin(bindir / ruby_executable, ruby_executable)
       if libruby_so
-        # On Linux, libruby.so is in libdir; on Windows, it's in bindir
+        # On POSIX systems, libruby.so is in libdir; on Windows, it's in bindir
         libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
         builder.copy_to_bin(libruby_src, libruby_so)
       end
 
-      # On Linux, set LD_LIBRARY_PATH to find bundled shared libraries
+      # On POSIX systems, set LD_LIBRARY_PATH to find bundled shared libraries
       unless Gem.win_platform?
         builder.export("LD_LIBRARY_PATH", File.join(EXTRACT_ROOT, BINDIR.to_s))
       end
@@ -333,7 +333,7 @@ module Ocran
           # All other feature that can not be resolved go in the the
           # Ruby sitelibdir. This is automatically in the load path
           # when Ruby starts on Windows.
-          # On Linux the ruby binary has a compile-time prefix so the
+          # On POSIX systems the ruby binary has a compile-time prefix so the
           # extraction dir's sitelibdir is not on the load path; put
           # the file in src instead and add the load path to RUBYLIB.
           if Gem.win_platform?

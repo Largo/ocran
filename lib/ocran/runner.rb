@@ -97,7 +97,7 @@ module Ocran
         if Gem.win_platform?
           direction.build_inno_setup_installer
         else
-          raise "Inno Setup is not supported on Linux"
+          raise "Inno Setup is only supported on Windows"
         end
       else
         direction.build_stab_exe

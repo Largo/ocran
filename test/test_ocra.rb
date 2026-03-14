@@ -55,7 +55,7 @@ class TestOcran < Minitest::Test
             yield
           end
         else
-          # On Linux, use minimal PATH with current directory for testing executables
+          # On POSIX systems, use minimal PATH with current directory for testing executables
           with_env "PATH" => ".:/usr/local/bin:/usr/bin:/bin" do
             yield
           end
@@ -134,7 +134,7 @@ class TestOcran < Minitest::Test
       yield(*args)
     end
 
-    # In parent directory of first file (skip on Linux: output name can collide
+    # In parent directory of first file (skip on POSIX systems: output name can collide
     # with the script's parent directory since there is no .exe extension)
     if Gem.win_platform?
       basedir = basedir.parent
@@ -1044,7 +1044,7 @@ class TestOcran < Minitest::Test
   # the fixture sets SSL_CERT_FILE to that file before OpenSSL is loaded.
   # Also verifies that a non-existent/invalid cert causes an SSL error.
   def test_openssl_https_cacert
-    skip "cacert.pem invalidation test is Windows-only (Linux falls back to system certs)" unless Gem.win_platform?
+    skip "cacert.pem invalidation test is Windows-only (POSIX systems fall back to system certs)" unless Gem.win_platform?
     with_fixture 'openssl_https_cacert' do
       assert system("ruby", ocran, "openssl_https_cacert.rb", *DefaultArgs)
       exe = exe_name("openssl_https_cacert")

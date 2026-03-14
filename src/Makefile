@@ -1,16 +1,17 @@
 # Detect host OS
 UNAME           := $(shell uname -s 2>/dev/null || echo Windows)
+IS_POSIX        := $(filter $(UNAME),Linux Darwin)
 
 CC              := gcc
 CFLAGS          := -Wall -O2 -DWITH_LZMA -Ilzma
 LDFLAGS         := -s
 
-ifeq ($(UNAME),Linux)
+ifneq ($(IS_POSIX),)
   EXEEXT          :=
   LDLIBS          :=
   GUI_LDFLAGS     :=
   STUB_CFLAGS     := $(CFLAGS) -D_CONSOLE
-  SYSTEM_UTILS_SRC := system_utils_linux.c
+  SYSTEM_UTILS_SRC := system_utils_posix.c
   PROG_NAMES      := stub
   RESOURCE_OBJ    :=
 else
@@ -49,7 +50,7 @@ all: $(BINARIES)
 %_window.o: %.c
 	$(CC) $(STUBW_CFLAGS) -c $< -o $@
 
-ifneq ($(UNAME),Linux)
+ifeq ($(IS_POSIX),)
 stub.res: stub.rc
 	windres -i stub.rc -O coff -o stub.res
 endif
@@ -57,7 +58,7 @@ endif
 stub$(EXEEXT): $(COMMON_OBJS) $(CONSOLE_OBJS)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-ifneq ($(UNAME),Linux)
+ifeq ($(IS_POSIX),)
 stubw$(EXEEXT): $(COMMON_OBJS) $(WINDOW_OBJS)
 	$(CC) $(LDFLAGS) $(GUI_LDFLAGS) $^ $(LDLIBS) -o $@
 

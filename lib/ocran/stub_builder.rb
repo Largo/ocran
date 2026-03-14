@@ -28,17 +28,19 @@ module Ocran
     LZMA_PATH = WINDOWS ? File.expand_path("lzma.exe", base_dir) : nil
     EDICON_PATH = WINDOWS ? File.expand_path("edicon.exe", base_dir) : nil
 
-    def self.find_linux_lzma_cmd
+    def self.find_posix_lzma_cmd
       if system("which lzma > /dev/null 2>&1")
         ["lzma", "--compress", "--stdout"]
       elsif system("which xz > /dev/null 2>&1")
         ["xz", "--format=lzma", "--compress", "--stdout"]
+      elsif File.exist?("/opt/homebrew/bin/lzma")
+        ["/opt/homebrew/bin/lzma", "--compress", "--stdout"]
       else
         nil
       end
     end
 
-    LZMA_CMD = WINDOWS ? [LZMA_PATH, "e", "-si", "-so"] : find_linux_lzma_cmd
+    LZMA_CMD = WINDOWS ? [LZMA_PATH, "e", "-si", "-so"] : find_posix_lzma_cmd
 
     attr_reader :data_size
 

@@ -32,6 +32,28 @@ jobs:
       - name: Run packed executable on Debian (no Ruby installed)
         run: docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/helloworld_packed
 
+  run-tests-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: brew install xz
+
+      - name: Build stub and run tests
+        run: |
+          bundle exec rake build
+          bundle exec rake test
+
   run-tests-windows:
     strategy:
       fail-fast: false
