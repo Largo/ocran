@@ -255,6 +255,75 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Test that --output-dir produces a directory with the expected layout and
+  # a working launch script.
+  def test_output_dir
+    with_fixture 'helloworld' do
+      outdir = File.expand_path("helloworld_dir")
+      assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output-dir", outdir]))
+
+      assert Dir.exist?(outdir),               "--output-dir did not create directory"
+      assert Dir.exist?(File.join(outdir, "bin")), "bin/ missing from output directory"
+      assert Dir.exist?(File.join(outdir, "src")), "src/ missing from output directory"
+
+      launch_script = if Gem.win_platform?
+                        File.join(outdir, "helloworld.bat")
+                      else
+                        File.join(outdir, "helloworld.sh")
+                      end
+      assert File.exist?(launch_script), "Launch script not found: #{launch_script}"
+
+      Bundler.with_original_env do
+        if Gem.win_platform?
+          assert system("cmd", "/c", launch_script)
+        else
+          assert system("sh", launch_script)
+        end
+      end
+    ensure
+      FileUtils.rm_rf(outdir)
+    end
+  end
+
+  # Test that --output-zip produces a zip archive whose contents unpack to a
+  # working directory layout with a functional launch script.
+  def test_output_zip
+    unless Gem.win_platform?
+      skip "zip command not available" unless system("which zip > /dev/null 2>&1")
+    end
+
+    with_fixture 'helloworld' do
+      zip_path = File.expand_path("helloworld.zip")
+      assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output-zip", zip_path]))
+
+      assert File.exist?(zip_path), "Zip file not created"
+      assert File.size(zip_path) > 0, "Zip file is empty"
+
+      Dir.mktmpdir(".ocrantest-zip-") do |tmpdir|
+        if Gem.win_platform?
+          assert system("powershell", "-NoProfile", "-Command",
+                        "Expand-Archive -Path '#{zip_path}' -DestinationPath '#{tmpdir}' -Force")
+          launch_script = File.join(tmpdir, "helloworld.bat")
+        else
+          assert system("unzip", "-q", zip_path, "-d", tmpdir)
+          launch_script = File.join(tmpdir, "helloworld.sh")
+        end
+
+        assert File.exist?(launch_script), "Launch script missing from zip: #{launch_script}"
+        assert Dir.exist?(File.join(tmpdir, "bin")), "bin/ missing from zip"
+        assert Dir.exist?(File.join(tmpdir, "src")), "src/ missing from zip"
+
+        Bundler.with_original_env do
+          if Gem.win_platform?
+            assert system("cmd", "/c", launch_script)
+          else
+            assert system("sh", launch_script)
+          end
+        end
+      end
+    end
+  end
+
   # Test that we can specify a directory to be recursively included
   def test_directory_on_cmd_line
     with_fixture 'subdir' do
