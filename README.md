@@ -6,240 +6,264 @@ issues :: http://github.com/largo/ocran/issues
 
 ## Description
 
-OCRAN (One-Click Ruby Application Next) builds Windows executables from Ruby
-source code. The executable is a self-extracting, self-running
-executable that contains the Ruby interpreter, your source code and
-any additionally needed ruby libraries or DLL.
+OCRAN (One-Click Ruby Application Next) packages Ruby applications for
+distribution. It bundles your script, the Ruby interpreter, gems, and native
+libraries into a single self-contained artifact that runs without requiring
+Ruby to be installed on the target machine.
 
-OCRAN is a fork of Ocra (https://github.com/larsch/ocra) in order to
-maintain compatibility with newer Ruby versions after 3.2
+OCRAN supports three output formats, all cross-platform:
+
+* **Self-extracting executable** — bundles everything into a single binary that unpacks and runs transparently, with no Ruby installation required. Produces a `.exe` on Windows, and a native executable on Linux and macOS.
+* **Directory** (`--output-dir`) — copies all files into a folder with a ready-to-run launch script (`.sh` on Linux/macOS, `.bat` on Windows).
+* **Zip archive** (`--output-zip`) — same as directory output, packed into a `.zip`.
+
+OCRAN is a fork of [OCRA](https://github.com/larsch/ocra) maintained for
+Ruby 3.2+ compatibility.
 
 ## Recommended usage
-Most commonly you will needs this, when you want to ship your program to windows servers / users that don't have Ruby installed.
-By default each time the .exe is opened it will extract the ruby interpeter along with the code to the temp directory.
-Since this process takes time, we recommend using the innosetup edition which will install your program together with the ruby intepreter into
-a directory.
+
+The most common use-case is shipping a program to Windows servers or users
+who do not have Ruby installed. By default, each time the `.exe` is opened it
+extracts the Ruby interpreter and your code to a temporary directory and runs
+them from there.
+
+Because extraction takes time on each launch, consider using the Inno Setup
+option (`--innosetup`) to produce a proper installer that extracts once to a
+permanent directory.
+
+For cross-platform packaging or CI artifacts, use `--output-dir` or
+`--output-zip` to produce a portable directory/archive that runs with the
+bundled Ruby on Linux, macOS, or Windows.
 
 ## Features
 
-* LZMA Compression (optional, default on)
-* Both windowed/console mode supported
-* Includes gems based on usage, or from a Bundler Gemfile
+* **Windows/Linux/macOS executable** — self-extracting, self-running executable (primary output)
+* **Directory output** — portable directory with a launch script (`--output-dir`)
+* **Zip archive output** — portable zip with a launch script (`--output-zip`)
+* LZMA compression (optional, default on, for `.exe` only)
+* Both windowed and console mode supported (Windows)
+* Gems included based on actual usage, or from a Bundler Gemfile
+* Code-signing compatible
+* Multibyte (UTF-8) path support on Windows 10 1903+
 
 ## Problems & Bug Reporting
 
-* Windows support only
-
-If you experience problems with OCRAN or have found a bug, please use
-the issue tracker on GitHub (http://github.com/largo/ocran/issues).
+If you experience problems with OCRAN or have found a bug, please use the
+issue tracker on GitHub (http://github.com/largo/ocran/issues).
 
 ## Safety
 
-As this gem comes with binary blobs, we have taken actions to insure your safety.
-The gem releases are securely built on Github Actions. Feel free verify that it matches the version on rubygems.
-This repository ships with LZMA.exe from [The official release of ip7z/7zip](https://github.com/ip7z/7zip/releases): Version 22.01 from lzma2201.7z
-The LZMA.exe is used to compress the executable.
-Other files such as stub.exe, stubw.exe and edicon.exe are built from source code in the repository.
+As this gem ships with binary blobs, releases are securely built on GitHub
+Actions. Feel free to verify that the published gem matches the source.
+
+This repository includes `lzma.exe` from the
+[official ip7z/7zip release](https://github.com/ip7z/7zip/releases)
+(version 22.01, from `lzma2201.7z`), used to compress Windows executables.
+
+`stub.exe`, `stubw.exe`, and `edicon.exe` are compiled from source in this
+repository.
 
 ## Installation
 
-Gem:
-
     gem install ocran
 
-Alternatively you can download the gem at either
-http://rubygems.org/gems/ocran or
+Alternatively, download from http://rubygems.org/gems/ocran or
 https://github.com/largo/ocran/releases/.
 
 ## Synopsis
 
-### Building an executable:
+### Building a Windows executable:
 
     ocran script.rb
 
-Will package `script.rb`, the Ruby interpreter and all
-dependencies (gems and DLLs) into an executable named
-`script.exe`.
+Packages `script.rb`, the Ruby interpreter, and all dependencies (gems and
+DLLs) into `script.exe`.
+
+### Building a portable directory (Linux / macOS / Windows):
+
+    ocran --output-dir myapp/ script.rb
+
+Copies all files into `myapp/` and writes a `script.sh` (or `script.bat` on
+Windows) launch script.
+
+### Building a zip archive:
+
+    ocran --output-zip myapp.zip script.rb
+
+Same as `--output-dir`, but packages the result into a zip file. Requires
+`zip` on Linux/macOS or PowerShell on Windows.
 
 ### Command line:
-  
+
     ocran [options] script.rb [<other files> ...] [-- <script arguments> ...]
 
 ### Options:
 
     ocran --help
 
-#### Ocran options:
+#### General options:
 
-* `--help`: Display available command-line options and information.
+* `--help`: Display available command-line options.
 * `--quiet`: Suppress all output during the build process.
-* `--verbose`: Provide detailed output during the build process, useful for debugging.
-* `--version`: Display the version number of OCRAN and exit.
+* `--verbose`: Provide detailed output during the build process.
+* `--version`: Display the OCRAN version number and exit.
 
 #### Packaging options:
 
 * `--dll <dllname>`: Include additional DLLs from the Ruby `bin` directory.
 * `--add-all-core`: Add all standard Ruby core libraries to the executable.
-* `--gemfile <file>`: Include all gems and their dependencies listed in a specified Bundler `Gemfile`.
-* `--no-enc`: Exclude encoding support files to reduce the size of the executable.
+* `--gemfile <file>`: Include all gems and dependencies listed in a Bundler `Gemfile`.
+* `--no-enc`: Exclude encoding support files to reduce output size.
 
 #### Gem content detection modes:
 
-These options control which files from the included gems are added to the executable.
+These options control which files from included gems are added to the output.
 
-* `--gem-minimal[=gem1,..]`: Include only the scripts that are actually loaded during the dependency run.
-* `--gem-guess[=gem1,..]`: Include loaded scripts and a "best guess" of other necessary files (DEFAULT).
+* `--gem-minimal[=gem1,..]`: Include only scripts actually loaded during the dependency run.
+* `--gem-guess[=gem1,..]`: Include loaded scripts and a best guess of other needed files (DEFAULT).
 * `--gem-all[=gem1,..]`: Include all scripts and important files from the gem.
-* `--gem-full[=gem1,..]`: Include every single file found in the gem's directory.
-* `--gem-spec[=gem1,..]`: Include files listed in the gem's gemspec (Note: Compatibility issues with newer RubyGems).
+* `--gem-full[=gem1,..]`: Include every file in the gem directory.
+* `--gem-spec[=gem1,..]`: Include files listed in the gemspec (not compatible with newer RubyGems).
 
-You can also fine-tune content inclusion using these flags:
+Fine-tuning flags:
 
-* `--[no-]gem-scripts[=..]`: Include/exclude non-loaded script files (.rb, .rbw).
-* `--[no-]gem-files[=..]`: Include/exclude other files like data files.
-* `--[no-]gem-extras[=..]`: Include/exclude "extra" files like READMEs, tests, and C sources.
+* `--[no-]gem-scripts[=..]`: Include/exclude non-loaded script files (`.rb`, `.rbw`).
+* `--[no-]gem-files[=..]`: Include/exclude data files.
+* `--[no-]gem-extras[=..]`: Include/exclude extras (READMEs, tests, C sources).
 
 #### Auto-detection options:
 
-* `--no-dep-run`: Do not run the source script to check for dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies.
-* `--no-autoload`: Do not attempt to load or include `autoload`ed constants.
-* `--no-autodll`: Disable the automatic detection of runtime DLL dependencies.
+* `--no-dep-run`: Skip running the script to detect dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies. Requires `--add-all-core` and `--gem-full`.
+* `--no-autoload`: Do not attempt to load `autoload`ed constants.
+* `--no-autodll`: Disable automatic detection of runtime DLL dependencies.
 
 #### Output options:
 
-* `--output <file>`: Specify the name and path of the generated executable. Defaults to `./<scriptname>.exe`.
-* `--no-lzma`: Disable LZMA compression. This results in faster build times but a significantly larger executable.
-* `--innosetup <file>`: Use the specified Inno Setup script (.iss) to create a Windows installer instead of a single standalone executable.
+* `--output <file>`: Name the generated executable. Defaults to `./<scriptname>.exe` on Windows and `./<scriptname>` on Linux/macOS.
+* `--output-dir <dir>`: Output all files to a directory with a launch script instead of building an executable. Works on Linux, macOS, and Windows.
+* `--output-zip <file>`: Output a zip archive containing all files and a launch script. Requires `zip` (Linux/macOS) or PowerShell (Windows).
+* `--no-lzma`: Disable LZMA compression (faster build, larger executable).
+* `--innosetup <file>`: Use an Inno Setup script (`.iss`) to create a Windows installer.
 
 #### Executable options:
 
-* `--windows`: Force the creation of a Windows GUI application (uses `rubyw.exe`).
-* `--console`: Force the creation of a console application (uses `ruby.exe`).
-* `--chdir-first`: Changes the working directory to the application's temporary extraction directory before the script starts.
-* `--icon <ico>`: Replace the default Ruby icon with a custom `.ico` file.
-* `--rubyopt <str>`: Set the `RUBYOPT` environment variable that will be used when the executable runs.
-* `--debug`: Enables verbose output when the generated executable is run.
-* `--debug-extract`: The executable will unpack its contents to a local directory and will not delete them after execution, which is helpful for troubleshooting extraction issues.
+* `--windows`: Force a Windows GUI application (uses `rubyw.exe`). (Windows only)
+* `--console`: Force a console application (uses `ruby.exe`). (Windows only)
+* `--chdir-first`: Change working directory to the app's extraction directory before the script starts.
+* `--icon <ico>`: Replace the default icon with a custom `.ico` file.
+* `--rubyopt <str>`: Set `RUBYOPT` when the executable runs.
+* `--debug`: Enable verbose output when the generated executable runs.
+* `--debug-extract`: Unpack to a local directory and do not delete after execution (useful for troubleshooting).
 
-  
 ### Compilation:
 
-* OCRAN will load your script (using `Kernel#load`) and build
-  the executable when it exits.
-
-* Your program should 'require' all necessary files when invoked without
-  arguments, so OCRAN can detect all dependencies.
-
-* DLLs are detected automatically but only those located in your Ruby
-  installation are included.
-
-* .rb files will become console applications. .rbw files will become
-  windowed application (without a console window popping
-  up). Alternatively, use the `--console` or
-  `--windows` options.
+* OCRAN runs your script (using `Kernel#load`) and builds the output when it exits.
+* Your program should `require` all necessary files when invoked without arguments so OCRAN can detect all dependencies.
+* DLLs are detected automatically; only those within your Ruby installation are included.
+* `.rb` files become console applications; `.rbw` files become windowed applications (without a console window popping up on Windows). Use `--console` or `--windows` to override.
 
 ### Running your application:
 
-* The 'current working directory' is not changed by OCRAN when running
-  your application. You must change to the installation or temporary
+* The working directory is not changed by OCRAN unless you use `--chdir-first`. You must change to the installation or temporary
   directory yourself. See also below.
-* When the application is running, the OCRAN_EXECUTABLE environment
-  variable points to the .exe (with full path).
-* The temporary location of the script can be obtained by inspected
-  the $0 variable.
-* OCRAN does not set up the include path. Use `$:.unshift
-  File.dirname($0)` at the start of your script if you need to
-  'require' additional source files from the same directory as your
-  main script.
+* When a `.exe` is running, `OCRAN_EXECUTABLE` points to the `.exe` with its full path.
+* The temporary location of the script is available via `$0`.
+* OCRAN does not set up the include path. Add `$:.unshift File.dirname($0)` at the start of your script if you need to `require` additional files from the same directory as your main script.
+
+### Directory and zip output (Linux / macOS / Windows):
+
+When using `--output-dir` or `--output-zip`, OCRAN produces the same file
+layout as a `.exe` would extract to:
+
+    bin/          # Ruby interpreter and shared libraries
+    lib/          # Ruby standard library
+    gems/         # Bundled gems
+    src/          # Your application source files
+    script.sh     # Launch script (Linux/macOS) — or script.bat on Windows
+
+The launch script sets `RUBYLIB`, `GEM_HOME`, `GEM_PATH`, and any other
+environment variables, then runs your script with the bundled Ruby.
+
+On Linux/macOS, make the script executable and run it:
+
+    chmod +x myapp/script.sh
+    ./myapp/script.sh
+
+On Windows, run the batch file:
+
+    myapp\script.bat
 
 ### Pitfalls:
 
-* Avoid modifying load paths at run time. Specify load paths using -I
-  or RUBYLIB if you must, but don't expect OCRAN to preserve them for
-  runtime. OCRAN may pack sources into other directories than you
-  expect.
-* If you use .rbw files or the `--windows` option, then check
-  that your application works with rubyw.exe before trying with OCRAN.
+* Avoid modifying load paths at runtime. Use `-I` or `RUBYLIB` if needed, but don't expect OCRAN to preserve them for runtime. OCRAN may pack sources into other directories than you
+  expect
+* If you use `.rbw` files or `--windows`, verify your application works with `rubyw.exe` before building.
 * Avoid absolute paths in your code and when invoking OCRAN.
 
 ### Multibyte path and filename support:
 
-* OCRAN-built executables can correctly handle multibyte paths and filenames
-  (e.g., Japanese or emoji) on Windows. To use this feature, the executable
-  must be run on Windows 10 version 1903 or later.
-* When using OCRAN-built executables from the console, we recommend running
-  `chcp 65001` to switch the code page to UTF-8. This ensures proper
-  input/output of multibyte characters in Command Prompt (CMD) and
-  PowerShell.
+* OCRAN-built executables correctly handle multibyte paths (e.g. Japanese, emoji) on Windows 10 1903+.
+* When using the executable from the console, run `chcp 65001` first to switch to UTF-8 on windows.
 
-## REQUIREMENTS:
+## Requirements
 
-* Windows
-* Working Ruby installation.
-* Ruby Installation with devkit from rubyinstaller (when working with the source code only)
+* Ruby 3.2+
+* For building Windows `.exe`: Windows with RubyInstaller DevKit (mingw-w64), or Wine on Linux/macOS
+* For `--output-dir` / `--output-zip`: any platform with Ruby 3.2+
+* For `--output-zip` on Linux/macOS: the `zip` command must be available
+* For `--output-zip` on Windows: PowerShell (included in Windows 8+)
 
 ## Development
 
 ### Quick start
 
-Quickly set up the development environment and run the full test suite:
-
     git clone https://github.com/largo/ocran.git
     cd ocran
-    bin/setup          # install Bundler & all dev gems, generate stub for tests
-    bundle exec rake   # run the entire Minitest suite
+    bin/setup          # install Bundler & all dev gems, build stubs
+    bundle exec rake   # run the full Minitest suite
+    exe/ocran filename.rb # build filename.rb as an executable
 
-### Developer Utilities (bin/ scripts)
-
-All scripts in the `bin/` directory are designed for developers and can be executed in any standard Windows shell, including Command Prompt (CMD), PowerShell, and Git Bash.
+### Developer utilities (`bin/` scripts)
 
 | Script        | Purpose                                                                  |
 |---------------|--------------------------------------------------------------------------|
 | `bin/setup`   | Installs Bundler and all required development gems, then builds stub.exe |
 | `bin/console` | Launches an IRB console with OCRAN preloaded                             |
 
-
-### Rake tasks (Windows compatible)
+### Rake tasks
 
 | Task         | Purpose                                                                |
 |--------------|------------------------------------------------------------------------|
-| `rake build` | Compile stub.exe (requires MSVC or mingw‑w64 + DevKit)                 |
-| `rake clean` | Remove generated binaries (e.g., stub.exe); temp files are not deleted |
+| `rake build` | Compile stub(.exe) (requires MSVC or mingw-w64 + DevKit or Unix build tools)                |
+| `rake clean` | Remove generated binaries                                              |
 | `rake test`  | Execute all unit & integration tests                                   |
 
 ## Technical details
 
-OCRAN first runs the target script in order to detect any files that
-are loaded and used at runtime (Using `Kernel#require` and
-`Kernel#load`).
+OCRAN first runs the target script to detect files loaded at runtime (via
+`Kernel#require` and `Kernel#load`).
 
-OCRAN embeds everything needed to run a Ruby script into a single
-executable file. The file contains the .exe stub which is compiled
-from C-code, and a custom opcode format containing instructions to
-create directories, save files, set environment variables and run
-programs. The OCRAN script generates this executable and the
-instructions to be run when it is launched.
+For `.exe` output, OCRAN embeds everything into a single executable: a C stub,
+and a custom opcode stream containing instructions to create directories,
+extract files, set environment variables, and launch the script. The stub
+extracts everything to a temporary directory at runtime and runs the script.
 
-When executed, the OCRAN stub extracts the Ruby interpreter and your
-scripts into a temporary directory. The directory will contains the
-same directory layout as your Ruby installlation. The source files for
-your application will be put in the 'src' subdirectory.
+For `--output-dir` / `--output-zip`, OCRAN performs the same file collection
+but writes directly to the filesystem and generates a shell/batch launch
+script instead of an opcode stream.
 
 ### Libraries
 
-Any code that is loaded through `Kernel#require` when your
-script is executed will be included in the OCRAN
-executable. Conditionally loaded code will not be loaded and included
-in the executable unless the code is actually run when OCRAN invokes
-your script. Otherwise, OCRAN won't know about it and will not include
+Any code loaded through `Kernel#require` when your script runs is included.
+Conditionally loaded code is only included if it is actually executed during
+the OCRAN build run.
+Otherwise, OCRAN won't know about it and will not include
 the source files.
+You can use `defined?(OCRAN)` to check if the script is running while OCRAN is building it and exit the script after dependencies are loaded but before the main logic runs.
 
-RubyGems are handled specially. Whenever a file from a Gem is
-detected, OCRAN will attempt to include all the required files from
-that specific Gem, expect some unlikely needed files such as readme's
-and other documentation. This behaviour can be controlled by using the
---gem-* options. Behaviour can be changed for all gems or specific
-gems using --gem-*=gemname.
+RubyGems are handled specially: when a file from a gem is detected, OCRAN
+includes the required files from that gem. It does not automatically include all the files of the Gem, which could be required at runtime. This behavior is controlled with
+the `--gem-*` options.
 
 Libraries found in non-standard path (for example, if you invoke OCRAN
 with "ruby -I some/path") will be placed into the site dir
@@ -248,105 +272,70 @@ with "ruby -I some/path") will be placed into the site dir
 tree, since OCRAN may place the files elsewhere when extracted into the
 temporary directory.
 
-In case your script (or any of its dependencies) sets up autoloaded
-module using `Kernel#autoload`, OCRAN will automatically try to
-load them to ensure that they are all included in the
-executable. Modules that doesn't exist will be ignored (a warning will
-be logged).
+If your script uses `Kernel#autoload`, OCRAN will attempt to load those
+constants so they are included in the output. Missing modules are ignored
+with a warning.
 
 Dynamic link libraries (.dll files, for example WxWidgets, or other
 source files) will be detected and included by OCRAN.
 
 ### Including libraries non-automatically
 
-If an application or framework is complicated enough that it tends
-to confuse Ocran's automatic dependency resolution, then you can
-use other means to specify what needs to be packaged with your app.
+If automatic dependency resolution is insufficient, use `--no-dep-run` to
+skip running your script. This requires `--gem-full` and typically
+`--add-all-core`.
 
-To disable automatic dependency resolution, use the `--no-dep-run`
-option; with it, Ocran will skip executing your program during the
-build process. This on the other hand requires using `--gem-full` option
-(see more below); otherwise Ocran will not include all the necessary
-files for the gems.
+You can specify gems via a Bundler Gemfile with `--gemfile`. OCRAN includes
+all listed gems and their dependencies (they must be installed, not vendored
+via `bundle package`).
 
-You will also probably need to use the `--add-all-core` option to
-include the Ruby core libraries.
-
-If your app uses gems, then you can specify them in a
-Bundler (http://gembundler.com) Gemfile, then use the --gemfile
-option to supply it to Ocran. Ocran will automatically include all
-gems specified, and all their dependencies.
-
-(Note: This assumes that the gems are installed in your system,
-*not* locally packaged inside the app directory by "bundle package")
-
-These options are particularly useful for packaging Rails
-applications.  For example, to package a Rails 3 app in the
-directory "someapp" and create an exe named "someapp.exe", without
-actually running the app during the build, you could use the
-following command:
+Example — packaging a Rails app without running it:
 
     ocran someapp/script/rails someapp --output someapp.exe --add-all-core \
     --gemfile someapp/Gemfile --no-dep-run --gem-full --chdir-first -- server
 
 Note the space between `--` and `server`! It's important; `server` is
 an argument to be passed to rails when the script is ran.
-
-Rails 2 apps can be packaged similarly, though you will have to
-integrate them with Bundler (http://gembundler.com/rails23.html)
-first.
-
 ### Gem handling
 
-By default, Ocran includes all scripts that are loaded by your script
-when it is run before packaging. Ocran detects which gems are using and
-includes any additional non-script files from those gems, except
-trivial files such as C/C++ source code, object files, READMEs, unit
-tests, specs, etc.
+By default, OCRAN includes all scripts loaded by your script plus important
+non-script files from those gems, excluding C/C++ sources, object files,
+READMEs, tests, and specs.
 
-This behaviour can be changed by using the --gem-* options. There are
-four possible modes:
+Four modes:
 
-* *minimal*: Include only loaded scripts
-* *guess*: Include loaded scripts and important files (DEFAULT)
-* *all*: Include all scripts and important files
-* *full*: Include all files
+* *minimal*: Loaded scripts only
+* *guess*: Loaded scripts and important files (DEFAULT)
+* *all*: All scripts and important files
+* *full*: All files in the gem directory
 
-If you find that files are missing from the resulting executable, try
-first with --gem-all=gemname for the gem that is missing, and if that
-does not work, try --gem-full=gemname. The paranoid can use --gem-full
-to include all files for all required gems.
+If files are missing from the output, try `--gem-all=gemname` first, then
+`--gem-full=gemname`. Use `--gem-full` to include everything for all gems.
 
-### Creating an installer for your application
+### Creating a Windows installer
 
-To make your application start up quicker, or to allow it to
-keep files in its application directory between runs, or if
-you just want to make your program seem more like a "regular"
-Windows application, you can have Ocran generate an installer
-for your app with the free Inno Setup software.
+To make your application start faster or keep files between runs, use
+`--innosetup` to generate an Inno Setup installer.
 
-You will first have to download and install Inno Setup 5 or
-later, and also add its directory to your PATH (so that Ocran
-can find the ISCC compiler program). Once you've done that,
-you can use the `--innosetup` option to Ocran to supply an
-Inno Setup script. Do not add any [Files] or [Dirs] sections
+Install Inno Setup 5+ and add it to your `PATH`, then supply an `.iss` script:
+
+Make sure that iss is in the PATH environment variable by running the command `iss` in your terminal.
+
+Do not add any [Files] or [Dirs] sections
 to the script; Ocran will figure those out itself.
+To continue the Rails example above, let's package the Rails application
+into an installer. Save the following as `someapp.iss`:
 
-To continue the Rails example above, let's package the Rails 3
-app into an installer. Save the following as `someapp.iss`:
+    [Setup]
+    AppName=SomeApp
+    AppVersion=0.1
+    DefaultDirName={pf}\SomeApp
+    DefaultGroupName=SomeApp
+    OutputBaseFilename=SomeAppInstaller
 
-  [Setup]
-  AppName=SomeApp
-  AppVersion=0.1
-  DefaultDirName={pf}\SomeApp
-  DefaultGroupName=SomeApp
-  OutputBaseFilename=SomeAppInstaller
-
-  [Icons]
-  Name: "{group}\SomeApp"; Filename: "{app}\someapp.bat"; IconFilename: "{app}\someapp.ico"; Flags: runminimized;
-  Name: "{group}\Uninstall SomeApp"; Filename: "{uninstallexe}"
-
-Then, run Ocran with this command:
+    [Icons]
+    Name: "{group}\SomeApp"; Filename: "{app}\someapp.bat"; IconFilename: "{app}\someapp.ico"; Flags: runminimized;
+    Name: "{group}\Uninstall SomeApp"; Filename: "{uninstallexe}"
 
     ocran someapp/script/rails someapp --output someapp.exe --add-all-core \
     --gemfile someapp/Gemfile --no-dep-run --gem-full --chdir-first --no-lzma \
@@ -357,24 +346,18 @@ into the Output directory.
 
 ### Environment variables
 
-OCRAN executables clear the RUBYLIB environment variable before your
-script is launched. This is done to ensure that your script does not
-use load paths from the end user's Ruby installation.
+OCRAN clears the `RUBYLIB` environment variable before running your script so it does not pick up load
+paths from the end user's Ruby installation.
 
-OCRAN executables set the RUBYOPT environment variable to the value it
-had when you invoked OCRAN. For example, if you had "RUBYOPT=rubygems"
-on your build PC, OCRAN ensures that it is also set on PC's running the
-executables.
-
-OCRAN executables set OCRAN_EXECUTABLE to the full path of the
-executable, for example
+OCRAN sets the `RUBYOPT` environment variable to the value it had when you invoked OCRAN. For `.exe`
+output, `OCRAN_EXECUTABLE` is set to the full path of the running executable:
 
     ENV["OCRAN_EXECUTABLE"] # => C:\Program Files\MyApp\MyApp.exe
 
 ### Working directory
 
-The OCRAN executable does not change the working directory when it is
-launched, unless you use the `--chdir-first` option.
+The OCRAN executable does not change the working directory when it starts. It only changes the working directory when you use
+`--chdir-first`.
 
 You should not assume that the current working directory when invoking
 an executable built with .exe is the location of the source script. It
@@ -384,48 +367,32 @@ through the Windows Explorer), the users' current working directory
 `C:\\WINDOWS\\SYSTEM32` when the executable is invoked through
 a file association.
 
-With the `--chdir-first` option, the working directory will
-always be the common parent directory of your source files. This
-should be fine for most applications. However, if your application
-is designed to run from the command line and take filenames as
-arguments, then you cannot use this option.
+With `--chdir-first`, the working directory is always the common parent
+directory of your source files. Do not use this if your application takes
+filenames as command-line arguments.
 
-If you wish to maintain the user's working directory, but need to
-`require` additional Ruby scripts from the source directory, you can
-add the following line to your script:
+To `require` additional files from the source directory while keeping the
+user's working directory:
 
     $LOAD_PATH.unshift File.dirname($0)
 
-### Load path mangling
+### Detecting OCRAN at build time
 
-Adding paths to `$LOAD_PATH` or `$:` at runtime is not
-recommended. Adding relative load paths depends on the working
-directory being the same as where the script is located (See
-above). If you have additional library files in directories below the
-directory containing your source script you can use this idiom:
-
-    $LOAD_PATH.unshift File.join(File.dirname($0), 'path/to/script')
-
-### Detecting
-
-You can detect whether OCRAN is currently building your script by
-looking for the 'Ocran' constant. If it is defined, OCRAN is currenly
-building the executable from your script. For example, you can use
-this to avoid opening a GUI window when compiling executables:
+Check for the `Ocran` constant to detect whether OCRAN is currently building
+your script:
 
     app = MyApp.new
     app.main_loop unless defined?(Ocran)
 
 ### Additional files and resources
 
-You can add additional files to the OCRAN executable (for example
-images) by appending them to the command line. They should be placed
-in the source directory with your main script (or a subdirectory).
+Append extra files, directories, or glob patterns to the command line:
 
     ocran mainscript.rb someimage.jpeg docs/document.txt
+    ocran script.rb assets/**/*.png
 
-This will create the following layout in the temporary directory when
-your program is executed:
+This produces the following layout in the output (temp dir for `.exe`,
+or the output directory for `--output-dir`):
 
     src/mainscript.rb
     src/someimage.jpeg
@@ -441,63 +408,67 @@ example:
 
 ### Command Line Arguments
 
-To pass command line argument to your script (both while building and
-when run from the resulting executable), specify them after a
-`--` marker. For example:
+Pass arguments to your script (both during the build run and at runtime)
+after a `--` marker:
 
-    ocran script.rb -- --some-options=value
+    ocran script.rb -- --some-option=value
 
-This will pass `--some-options=value` to the script when
-build and when running the executable. Any extra argument specified by
-the user when invoking the executable will be appended after the
+Extra arguments supplied by the user at runtime are appended after the
 compile-time arguments.
+
+### Load path mangling
+
+Adding paths to `$LOAD_PATH` or `$:` at runtime is not recommended. Adding
+relative load paths depends on the working directory being the same as where
+the script is located (see above). If you have additional library files in
+directories below the directory containing your source script, use this idiom:
+
+    $LOAD_PATH.unshift File.join(File.dirname($0), 'path/to/script')
 
 ### Window/Console
 
-By default, OCRAN builds console application from .rb-files and
-windowed applications (without console window) from .rbw-files.
+By default, OCRAN builds console applications from `.rb` files and windowed
+applications (without a console window) from `.rbw` files.
 
-Ruby on Windows provides two executables: ruby.exe is a console mode
-application and rubyw.exe is a windowed application which does not
-bring up a console window when launched using the Windows Explorer.
-By default, or if the `--console` option is used, OCRAN will
-use the console runtime (ruby.exe). OCRAN will automatically select the
-windowed runtime when your script has the ".rbw" extension, or if you
-specify the `--windows` command line option.
+Ruby on Windows provides two executables: `ruby.exe` is a console mode
+application and `rubyw.exe` is a windowed application that does not bring up
+a console window when launched from Windows Explorer. By default, or if
+`--console` is used, OCRAN uses the console runtime. OCRAN automatically
+selects the windowed runtime when your script has the `.rbw` extension, or
+when you pass `--windows`.
 
-If your application works in console mode but not in windowed mode,
-first check if your script works without OCRAN using rubyw.exe. A
-script that prints to standard output (using puts, print etc.) will
-eventually cause an exception when run with rubyw.exe (when the IO
-buffers run full).
+If your application works in console mode but not in windowed mode, first
+check that your script works without OCRAN using `rubyw.exe`. A script that
+prints to standard output (`puts`, `print`, etc.) will eventually raise an
+exception under `rubyw.exe` once the IO buffers fill up.
 
-You can also try wrapping your script in an exception handler that
-logs any errors to a file:
+You can also wrap your script in an exception handler that logs errors to a
+file:
 
     begin
       # your script here
     rescue Exception => e
-      File.open("except.log") do |f|
+      File.open("except.log", "w") do |f|
         f.puts e.inspect
         f.puts e.backtrace
       end
     end
 
-## CREDITS:
+## Credits
 
 Lars Christensen and contributors for the OCRA project which this is forked from.
 
-Kevin Walzer of codebykevin, Maxim Samsonov for ocra2, John Mair for codesigining support (to be merged) 
+Kevin Walzer of codebykevin, Maxim Samsonov for ocra2, John Mair for
+codesigning support.
 
-Thanks for Igor Pavlov for the LZMA compressor and decompressor. The
-source code used was place into Public Domain by Igor Pavlov.
+Igor Pavlov for the LZMA compressor and decompressor (Public Domain).
 
-Erik Veenstra for rubyscript2exe which provided inspiration.
+Erik Veenstra for rubyscript2exe, which provided inspiration.
 
-Dice for the default .exe icon (vit-ruby.ico,
-http://ruby.morphball.net/vit-ruby-ico_en.html)
+Dice for the default `.exe` icon (vit-ruby.ico,
+http://ruby.morphball.net/vit-ruby-ico_en.html).
 
-## LICENSE:
+## License
 
 (The MIT License)
 

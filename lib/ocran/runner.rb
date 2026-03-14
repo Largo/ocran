@@ -99,6 +99,10 @@ module Ocran
         else
           raise "Inno Setup is only supported on Windows"
         end
+      elsif @option.output_dir
+        direction.build_output_dir(@option.output_dir)
+      elsif @option.output_zip
+        direction.build_zip(@option.output_zip)
       else
         direction.build_stab_exe
       end

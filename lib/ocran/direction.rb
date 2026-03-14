@@ -529,6 +529,28 @@ module Ocran
       say "Finished building installer file"
     end
 
+    def build_output_dir(path)
+      require_relative "dir_builder"
+
+      path = Pathname(path)
+      say "Building directory #{path}"
+      DirBuilder.new(path, &to_proc)
+      say "Finished building directory #{path}"
+    end
+
+    def build_zip(path)
+      require_relative "dir_builder"
+      require "tmpdir"
+
+      path = Pathname(path)
+      say "Building zip #{path}"
+      Dir.mktmpdir("ocran") do |tmpdir|
+        build_output_dir(tmpdir)
+        DirBuilder.create_zip(path, tmpdir)
+      end
+      say "Finished building #{path} (#{File.size(path)} bytes)"
+    end
+
     def build_stab_exe
       require_relative "stub_builder"
 

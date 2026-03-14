@@ -24,7 +24,9 @@ module Ocran
         :icon_filename => nil,
         :inno_setup_script => nil,
         :load_autoload? => true,
+        :output_dir => nil,
         :output_override => nil,
+        :output_zip => nil,
         :quiet? => false,
         :rubyopt => nil,
         :run_script? => true,
@@ -83,6 +85,8 @@ Auto-detection options:
 Output options:
 
 --output <file>    Name the exe to generate. Defaults to ./<scriptname>.exe.
+--output-dir <dir> Output all files to a directory with a launch script instead of an exe.
+--output-zip <file> Output a zip archive containing all files and a launch script.
 --no-lzma          Disable LZMA compression of the executable.
 --innosetup <file> Use given Inno Setup script (.iss) to create an installer.
 
@@ -110,6 +114,12 @@ EOF
         when "--output"
           path = argv.shift
           @options[:output_override] = Pathname.new(path).expand_path if path
+        when "--output-dir"
+          path = argv.shift
+          @options[:output_dir] = Pathname.new(path).expand_path if path
+        when "--output-zip"
+          path = argv.shift
+          @options[:output_zip] = Pathname.new(path).expand_path if path
         when "--dll"
           path = argv.shift
           @options[:extra_dlls] << path if path
@@ -219,6 +229,10 @@ EOF
           raise "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
         end
       end
+
+      if output_dir && output_zip
+        raise "--output-dir and --output-zip cannot be used together"
+      end
     end
 
     def add_all_core? = @options[__method__]
@@ -255,9 +269,13 @@ EOF
 
     def load_autoload? = @options[__method__]
 
+    def output_dir = @options[__method__]
+
     def output_executable = @options[__method__]
 
     def output_override = @options[__method__]
+
+    def output_zip = @options[__method__]
 
     def quiet? = @options[__method__]
 
