@@ -943,16 +943,16 @@ class TestOcran < Minitest::Test
   def test_multibyte_resource_dir
     with_fixture 'multibyte_dir' do
       assert system("ruby", ocran, "resource.rb", "äあ💎/äあ💎.txt", *DefaultArgs)
-      assert File.exist?("resource.exe")
-      pristine_env "resource.exe" do
-        assert system("resource.exe")
+      assert File.exist?(exe_name("resource"))
+      pristine_env exe_name("resource") do
+        assert system(exe_name("resource"))
       end
     end
   end
 
   # Test that code-signed executables still work
   def test_codesigning_support
-    skip "Only for windows" if Gem.win_platform?
+    skip "Only for windows" unless Gem.win_platform?
     with_fixture 'helloworld' do
       each_path_combo "helloworld.rb" do |script|
         assert system("ruby", ocran, script, *DefaultArgs)
@@ -995,9 +995,9 @@ class TestOcran < Minitest::Test
     skip "glimmer-dsl-libui gem not available" unless Gem::Specification.find_all_by_name("glimmer-dsl-libui").any? or ENV["GITHUB_ACTIONS"]
     with_fixture "glimmer_libui" do
       assert system("ruby", ocran, "glimmer_libui.rb", *DefaultArgs)
-      assert File.exist?("glimmer_libui.exe")
-      pristine_env "glimmer_libui.exe" do
-        assert system("glimmer_libui.exe")
+      assert File.exist?(exe_name("glimmer_libui"))
+      pristine_env exe_name("glimmer_libui") do
+        assert system(exe_name("glimmer_libui"))
       end
     end
   end
@@ -1006,11 +1006,12 @@ class TestOcran < Minitest::Test
   # zlib1.dll in archdir. Without them the SxS activation context fails with
   # error 14001 at runtime. Verifies that compress/decompress round-trips work.
   def test_zlib
+    skip "SxS manifest test is Windows-only" unless Gem.win_platform?
     with_fixture 'zlib' do
       assert system("ruby", ocran, "zlib.rb", *DefaultArgs)
-      assert File.exist?("zlib.exe")
-      pristine_env "zlib.exe" do
-        assert system("zlib.exe")
+      assert File.exist?(exe_name("zlib"))
+      pristine_env exe_name("zlib") do
+        assert system(exe_name("zlib"))
       end
     end
   end
@@ -1022,9 +1023,9 @@ class TestOcran < Minitest::Test
   def test_openssl_https
     with_fixture 'openssl_https' do
       assert system("ruby", ocran, "openssl_https.rb", *DefaultArgs)
-      assert File.exist?("openssl_https.exe")
-      pristine_env "openssl_https.exe" do
-        assert system("openssl_https.exe")
+      assert File.exist?(exe_name("openssl_https"))
+      pristine_env exe_name("openssl_https") do
+        assert system(exe_name("openssl_https"))
         cert_path = File.read("cert_path.txt")
         # OCRAN extracts to a temp directory named ocranXXXXXX; the bundled
         # cert is placed there and SSL_CERT_FILE is set to that path.
@@ -1041,17 +1042,18 @@ class TestOcran < Minitest::Test
   def test_openssl_https_cacert
     with_fixture 'openssl_https_cacert' do
       assert system("ruby", ocran, "openssl_https_cacert.rb", *DefaultArgs)
-      assert File.exist?("openssl_https_cacert.exe")
+      exe = exe_name("openssl_https_cacert")
+      assert File.exist?(exe)
 
-      pristine_env "openssl_https_cacert.exe", "cacert.pem" do
-        assert system("openssl_https_cacert.exe")
+      pristine_env exe, "cacert.pem" do
+        assert system(exe)
       end
 
       # With an invalid cert file SSL verification must fail, confirming the
       # fixture actually uses cacert.pem rather than the system cert store.
-      pristine_env "openssl_https_cacert.exe" do
+      pristine_env exe do
         File.write("cacert.pem", "not a valid certificate")
-        refute system("openssl_https_cacert.exe"),
+        refute system(exe),
                "Expected SSL failure when cacert.pem is invalid"
       end
     end

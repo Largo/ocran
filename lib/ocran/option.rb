@@ -164,14 +164,20 @@ EOF
           puts usage
           raise SystemExit
         else
-          raise "#{arg} not found!" unless File.exist?(arg)
+          expanded = Dir.glob(arg)
+          if expanded.empty?
+            raise "#{arg} not found!" unless File.exist?(arg)
+            expanded = [arg]
+          end
 
-          if File.directory?(arg)
-            raise "#{arg} is empty!" if Dir.empty?(arg)
-            # If a directory is passed, we want all files under that directory
-            @options[:source_files] += Pathname.new(arg).find.reject(&:directory?).map(&:expand_path)
-          else
-            @options[:source_files] << Pathname.new(arg).expand_path
+          expanded.each do |f|
+            if File.directory?(f)
+              raise "#{f} is empty!" if Dir.empty?(f)
+              # If a directory is passed, we want all files under that directory
+              @options[:source_files] += Pathname.new(f).find.reject(&:directory?).map(&:expand_path)
+            else
+              @options[:source_files] << Pathname.new(f).expand_path
+            end
           end
         end
       end
