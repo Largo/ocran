@@ -1,4 +1,6 @@
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -63,6 +65,7 @@ void PrintFatalMessage(const char *format, ...)
 }
 
 // Displays a fatal error message via a message box.
+#ifdef _WIN32
 void PrintFatalMessageBox(const char *format, ...)
 {
     char TextBuffer[1024];
@@ -72,6 +75,7 @@ void PrintFatalMessageBox(const char *format, ...)
     va_end(args);
     MessageBox(NULL, TextBuffer, "OCRAN", MB_OK | MB_ICONWARNING);
 }
+#endif
 
 // Prints an application level error message to stderr if in debug mode.
 void PrintAppErrorMessage(const char *format, ...)

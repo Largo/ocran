@@ -4,10 +4,10 @@
   and files in a temporary directory, launching a program.
 */
 
-#include <windows.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "error.h"
 #include "system_utils.h"
 #include "inst_dir.h"

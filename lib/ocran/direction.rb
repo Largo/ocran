@@ -63,7 +63,11 @@ module Ocran
     end
 
     def detect_dlls
-      require_relative "library_detector"
+      if Gem.win_platform?
+        require_relative "library_detector"
+      else
+        require_relative "library_detector_linux"
+      end
       LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
     end
 
@@ -127,11 +131,18 @@ module Ocran
       say "Adding ruby executable #{ruby_executable}"
       builder.copy_to_bin(bindir / ruby_executable, ruby_executable)
       if libruby_so
-        builder.copy_to_bin(bindir / libruby_so, libruby_so)
+        # On Linux, libruby.so is in libdir; on Windows, it's in bindir
+        libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
+        builder.copy_to_bin(libruby_src, libruby_so)
       end
 
-      # Add detected DLLs
-      if @option.auto_detect_dlls?
+      # On Linux, set LD_LIBRARY_PATH to find bundled shared libraries
+      unless Gem.win_platform?
+        builder.export("LD_LIBRARY_PATH", File.join(EXTRACT_ROOT, BINDIR.to_s))
+      end
+
+      # Windows-only: Add detected DLLs
+      if Gem.win_platform? && @option.auto_detect_dlls?
         detect_dlls.each do |dll|
           next unless dll.subpath?(exec_prefix) && dll.extname?(".dll") && dll.basename != libruby_so
 
@@ -144,42 +155,44 @@ module Ocran
         end
       end
 
-      # Add external manifest and builtin DLLs
-      if (manifest = ruby_builtin_manifest)
-        manifest.dirname.each_child do |path|
-          next if path.directory?
-          say "Adding builtin DLL/manifest #{path}"
-          builder.duplicate_to_exec_prefix(path)
+      # Windows-only: Add external manifest and builtin DLLs
+      if Gem.win_platform?
+        if (manifest = ruby_builtin_manifest)
+          manifest.dirname.each_child do |path|
+            next if path.directory?
+            say "Adding builtin DLL/manifest #{path}"
+            builder.duplicate_to_exec_prefix(path)
+          end
         end
-      end
 
-      # Include SxS assembly manifests for native extensions.
-      # Each .so file may have an embedded manifest referencing a companion
-      # *.so-assembly.manifest file in the same directory. Without these
-      # manifests the SxS activation context fails (error 14001) at runtime.
-      # Scan archdir and the extension dirs of all loaded gems.
-      sxs_manifest_dirs = []
-      archdir = Pathname(RbConfig::CONFIG["archdir"])
-      sxs_manifest_dirs << archdir if archdir.exist? && archdir.subpath?(exec_prefix)
-      if defined?(Gem)
-        Gem.loaded_specs.each_value do |spec|
-          next if spec.extensions.empty?
-          ext_dir = Pathname(spec.extension_dir)
-          sxs_manifest_dirs << ext_dir if ext_dir.exist? && ext_dir.subpath?(exec_prefix)
+        # Include SxS assembly manifests for native extensions.
+        # Each .so file may have an embedded manifest referencing a companion
+        # *.so-assembly.manifest file in the same directory. Without these
+        # manifests the SxS activation context fails (error 14001) at runtime.
+        # Scan archdir and the extension dirs of all loaded gems.
+        sxs_manifest_dirs = []
+        archdir = Pathname(RbConfig::CONFIG["archdir"])
+        sxs_manifest_dirs << archdir if archdir.exist? && archdir.subpath?(exec_prefix)
+        if defined?(Gem)
+          Gem.loaded_specs.each_value do |spec|
+            next if spec.extensions.empty?
+            ext_dir = Pathname(spec.extension_dir)
+            sxs_manifest_dirs << ext_dir if ext_dir.exist? && ext_dir.subpath?(exec_prefix)
+          end
         end
-      end
-      sxs_manifest_dirs.each do |dir|
-        dir.each_child do |path|
-          next unless path.extname == ".manifest"
-          say "Adding native extension assembly manifest #{path}"
-          builder.duplicate_to_exec_prefix(path)
+        sxs_manifest_dirs.each do |dir|
+          dir.each_child do |path|
+            next unless path.extname == ".manifest"
+            say "Adding native extension assembly manifest #{path}"
+            builder.duplicate_to_exec_prefix(path)
+          end
         end
-      end
 
-      # Add extra DLLs specified on the command line
-      @option.extra_dlls.each do |dll|
-        say "Adding supplied DLL #{dll}"
-        builder.copy_to_bin(bindir / dll, dll)
+        # Add extra DLLs specified on the command line
+        @option.extra_dlls.each do |dll|
+          say "Adding supplied DLL #{dll}"
+          builder.copy_to_bin(bindir / dll, dll)
+        end
       end
 
       # Searches for features that are loaded from gems, then produces a
@@ -267,9 +280,12 @@ module Ocran
         say "Not including encoding support files"
       end
 
-      # Workaround: RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
-      # Add an empty file to /msys64/usr/bin/msys-2.0.dll if the dll was not required otherwise
-      builder.touch('msys64/usr/bin/msys-2.0.dll')
+      # Windows-only: Workaround for RubyInstaller MSYS folder detection
+      if Gem.win_platform?
+        # RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present
+        # (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
+        builder.touch('msys64/usr/bin/msys-2.0.dll')
+      end
 
       # Find the source root and adjust paths
       source_files = @option.source_files.dup

@@ -21,6 +21,11 @@ include FileUtils
 
 class TestOcran < Minitest::Test
 
+  # Helper to get platform-specific executable name
+  def exe_name(base)
+    Gem.win_platform? ? "#{base}.exe" : base
+  end
+
   # Default arguments for invoking OCRAN when running tests.
   DefaultArgs = %w[--no-lzma --verbose].tap do |ary|
     ary << "--quiet" unless ENV["OCRAN_VERBOSE_TEST"]
@@ -45,8 +50,15 @@ class TestOcran < Minitest::Test
     # environment to accurately test the built executables.
     Bundler.with_original_env do
       with_tmpdir files do
-        with_env "PATH" => ENV["SystemRoot"] + ";" + ENV["SystemRoot"] + "\\SYSTEM32" do
-          yield
+        if Gem.win_platform?
+          with_env "PATH" => ENV["SystemRoot"] + ";" + ENV["SystemRoot"] + "\\SYSTEM32" do
+            yield
+          end
+        else
+          # On Linux, use minimal PATH with current directory for testing executables
+          with_env "PATH" => ".:/usr/local/bin:/usr/bin:/bin" do
+            yield
+          end
         end
       end
     end
@@ -141,9 +153,9 @@ class TestOcran < Minitest::Test
     with_fixture 'helloworld' do
       each_path_combo "helloworld.rb" do |script|
         assert system("ruby", ocran, script, *DefaultArgs)
-        assert File.exist?("helloworld.exe")
-        pristine_env "helloworld.exe" do
-          assert system("helloworld.exe")
+        assert File.exist?(exe_name("helloworld"))
+        pristine_env exe_name("helloworld") do
+          assert system(exe_name("helloworld"))
         end
       end
     end
@@ -153,9 +165,9 @@ class TestOcran < Minitest::Test
   def test_lzma
     with_fixture 'helloworld' do
       assert system("ruby", ocran, "helloworld.rb", "--quiet", "--lzma")
-      assert File.exist?("helloworld.exe")
-      pristine_env "helloworld.exe" do
-        assert system("helloworld.exe")
+      assert File.exist?(exe_name("helloworld"))
+      pristine_env exe_name("helloworld") do
+        assert system(exe_name("helloworld"))
       end
     end
   end
@@ -166,9 +178,10 @@ class TestOcran < Minitest::Test
     with_fixture 'writefile' do
       assert system("ruby", ocran, "writefile.rb", *DefaultArgs)
       assert File.exist?("output.txt") # Make sure ocran ran the script during build
-      pristine_env "writefile.exe" do
-        assert File.exist?("writefile.exe")
-        assert system("writefile.exe")
+      exe = exe_name("writefile")
+      pristine_env exe do
+        assert File.exist?(exe)
+        assert system(exe)
         assert File.exist?("output.txt")
         assert_equal "output", File.read("output.txt")
       end
@@ -180,9 +193,10 @@ class TestOcran < Minitest::Test
     with_fixture 'writefile' do
       assert system("ruby", ocran, "writefile.rb", *(DefaultArgs + ["--no-dep-run"]))
       refute File.exist?("output.txt")
-      pristine_env "writefile.exe" do
-        assert File.exist?("writefile.exe")
-        assert system("writefile.exe")
+      exe = exe_name("writefile")
+      pristine_env exe do
+        assert File.exist?(exe)
+        assert system(exe)
         assert File.exist?("output.txt")
         assert_equal "output", File.read("output.txt")
       end
@@ -194,9 +208,10 @@ class TestOcran < Minitest::Test
   def test_rubycoreincl
     with_fixture 'rubycoreincl' do
       assert system("ruby", ocran, "rubycoreincl.rb", *(DefaultArgs + ["--no-dep-run", "--add-all-core"]))
-      pristine_env "rubycoreincl.exe" do
-        assert File.exist?("rubycoreincl.exe")
-        assert system("rubycoreincl.exe")
+      exe = exe_name("rubycoreincl")
+      pristine_env exe do
+        assert File.exist?(exe)
+        assert system(exe)
         assert File.exist?("output.txt")
         assert_equal "3 &lt; 5", File.read("output.txt")
       end
@@ -208,8 +223,9 @@ class TestOcran < Minitest::Test
   def test_gemfile
     with_fixture 'bundlerusage' do
       assert system("ruby", ocran, "bundlerusage.rb", "Gemfile", *(DefaultArgs + ["--no-dep-run", "--add-all-core", "--gemfile", "Gemfile", "--gem-all"]))
-      pristine_env "bundlerusage.exe" do
-        assert system("bundlerusage.exe")
+      exe = exe_name("bundlerusage")
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -218,9 +234,10 @@ class TestOcran < Minitest::Test
   def test_debug_extract
     with_fixture 'helloworld' do
       assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--debug-extract"]))
-      pristine_env "helloworld.exe" do
+      exe = exe_name("helloworld")
+      pristine_env exe do
         assert_equal 0, Dir["ocr*"].size
-        assert system("helloworld.exe")
+        assert system(exe)
         assert_equal 1, Dir["ocr*"].size
       end
     end
@@ -239,8 +256,9 @@ class TestOcran < Minitest::Test
   def test_directory_on_cmd_line
     with_fixture 'subdir' do
       assert system("ruby", ocran, "subdir.rb", "a", *DefaultArgs)
-      pristine_env "subdir.exe" do
-        assert system("subdir.exe")
+      exe = exe_name("subdir")
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -249,8 +267,9 @@ class TestOcran < Minitest::Test
   def test_exitstatus
     with_fixture 'exitstatus' do
       assert system("ruby", ocran, "exitstatus.rb", *DefaultArgs)
-      pristine_env "exitstatus.exe" do
-        system("exitstatus.exe")
+      exe = exe_name("exitstatus")
+      pristine_env exe do
+        system(exe)
         assert_equal 167, $?.exitstatus
       end
     end
@@ -260,9 +279,10 @@ class TestOcran < Minitest::Test
   def test_arguments1
     with_fixture 'arguments' do
       assert system("ruby", ocran, "arguments.rb", *DefaultArgs)
-      assert File.exist?("arguments.exe")
-      pristine_env "arguments.exe" do
-        system("arguments.exe foo \"bar baz \\\"quote\\\"\"")
+      exe = exe_name("arguments")
+      assert File.exist?(exe)
+      pristine_env exe do
+        system("#{exe} foo \"bar baz \\\"quote\\\"\"")
         assert_equal 5, $?.exitstatus
       end
     end
@@ -274,9 +294,10 @@ class TestOcran < Minitest::Test
     with_fixture 'arguments' do
       args = DefaultArgs + ["--", "foo", "bar baz \"quote\"" ]
       assert system("ruby", ocran, "arguments.rb", *args)
-      assert File.exist?("arguments.exe")
-      pristine_env "arguments.exe" do
-        system("arguments.exe")
+      exe = exe_name("arguments")
+      assert File.exist?(exe)
+      pristine_env exe do
+        system(exe)
         assert_equal 5, $?.exitstatus
       end
     end
@@ -288,9 +309,10 @@ class TestOcran < Minitest::Test
     with_fixture 'arguments' do
       args = DefaultArgs + ["--", "foo"]
       assert system("ruby", ocran, "arguments.rb", *args)
-      assert File.exist?("arguments.exe")
-      pristine_env "arguments.exe" do
-        system("arguments.exe \"bar baz \\\"quote\\\"\"")
+      exe = exe_name("arguments")
+      assert File.exist?(exe)
+      pristine_env exe do
+        system("#{exe} \"bar baz \\\"quote\\\"\"")
         assert_equal 5, $?.exitstatus
       end
     end
@@ -301,9 +323,10 @@ class TestOcran < Minitest::Test
     with_fixture "buildarg" do
       args = DefaultArgs + [ "--", "--some-option" ]
       assert system("ruby", ocran, "buildarg.rb", *args)
-      assert File.exist?("buildarg.exe")
-      pristine_env "buildarg.exe" do
-        assert system("buildarg.exe")
+      exe = exe_name("buildarg")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -313,9 +336,10 @@ class TestOcran < Minitest::Test
   def test_stdout_redir
     with_fixture 'stdoutredir' do
       assert system("ruby", ocran, "stdoutredir.rb", *DefaultArgs)
-      assert File.exist?("stdoutredir.exe")
-      pristine_env "stdoutredir.exe" do
-        system("stdoutredir.exe > output.txt")
+      exe = exe_name("stdoutredir")
+      assert File.exist?(exe)
+      pristine_env exe do
+        system("#{exe} > output.txt")
         assert File.exist?("output.txt")
         assert_equal "Hello, World!\n", File.read("output.txt")
       end
@@ -327,10 +351,11 @@ class TestOcran < Minitest::Test
   def test_stdin_redir
     with_fixture 'stdinredir' do
       assert system("ruby", ocran, "stdinredir.rb", *DefaultArgs)
-      assert File.exist?("stdinredir.exe")
-      # Kernel.system("ruby -e \"system 'stdinredir.exe<input.txt';p $?\"")
-      pristine_env "stdinredir.exe", "input.txt" do
-        system("stdinredir.exe < input.txt")
+      exe = exe_name("stdinredir")
+      assert File.exist?(exe)
+      # Kernel.system("ruby -e \"system '#{exe}<input.txt';p $?\"")
+      pristine_env exe, "input.txt" do
+        system("#{exe} < input.txt")
       end
       assert_equal 104, $?.exitstatus
     end
@@ -349,9 +374,10 @@ class TestOcran < Minitest::Test
 
     with_fixture 'gdbmdll' do
       assert system("ruby", ocran, "gdbmdll.rb", *args)
+      exe = exe_name("gdbmdll")
       with_env 'PATH' => '.' do
-        pristine_env "gdbmdll.exe" do
-          system("gdbmdll.exe")
+        pristine_env exe do
+          system(exe)
           assert_equal 104, $?.exitstatus
         end
       end
@@ -364,9 +390,10 @@ class TestOcran < Minitest::Test
   def test_relative_require
     with_fixture 'relativerequire' do
       assert system("ruby", ocran, "relativerequire.rb", *DefaultArgs)
-      assert File.exist?("relativerequire.exe")
-      pristine_env "relativerequire.exe" do
-        system("relativerequire.exe")
+      exe = exe_name("relativerequire")
+      assert File.exist?(exe)
+      pristine_env exe do
+        system(exe)
         assert_equal 160, $?.exitstatus
       end
     end
@@ -378,9 +405,10 @@ class TestOcran < Minitest::Test
   def test_autoload
     with_fixture 'autoload' do
       assert system("ruby", ocran, "autoload.rb", *DefaultArgs)
-      assert File.exist?("autoload.exe")
-      pristine_env "autoload.exe" do
-        assert system("autoload.exe")
+      exe = exe_name("autoload")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -392,9 +420,10 @@ class TestOcran < Minitest::Test
       require "open3"
       _o, e, _s = Open3.capture3("ruby", ocran, "autoloadmissing.rb", *DefaultArgs)
       assert_match %r{\AWARNING: Foo::Bar loading failed:}, e
-      assert File.exist?("autoloadmissing.exe")
-      pristine_env "autoloadmissing.exe" do
-        assert system("autoloadmissing.exe")
+      exe = exe_name("autoloadmissing")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -403,9 +432,10 @@ class TestOcran < Minitest::Test
   def test_autoload_nested
     with_fixture 'autoloadnested' do
       assert system("ruby", ocran, "autoloadnested.rb", *DefaultArgs)
-      assert File.exist?("autoloadnested.exe")
-      pristine_env "autoloadnested.exe" do
-        assert system("autoloadnested.exe")
+      exe = exe_name("autoloadnested")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -416,9 +446,10 @@ class TestOcran < Minitest::Test
     with_fixture "relloadpath" do
       each_path_combo "bin/chdir1.rb" do |script|
         assert system('ruby', ocran, script, *DefaultArgs)
-        assert File.exist?('chdir1.exe')
-        pristine_env "chdir1.exe" do
-          assert system('chdir1.exe')
+        exe = exe_name('chdir1')
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -430,9 +461,10 @@ class TestOcran < Minitest::Test
     with_fixture "relloadpath" do
       each_path_combo "bin/chdir2.rb" do |script|
         assert system('ruby', ocran, script, *DefaultArgs)
-        assert File.exist?('chdir2.exe')
-        pristine_env "chdir2.exe" do
-          assert system('chdir2.exe')
+        exe = exe_name('chdir2')
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -445,9 +477,10 @@ class TestOcran < Minitest::Test
     with_fixture 'relloadpath' do
       each_path_combo "bin/external.rb", "lib", "bin/sub" do |script, *loadpaths|
         assert system('ruby', '-I', loadpaths[0], '-I', loadpaths[1], ocran, script, *DefaultArgs)
-        assert File.exist?('external.exe')
-        pristine_env "external.exe" do
-          assert system('external.exe')
+        exe = exe_name('external')
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -461,9 +494,10 @@ class TestOcran < Minitest::Test
         with_env 'RUBYLIB' => loadpaths.join(';') do
           assert system('ruby', ocran, script, *DefaultArgs)
         end
-        assert File.exist?('external.exe')
-        pristine_env "external.exe" do
-          assert system('external.exe')
+        exe = exe_name('external')
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -475,9 +509,10 @@ class TestOcran < Minitest::Test
     with_fixture 'relloadpath' do
       each_path_combo "bin/loadpath0.rb" do |script|
         assert system('ruby', ocran, script, *DefaultArgs)
-        assert File.exist?('loadpath0.exe')
-        pristine_env "loadpath0.exe" do
-          assert system('loadpath0.exe')
+        exe = exe_name('loadpath0')
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -489,9 +524,10 @@ class TestOcran < Minitest::Test
     with_fixture 'relloadpath' do
       each_path_combo "bin/loadpath1.rb" do |script|
         assert system('ruby', ocran, script, *DefaultArgs)
-        assert File.exist?('loadpath1.exe')
-        pristine_env "loadpath1.exe" do
-          assert system('loadpath1.exe')
+        exe = exe_name('loadpath1')
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -503,9 +539,10 @@ class TestOcran < Minitest::Test
     with_fixture 'relloadpath' do
       each_path_combo "bin/loadpath2.rb" do |script|
         assert system('ruby', ocran, script, *DefaultArgs)
-        assert File.exist?('loadpath2.exe')
-        pristine_env "loadpath2.exe" do
-          assert system('loadpath2.exe')
+        exe = exe_name('loadpath2')
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -517,9 +554,10 @@ class TestOcran < Minitest::Test
     with_fixture 'relloadpath' do
       each_path_combo "bin/loadpath3.rb" do |script|
         assert system('ruby', ocran, script, *DefaultArgs)
-        assert File.exist?('loadpath3.exe')
-        pristine_env "loadpath3.exe" do
-          assert system('loadpath3.exe')
+        exe = exe_name('loadpath3')
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -535,9 +573,10 @@ class TestOcran < Minitest::Test
     with_fixture 'helloworld' do
       icofile = File.join(OcranRoot, 'src', 'vit-ruby.ico')
       assert system("ruby", ocran, '--icon', icofile, "helloworld.rb", *DefaultArgs)
-      assert File.exist?("helloworld.exe")
-      pristine_env "helloworld.exe" do
-        assert system("helloworld.exe")
+      exe = exe_name("helloworld")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -547,9 +586,10 @@ class TestOcran < Minitest::Test
   def test_resource
     with_fixture 'resource' do
       assert system("ruby", ocran, "resource.rb", "resource.txt", "res/resource.txt", *DefaultArgs)
-      assert File.exist?("resource.exe")
-      pristine_env "resource.exe" do
-        assert system("resource.exe")
+      exe = exe_name("resource")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -559,7 +599,8 @@ class TestOcran < Minitest::Test
     with_fixture 'exception' do
       system("ruby \"#{ocran}\" exception.rb #{DefaultArgs.join(' ')} 2>NUL")
       assert $?.exitstatus != 0
-      refute File.exist?("exception.exe")
+      exe = exe_name("exception")
+      refute File.exist?(exe)
     end
   end
 
@@ -568,8 +609,9 @@ class TestOcran < Minitest::Test
     with_fixture 'environment' do
       with_env "RUBYOPT" => "-rtime" do
         assert system("ruby", ocran, "environment.rb", *DefaultArgs)
-        pristine_env "environment.exe" do
-          assert system("environment.exe")
+        exe = exe_name("environment")
+        pristine_env exe do
+          assert system(exe)
           env = Marshal.load(File.open("environment", "rb") { |f| f.read })
           # Verify that the specified RUBYOPT is included in the execution environment.
           # NOTE: In Ruby 3.2 and later, Bundler may add additional options to RUBYOPT.
@@ -588,8 +630,9 @@ class TestOcran < Minitest::Test
     with_fixture 'environment' do
       with_env "RUBYOPT" => "-rtime" do
         assert system("ruby", ocran, "environment.rb", *test_args)
-        pristine_env "environment.exe" do
-          assert system("environment.exe")
+        exe = exe_name("environment")
+        pristine_env exe do
+          assert system(exe)
           env = Marshal.load(File.open("environment", "rb") { |f| f.read })
           assert_equal specified_rubyopt, env['RUBYOPT']
         end
@@ -600,9 +643,10 @@ class TestOcran < Minitest::Test
   def test_exit
     with_fixture 'exit' do
       assert system("ruby", ocran, "exit.rb", *DefaultArgs)
-      pristine_env "exit.exe" do
-        assert File.exist?("exit.exe")
-        assert system("exit.exe")
+      exe = exe_name("exit")
+      pristine_env exe do
+        assert File.exist?(exe)
+        assert system(exe)
       end
     end
   end
@@ -610,10 +654,11 @@ class TestOcran < Minitest::Test
   def test_ocran_executable_env
     with_fixture 'environment' do
       assert system("ruby", ocran, "environment.rb", *DefaultArgs)
-      pristine_env "environment.exe" do
-        assert system("environment.exe")
+      exe = exe_name("environment")
+      pristine_env exe do
+        assert system(exe)
         env = Marshal.load(File.open("environment", "rb") { |f| f.read })
-        expected_path = File.expand_path("environment.exe").tr('/','\\')
+        expected_path = File.expand_path(exe).tr('/','\\')
         assert_equal expected_path, env['OCRAN_EXECUTABLE']
       end
     end
@@ -622,8 +667,9 @@ class TestOcran < Minitest::Test
   def test_hierarchy
     with_fixture 'hierarchy' do
       assert system("ruby", ocran, "hierarchy.rb", "assets/**/*", *DefaultArgs)
-      pristine_env "hierarchy.exe" do
-        assert system("hierarchy.exe")
+      exe = exe_name("hierarchy")
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -633,9 +679,10 @@ class TestOcran < Minitest::Test
       assert system("ruby", ocran, "helloworld.rb", *DefaultArgs)
       tempdir = File.expand_path("temporary directory")
       mkdir_p tempdir
-      pristine_env "helloworld.exe" do
+      exe = exe_name("helloworld")
+      pristine_env exe do
         with_env "TMP" => tempdir.tr('/','\\') do
-          assert system("helloworld.exe")
+          assert system(exe)
         end
       end
     end
@@ -648,9 +695,10 @@ class TestOcran < Minitest::Test
       script_path = File.expand_path("helloworld.rb")
       with_tmpdir do
         assert system("ruby", ocran, script_path, *DefaultArgs)
-        assert File.exist?("helloworld.exe")
-        pristine_env "helloworld.exe" do
-          assert system("helloworld.exe")
+        exe = exe_name("helloworld")
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -661,9 +709,10 @@ class TestOcran < Minitest::Test
       mkdir "build"
       cd "build" do
         assert system("ruby", ocran, File.expand_path("../helloworld.rb"), *DefaultArgs)
-        assert File.exist?("helloworld.exe")
-        pristine_env "helloworld.exe" do
-          assert system("helloworld.exe")
+        exe = exe_name("helloworld")
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -672,9 +721,10 @@ class TestOcran < Minitest::Test
   def test_relpath
     with_fixture "helloworld" do
       assert system("ruby", ocran, "./helloworld.rb", *DefaultArgs)
-      assert File.exist?("helloworld.exe")
-      pristine_env "helloworld.exe" do
-        assert system("helloworld.exe")
+      exe = exe_name("helloworld")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -684,9 +734,10 @@ class TestOcran < Minitest::Test
       mkdir "build"
       cd "build" do
         assert system("ruby", ocran, "../helloworld.rb", *DefaultArgs)
-        assert File.exist?("helloworld.exe")
-        pristine_env "helloworld.exe" do
-          assert system("helloworld.exe")
+        exe = exe_name("helloworld")
+        assert File.exist?(exe)
+        pristine_env exe do
+          assert system(exe)
         end
       end
     end
@@ -696,11 +747,12 @@ class TestOcran < Minitest::Test
   def test_srcroot
     with_fixture "srcroot" do
       assert system("ruby", ocran, "bin/srcroot.rb", "share/data.txt", *DefaultArgs)
-      assert File.exist?("srcroot.exe")
-      pristine_env "srcroot.exe" do
-        exe = File.expand_path("srcroot.exe")
+      exe = exe_name("srcroot")
+      assert File.exist?(exe)
+      pristine_env exe do
+        exe_path = File.expand_path(exe)
         cd ENV["SystemRoot"] do
-          assert system(exe)
+          assert system(exe_path)
         end
       end
     end
@@ -710,11 +762,12 @@ class TestOcran < Minitest::Test
   def test_chdir
     with_fixture "chdir" do
       assert system("ruby", ocran, "chdir.rb", *DefaultArgs)
-      assert File.exist?("chdir.exe")
-      pristine_env "chdir.exe" do
-        exe = File.expand_path("chdir.exe")
+      exe = exe_name("chdir")
+      assert File.exist?(exe)
+      pristine_env exe do
+        exe_path = File.expand_path(exe)
         cd ENV["SystemRoot"] do
-          assert system(exe)
+          assert system(exe_path)
         end
       end
     end
@@ -725,16 +778,17 @@ class TestOcran < Minitest::Test
     with_fixture 'writefile' do
       # Control test; make sure the writefile script works as expected under default options
       assert system("ruby", ocran, "writefile.rb", *(DefaultArgs))
-      pristine_env "writefile.exe" do
+      exe = exe_name("writefile")
+      pristine_env exe do
         refute File.exist?("output.txt")
-        assert system("writefile.exe")
+        assert system(exe)
         assert File.exist?("output.txt")
       end
 
       assert system("ruby", ocran, "writefile.rb", *(DefaultArgs + ["--chdir-first"]))
-      pristine_env "writefile.exe" do
+      pristine_env exe do
         refute File.exist?("output.txt")
-        assert system("writefile.exe")
+        assert system(exe)
         # If the script ran in its inst directory, then our working dir still shouldn't have any output.txt
         refute File.exist?("output.txt")
       end
@@ -747,9 +801,10 @@ class TestOcran < Minitest::Test
     path = File.join(RbConfig::CONFIG["exec_prefix"], "ocrantempsrc")
     with_fixture "helloworld", path do
       assert system("ruby", ocran, "helloworld.rb", *DefaultArgs)
-      assert File.exist?("helloworld.exe")
-      pristine_env "helloworld.exe" do
-        assert system("helloworld.exe")
+      exe = exe_name("helloworld")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
@@ -761,9 +816,10 @@ class TestOcran < Minitest::Test
     assert number_of_files > 3
     with_fixture "check_includes" do
       assert system("ruby", ocran, "check_includes.rb", path, *DefaultArgs)
-      assert File.exist?("check_includes.exe")
-      pristine_env "check_includes.exe" do
-        assert system("check_includes.exe", number_of_files.to_s)
+      exe = exe_name("check_includes")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe, number_of_files.to_s)
       end
     end
   end
@@ -772,12 +828,13 @@ class TestOcran < Minitest::Test
   def test_nonexistent_temp
     with_fixture 'helloworld' do
       assert system("ruby", ocran, "helloworld.rb", *DefaultArgs)
-      assert File.exist?("helloworld.exe")
-      pristine_env "helloworld.exe" do
+      exe = exe_name("helloworld")
+      assert File.exist?(exe)
+      pristine_env exe do
         with_env "TEMP" => "c:\\thispathdoesnotexist12345", "TMP" => "c:\\thispathdoesnotexist12345" do
-          assert File.exist?("helloworld.exe")
-          system("helloworld.exe 2>NUL")
-          assert File.exist?("helloworld.exe")
+          assert File.exist?(exe)
+          system("#{exe} 2>NUL")
+          assert File.exist?(exe)
         end
       end
     end
@@ -802,9 +859,10 @@ class TestOcran < Minitest::Test
   def test_debug
     with_fixture 'helloworld' do
       assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--debug"]))
-      pristine_env "helloworld-debug.exe" do
+      exe = exe_name("helloworld-debug")
+      pristine_env exe do
         require 'open3'
-        Open3.popen3("helloworld-debug.exe") do |_stdin, _stdout, stderr, wait_thr|
+        Open3.popen3(exe) do |_stdin, _stdout, stderr, wait_thr|
           # The Ocran stub outputs in debug mode to the standard output.
           assert_equal "DEBUG: Ocran stub running in debug mode\n", stderr.gets
           stderr.read # Ignore the output content after the first line
@@ -818,17 +876,17 @@ class TestOcran < Minitest::Test
   # with multibyte (UTF-8) characters in its name.
   def test_multibyte_path_execution
     with_fixture 'helloworld' do
-      exe_name = "helloworld.exe"
+      exe = exe_name("helloworld")
       assert system("ruby", ocran, "helloworld.rb", *DefaultArgs)
-      assert File.exist?(exe_name)
+      assert File.exist?(exe)
 
       multibyte_dir = "äあ💎"
 
-      pristine_env exe_name do
+      pristine_env exe do
         mkdir_p multibyte_dir
-        cp exe_name, multibyte_dir
+        cp exe, multibyte_dir
         Dir.chdir(multibyte_dir) do
-          assert system(exe_name)
+          assert system(exe)
         end
       end
     end

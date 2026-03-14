@@ -94,7 +94,11 @@ module Ocran
       direction = Direction.new(@post_env, @pre_env, @option)
 
       if @option.use_inno_setup?
-        direction.build_inno_setup_installer
+        if Gem.win_platform?
+          direction.build_inno_setup_installer
+        else
+          raise "Inno Setup is not supported on Linux"
+        end
       else
         direction.build_stab_exe
       end
