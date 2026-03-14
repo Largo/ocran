@@ -108,22 +108,17 @@ jobs:
           gem build ocran-source.gemspec
           gem install --local ocran-*.gem
 
-      - name: Build and run hello world executable (Linux)
+      - name: Build zlib executable and run portability test (Linux)
         if: runner.os == 'Linux'
         run: |
-          ocran test/fixtures/helloworld/helloworld.rb --no-lzma
-          ./helloworld
-          cp helloworld /tmp/helloworld_from_source_gem
+          ocran test/fixtures/zlib/zlib.rb --output /tmp/zlib_from_source_gem
+          docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/zlib_from_source_gem
 
-      - name: Run executable on Debian (no Ruby installed)
-        if: runner.os == 'Linux'
-        run: docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/helloworld_from_source_gem
-
-      - name: Build and run hello world executable (Windows)
+      - name: Build and run zlib executable (Windows)
         if: runner.os == 'Windows'
         run: |
-          ocran test/fixtures/helloworld/helloworld.rb --no-lzma
-          .\helloworld.exe
+          ocran test/fixtures/zlib/zlib.rb --output zlib_from_source_gem.exe
+          .\zlib_from_source_gem.exe
 
   run-tests-windows:
     strategy:
