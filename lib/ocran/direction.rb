@@ -134,6 +134,13 @@ module Ocran
         # On POSIX systems, libruby.so is in libdir; on Windows, it's in bindir
         libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
         builder.copy_to_bin(libruby_src, libruby_so)
+
+        # On POSIX systems, we also need to copy symlinks (aliases) for libruby.so
+        unless Gem.win_platform?
+          libruby_aliases.each do |libruby_alias|
+            builder.copy_to_bin(libdir / libruby_alias, libruby_alias)
+          end
+        end
       end
 
       # On POSIX systems, set LD_LIBRARY_PATH to find bundled shared libraries

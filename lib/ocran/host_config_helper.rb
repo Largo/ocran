@@ -28,6 +28,12 @@ module Ocran
       @libruby_so ||= Pathname.new(name)
     end
 
+    def libruby_aliases
+      aliases = RbConfig::CONFIG["LIBRUBY_ALIASES"]
+      return [] if aliases.nil? || aliases.empty?
+      aliases.split.map { |name| Pathname.new(name) }
+    end
+
     def exe_extname
       RbConfig::CONFIG["EXEEXT"] || ".exe"
     end
