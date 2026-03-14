@@ -85,7 +85,13 @@ jobs:
           ./zlib_packed
 
   test-source-gem-install:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04-arm
+          - os: windows-11-arm
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -94,6 +100,7 @@ jobs:
           ruby-version: '4.0'
 
       - name: Install build dependencies
+        if: runner.os == 'Linux'
         run: sudo apt-get install -y xz-utils gcc make
 
       - name: Build and install source gem
@@ -101,14 +108,22 @@ jobs:
           gem build ocran-source.gemspec
           gem install --local ocran-*.gem
 
-      - name: Build hello world executable via installed gem
+      - name: Build and run hello world executable (Linux)
+        if: runner.os == 'Linux'
         run: |
           ocran test/fixtures/helloworld/helloworld.rb --no-lzma
           ./helloworld
           cp helloworld /tmp/helloworld_from_source_gem
 
       - name: Run executable on Debian (no Ruby installed)
+        if: runner.os == 'Linux'
         run: docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/helloworld_from_source_gem
+
+      - name: Build and run hello world executable (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          ocran test/fixtures/helloworld/helloworld.rb --no-lzma
+          .\helloworld.exe
 
   run-tests-windows:
     strategy:
