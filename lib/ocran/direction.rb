@@ -30,12 +30,13 @@ module Ocran
       # modifications that may occur during script execution.
       @rubyopt = @option.rubyopt || pre_env.env["RUBYOPT"] || ""
 
-      # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
-      # This is a temporary measure to ensure compatibility with self-extracting executables
-      # built in a bundle exec environment, particularly for Ruby 3.2 and later where
-      # absolute paths are included in RUBYOPT.
-      # In the future, we plan to implement a more appropriate solution.
-      @rubyopt = @rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
+      # Remove any absolute path to bundler/setup from RUBYOPT.
+      # When building under `bundle exec`, RUBYOPT contains `-r/absolute/path/bundler/setup`.
+      # That path doesn't exist inside the packed executable's environment, causing Ruby to
+      # print "RubyGems were not loaded" / "did_you_mean was not loaded" warnings on startup.
+      # We strip the flag regardless of install prefix because the gem may live in a user gem
+      # directory that doesn't share a prefix with RbConfig::TOPDIR (e.g. on CI runners).
+      @rubyopt = @rubyopt.gsub(/-r\S*\/bundler\/setup/, "").strip
     end
 
     # Resolves the common root directory prefix from an array of absolute paths.
@@ -97,8 +98,22 @@ module Ocran
       features = @post_env.loaded_features.map { |feature| Pathname(feature) }
 
       # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
-      # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually
-      features.push(Pathname("rubygems/core_ext/kernel_require.rb"))
+      # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually.
+      # We try to find it relative to rubygems.rb to ensure it's picked up even if it's not in the standard LOAD_PATH.
+      kernel_require = Pathname("rubygems/core_ext/kernel_require.rb")
+      unless features.any? { |f| f.to_s.end_with?(kernel_require.to_s) }
+        rubygems_rb = features.find { |f| f.to_s.end_with?("rubygems.rb") }
+        if rubygems_rb
+          kernel_require_path = rubygems_rb.dirname / kernel_require
+          if kernel_require_path.exist?
+            features.push(kernel_require_path)
+          else
+            features.push(kernel_require)
+          end
+        else
+          features.push(kernel_require)
+        end
+      end
 
       # Convert all relative paths to absolute paths before building.
       # NOTE: In the future, different strategies may be needed before and after script execution.
@@ -425,6 +440,7 @@ module Ocran
       # src_prefix was adjusted.
       load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
       builder.set_env_path("RUBYLIB", *load_path)
+      builder.set_env_path("GEM_HOME", GEMDIR)
       builder.set_env_path("GEM_PATH", GEMDIR)
 
       # Add the opcode to launch the script

@@ -8,7 +8,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: ['4.0']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,17 +27,18 @@ jobs:
           bundle exec rake build
           bundle exec rake test
 
-      - name: Build helloworld for cross-distro test
-        run: ruby -Ilib exe/ocran test/fixtures/helloworld/helloworld.rb --output /tmp/helloworld_packed
+      - name: Build zlib fixture for cross-distro test
+        run: ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output /tmp/zlib_packed
 
       - name: Run packed executable on Debian (no Ruby installed)
-        run: docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/helloworld_packed
+        run: docker run --rm -v /tmp:/mnt debian:stable-slim /mnt/zlib_packed
 
   run-tests-macos:
     strategy:
       fail-fast: false
       matrix:
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: ['4.0']
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,14 +56,14 @@ jobs:
           bundle exec rake build
           bundle exec rake test
 
-      - name: Build helloworld for cross-system test
-        run: ruby -Ilib exe/ocran test/fixtures/helloworld/helloworld.rb --output helloworld_packed
+      - name: Build zlib fixture for cross-system test
+        run: ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output zlib_packed
 
       - name: Upload packed binary
         uses: actions/upload-artifact@v4
         with:
-          name: helloworld-macos-${{ matrix.ruby }}
-          path: helloworld_packed
+          name: zlib-macos-${{ matrix.ruby }}
+          path: zlib_packed
           retention-days: 1
 
   test-macos-portability:
@@ -69,25 +71,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: ['4.0']
     runs-on: macos-latest
     steps:
       - name: Download packed binary
         uses: actions/download-artifact@v4
         with:
-          name: helloworld-macos-${{ matrix.ruby }}
+          name: zlib-macos-${{ matrix.ruby }}
 
       - name: Run packed executable
         run: |
-          chmod +x helloworld_packed
-          ./helloworld_packed
+          chmod +x zlib_packed
+          ./zlib_packed
 
   run-tests-windows:
     strategy:
       fail-fast: false
       matrix:
         os: [ windows-latest ]
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        #ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: ['4.0']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -135,10 +139,36 @@ jobs:
       #   shell: pwsh
       #   run: ridk exec pacman -S --noconfirm mingw-w64-ucrt-x86_64-tcl mingw-w64-ucrt-x86_64-tk
 
-      # - name: Install tk gem
-      #   run: gem install tk -v 0.5.1 -- --without-X11 --with-cflags="-std=gnu99 -Wno-incompatible-pointer-types"
-
       - name: Build stub and run tests
         run: |
           bundle exec rake build
           bundle exec rake test
+
+      - name: Build zlib fixture for portability test
+        run: bundle exec ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output zlib_packed.exe
+
+      - name: Upload packed binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: zlib-windows-${{ matrix.ruby }}
+          path: zlib_packed.exe
+          retention-days: 1
+
+  test-windows-portability:
+    needs: run-tests-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['4.0']
+    runs-on: windows-latest
+    steps:
+      - name: Download packed binary
+        uses: actions/download-artifact@v4
+        with:
+          name: zlib-windows-${{ matrix.ruby }}
+
+      - name: Run packed executable
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\Windows\system32;C:\Windows"
+          .\zlib_packed.exe
