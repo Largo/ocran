@@ -10,3 +10,5 @@ gem "fiddle", "~> 1.0"
 gem "glimmer-dsl-libui"
 
 gem 'logger'
+gem 'csv'
+gem 'matrix'

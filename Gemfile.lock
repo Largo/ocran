@@ -5,6 +5,7 @@ GEM
     awesome_print (1.9.2)
     chunky_png (1.4.0)
     color (1.8)
+    csv (3.3.5)
     drb (2.2.3)
     equalizer (0.0.11)
     facets (3.1.0)
@@ -70,10 +71,12 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
+  csv
   fiddle (~> 1.0)
   glimmer-dsl-libui
   hoe (~> 4.6)
   logger
+  matrix
   minitest (~> 6.0)
 
 BUNDLED WITH
