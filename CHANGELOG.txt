@@ -1,3 +1,6 @@
+=== 1.4.1
+- Fix kernel_require.rb packed at wrong path when rubygems-update is installed (e.g. via asdf on Linux/macOS). kernel_require.rb is now located relative to the actually-loaded rubygems.rb from $LOADED_FEATURES, falling back to rubylibdir for standard Ruby installations.
+
 === 1.4.0
 - Add Linux support: build and run self-extracting ELF executables on Linux. The stub compiles and runs natively on Linux using POSIX APIs.
 - Add macOS support: build and run self-extracting Mach-O executables on macOS.
