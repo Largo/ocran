@@ -1077,7 +1077,6 @@ class TestOcran < Minitest::Test
   # zlib1.dll in archdir. Without them the SxS activation context fails with
   # error 14001 at runtime. Verifies that compress/decompress round-trips work.
   def test_zlib
-    skip "SxS manifest test is Windows-only" unless Gem.win_platform?
     with_fixture 'zlib' do
       assert system("ruby", ocran, "zlib.rb", *DefaultArgs)
       assert File.exist?(exe_name("zlib"))

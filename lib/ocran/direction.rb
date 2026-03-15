@@ -100,12 +100,25 @@ module Ocran
       # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
       # rubygems/core_ext/kernel_require.rb is loaded via IO.read+eval rather than require,
       # so it never appears in $LOADED_FEATURES and must be added manually.
-      # Use RbConfig::CONFIG["rubylibdir"] directly so the path is always correct,
-      # regardless of Ruby version or platform path separator conventions.
+      # We check multiple candidate locations because the layout varies by Ruby setup:
+      # - Standard Ruby (including RubyInstaller on Windows): rubygems.rb lives in rubylibdir
+      # - Ruby with rubygems-update (e.g. asdf on Linux/macOS): rubygems.rb lives in site_ruby
+      # kernel_require.rb must be packed alongside the rubygems.rb that was actually loaded,
+      # because rubygems.rb uses require_relative to load it.
       kernel_require_rel = "rubygems/core_ext/kernel_require.rb"
       unless features.any? { |f| f.to_posix.end_with?(kernel_require_rel) }
-        kernel_require_path = Pathname(RbConfig::CONFIG["rubylibdir"]) / kernel_require_rel
-        features.push(kernel_require_path) if kernel_require_path.exist?
+        # Prefer the location alongside the actually-loaded rubygems.rb, fall back to rubylibdir
+        rubygems_feature = features.find { |f| f.to_posix.end_with?("/rubygems.rb") }
+        candidate_dirs = []
+        candidate_dirs << rubygems_feature.dirname if rubygems_feature
+        candidate_dirs << Pathname(RbConfig::CONFIG["rubylibdir"])
+        candidate_dirs.each do |base_dir|
+          kernel_require_path = base_dir / kernel_require_rel
+          if kernel_require_path.exist?
+            features.push(kernel_require_path)
+            break
+          end
+        end
       end
 
       # Convert all relative paths to absolute paths before building.
