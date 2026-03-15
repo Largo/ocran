@@ -115,10 +115,11 @@ Same as `--output-dir`, but packages the result into a zip file. Requires
 ### Options:
 
     ocran --help
+    ocran -h
 
 #### General options:
 
-* `--help`: Display available command-line options.
+* `--help`, `-h`: Display available command-line options.
 * `--quiet`: Suppress all output during the build process.
 * `--verbose`: Provide detailed output during the build process.
 * `--version`: Display the OCRAN version number and exit.
@@ -221,6 +222,23 @@ On Windows, run the batch file:
 
 * OCRAN-built executables correctly handle multibyte paths (e.g. Japanese, emoji) on Windows 10 1903+.
 * When using the executable from the console, run `chcp 65001` first to switch to UTF-8 on windows.
+
+## Limitations
+
+### No cross-platform building
+
+OCRAN is not a cross-compiler. The executable or directory it produces bundles
+the Ruby interpreter from the machine where OCRAN is run, so you must **run
+OCRAN on the same platform (and architecture) as the intended target**:
+
+* To produce a Windows `.exe`, run OCRAN on Windows.
+* To produce a Linux binary, run OCRAN on Linux.
+* To produce a macOS app bundle, run OCRAN on macOS.
+
+There is no support for building a Windows `.exe` from a Linux or macOS host,
+or vice versa. If you need builds for multiple platforms, run OCRAN in CI on
+each target platform separately (e.g., a Windows runner for `.exe` builds and
+a Linux runner for Linux builds).
 
 ## Requirements
 

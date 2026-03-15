@@ -46,7 +46,7 @@ ocran [options] script.rb
 
 Ocran options:
 
---help             Display this information.
+--help, -h         Display this information.
 --quiet            Suppress output while building executable.
 --verbose          Show extra output while building executable.
 --version          Display version number and exit.
@@ -179,7 +179,7 @@ EOF
         when /\A--(no-)?gem-(\w+)(?:=(.*))?$/
           negate, group, list = $1, $2, $3
           @options[:gem_options] << [negate, group.to_sym, list&.split(",")] if group
-        when "--help", /\A--./
+        when "--help", "-h", /\A--./
           puts usage
           raise SystemExit
         else
