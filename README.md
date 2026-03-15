@@ -230,6 +230,14 @@ On Windows, run the batch file:
 * For `--output-zip` on Linux/macOS: the `zip` command must be available
 * For `--output-zip` on Windows: PowerShell (included in Windows 8+)
 
+### Output architecture
+
+The architecture of the generated executable matches the Ruby interpreter used to run OCRAN:
+
+* **macOS (Intel / Apple Silicon)** — The output binary targets the same CPU as your Ruby installation. If you build with an ARM64 Ruby (Apple Silicon), the result is an ARM64 executable and will not run on Intel Macs. Build on Intel (or with an Intel Ruby under Rosetta) to produce a universally compatible x86-64 binary.
+
+* **Windows on ARM (Windows 11 ARM)** — RubyInstaller recently started shipping ARM64 builds; Installing the ARM64 RubyInstaller on a Windows ARM machine and running OCRAN from it will produce an ARM64 `.exe`. These run on ARM Windows natively. Installing the standard x86-64 RubyInstaller on a Windows ARM machine and running OCRAN from it will (probably?) produce an x86-64 `.exe`. These run on ARM Windows via the built-in x86-64 emulation layer, so the executables work on both ARM and x86-64 Windows targets. If you use `--no-lzma`, note that `lzma.exe` (the bundled compressor) is also x86-64 and relies on the same emulation.
+
 ## Development
 
 ### Quick start
