@@ -3,7 +3,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include "error.h"
 #include "system_utils.h"
 #include "inst_dir.h"
@@ -151,6 +153,22 @@ static bool process_opcode(UnpackReader *reader, Opcode opcode)
             return SetScriptInfo(args, size);
         }
 
+        case OP_CREATE_SYMLINK: {
+            if (!read_string(reader, &name)) {
+                return false;
+            }
+            if (!read_string(reader, &value)) {
+                return false;
+            }
+            DEBUG("OP_CREATE_SYMLINK: link='%s', target='%s'", name, value);
+#ifndef _WIN32
+            return CreateSymlinkUnderInstDir(name, value);
+#else
+            DEBUG("OP_CREATE_SYMLINK: skipped on Windows");
+            return true;
+#endif
+        }
+
         default: {
             DEBUG("Invalid opcode: %d", opcode);
             return false;
@@ -270,6 +288,7 @@ const uint8_t Signature[] = { 0x41, 0xb6, 0xba, 0x4e };
 /* see https://en.wikipedia.org/wiki/Portable_Executable for explanation of these header fields */
 #define SECURITY_ENTRY(header) ((header)->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY])
 
+#ifdef _WIN32
 /* The NTHeader is another name for the PE header. It is the 'modern' executable header
    as opposed to the DOS_HEADER which exists for legacy reasons */
 static PIMAGE_NT_HEADERS retrieveNTHeader(const void *ptr) {
@@ -303,9 +322,11 @@ static bool isDigitallySigned(const void *ptr, size_t buffer_size) {
 
   return true;
 }
+#endif
 
 static const void *find_signature(const void *buffer, size_t buffer_size)
 {
+#ifdef _WIN32
     // Check if the executable is digitally signed
     if (!isDigitallySigned(buffer, buffer_size)) {
         // No digital signature, use the original logic
@@ -351,6 +372,19 @@ static const void *find_signature(const void *buffer, size_t buffer_size)
         }
         return sig;
     }
+#else
+    // POSIX: no PE headers, just check the end of the file
+    if (buffer_size < sizeof(Signature)) {
+        return NULL;
+    }
+
+    const void *sig = (const uint8_t *)buffer + buffer_size - sizeof(Signature);
+    if (memcmp(sig, Signature, sizeof(Signature)) != 0) {
+        return NULL;
+    }
+
+    return sig;
+#endif
 }
 
 typedef uint8_t OperationModesType;

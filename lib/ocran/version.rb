@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 module Ocran
-  VERSION = "1.3.18"
+  VERSION = "1.4.0"
 end

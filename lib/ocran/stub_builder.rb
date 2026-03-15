@@ -13,6 +13,7 @@ module Ocran
     OP_CREATE_FILE = 2
     OP_SETENV = 3
     OP_SET_SCRIPT = 4
+    OP_CREATE_SYMLINK = 5
 
     DEBUG_MODE          = 0x01
     EXTRACT_TO_EXE_DIR  = 0x02
@@ -20,11 +21,27 @@ module Ocran
     CHDIR_BEFORE_SCRIPT = 0x08
     DATA_COMPRESSED     = 0x10
 
+    WINDOWS = Gem.win_platform?
+
     base_dir = File.expand_path("../../share/ocran", File.dirname(__FILE__))
-    STUB_PATH = File.expand_path("stub.exe", base_dir)
-    STUBW_PATH = File.expand_path("stubw.exe", base_dir)
-    LZMA_PATH = File.expand_path("lzma.exe", base_dir)
-    EDICON_PATH = File.expand_path("edicon.exe", base_dir)
+    STUB_PATH = File.expand_path(WINDOWS ? "stub.exe" : "stub", base_dir)
+    STUBW_PATH = WINDOWS ? File.expand_path("stubw.exe", base_dir) : nil
+    LZMA_PATH = WINDOWS ? File.expand_path("lzma.exe", base_dir) : nil
+    EDICON_PATH = WINDOWS ? File.expand_path("edicon.exe", base_dir) : nil
+
+    def self.find_posix_lzma_cmd
+      if system("which lzma > /dev/null 2>&1")
+        ["lzma", "--compress", "--stdout"]
+      elsif system("which xz > /dev/null 2>&1")
+        ["xz", "--format=lzma", "--compress", "--stdout"]
+      elsif File.exist?("/opt/homebrew/bin/lzma")
+        ["/opt/homebrew/bin/lzma", "--compress", "--stdout"]
+      else
+        nil
+      end
+    end
+
+    LZMA_CMD = WINDOWS ? [LZMA_PATH, "e", "-si", "-so"] : find_posix_lzma_cmd
 
     attr_reader :data_size
 
@@ -89,15 +106,23 @@ module Ocran
         raise "Icon file #{icon_path} not found"
       end
 
-      stub = Tempfile.new("", File.dirname(path))
-      IO.copy_stream(gui_mode ? STUBW_PATH : STUB_PATH, stub)
-      stub.close
+      output_dir = File.dirname(path)
+      FileUtils.mkdir_p(output_dir) unless Dir.exist?(output_dir)
+      stub_tmp = File.join(output_dir, ".ocran_stub_#{$$}_#{Time.now.to_i}")
+      stub_src = if gui_mode && WINDOWS
+                   STUBW_PATH
+                 else
+                   STUB_PATH
+                 end
+      IO.copy_stream(stub_src, stub_tmp)
+      stub = stub_tmp
 
-      # Clear any invalid security directory entries from the stub
-      self.class.clear_invalid_security_entry(stub.path)
+      # Clear any invalid security directory entries from the stub (Windows only)
+      self.class.clear_invalid_security_entry(stub) if WINDOWS
 
-      if icon_path
-        system(EDICON_PATH, stub.path, icon_path.to_s, exception: true)
+      # Embed icon resource (Windows only)
+      if icon_path && WINDOWS
+        system(EDICON_PATH, stub, icon_path.to_s, exception: true)
       end
 
       File.open(stub, "ab") do |of|
@@ -110,7 +135,7 @@ module Ocran
           yield(self)
         }
 
-        if enable_compression
+        if enable_compression && LZMA_CMD
           compress(&b)
         else
           b.yield
@@ -120,6 +145,7 @@ module Ocran
       end
 
       File.rename(stub, path)
+      File.chmod(0755, path) unless WINDOWS
     end
 
     def mkdir(target)
@@ -127,6 +153,12 @@ module Ocran
 
       write_opcode(OP_CREATE_DIRECTORY)
       write_path(target)
+    end
+
+    def symlink(link_path, target)
+      write_opcode(OP_CREATE_SYMLINK)
+      write_path(link_path)
+      write_string(target.to_s)
     end
 
     def cp(source, target)
@@ -164,7 +196,9 @@ module Ocran
     end
 
     def compress
-      IO.popen([LZMA_PATH, "e", "-si", "-so"], "r+b") do |lzma|
+      raise "No LZMA compressor found" unless LZMA_CMD
+
+      IO.popen(LZMA_CMD, "r+b") do |lzma|
         _of, @of = @of, lzma
         Thread.new { yield(self); lzma.close_write }
         IO.copy_stream(lzma, _of)
@@ -257,7 +291,7 @@ module Ocran
     private :write_footer
 
     def convert_to_native(path)
-      path.to_s.tr(File::SEPARATOR, "\\")
+      WINDOWS ? path.to_s.tr(File::SEPARATOR, "\\") : path.to_s
     end
     private :convert_to_native
   end

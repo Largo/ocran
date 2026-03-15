@@ -14,7 +14,7 @@ module Ocran
 
     class << self
       def compile(iss_filename, quiet: false)
-        unless system("where #{quote_and_escape(ISCC_CMD)} >NUL 2>&1")
+        unless Gem.win_platform? || system("where #{quote_and_escape(ISCC_CMD)} >NUL 2>&1")
           raise "ISCC command not found. Is the InnoSetup directory in your PATH?"
         end
 

@@ -5,6 +5,7 @@ typedef enum {
     OP_CREATE_FILE      = 2,
     OP_SETENV           = 3,
     OP_SET_SCRIPT       = 4,
+    OP_CREATE_SYMLINK   = 5,
 } Opcode;
 
 /**

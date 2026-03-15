@@ -40,11 +40,18 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = "https://github.com/largo/ocran"
   spec.metadata["changelog_uri"] = "https://github.com/largo/ocran/CHANGELOG.txt"
 
-  # Each platform ships only its own compiled stub binary.
-  # gem install ocran automatically selects the right gem for the current platform.
-  spec.platform = Gem::Platform::CURRENT
+  # Source gem: no platform set, ships C source and compiles the stub on install.
+  # RubyGems falls back to this when no binary gem matches the user's platform.
+  spec.extensions = ["ext/extconf.rb"]
 
-  spec.files = Dir.glob("{exe,lib,share}/**/*") +
+  spec.files = Dir.glob("{exe,lib}/**/*") +
+               Dir.glob("src/**/*.{c,h,rc,manifest,ico}") +
+               ["src/Makefile"] +
+               ["ext/extconf.rb"] +
+               # lzma.exe is a pre-built x86-64 Windows binary (not compiled from source).
+               # Include it so Windows users get compression support out of the box.
+               # On ARM64 Windows, x86-64 emulation makes it usable; use --no-lzma otherwise.
+               Dir.glob("share/ocran/lzma.exe") +
                %w[README.md LICENSE.txt CHANGELOG.txt]
   spec.bindir = "exe"
   spec.executables = Dir.glob("exe/*").map { |f| File.basename(f) }

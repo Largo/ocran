@@ -12,6 +12,9 @@ module Ocran
         :add_all_encoding? => true,
         :argv => [],
         :auto_detect_dlls? => true,
+        :bundle_identifier => nil,
+        :macosx_bundle => nil,
+        :macosx_bundle? => false,
         :chdir_before? => false,
         :enable_compression? => true,
         :enable_debug_extract? => false,
@@ -24,7 +27,9 @@ module Ocran
         :icon_filename => nil,
         :inno_setup_script => nil,
         :load_autoload? => true,
+        :output_dir => nil,
         :output_override => nil,
+        :output_zip => nil,
         :quiet? => false,
         :rubyopt => nil,
         :run_script? => true,
@@ -83,6 +88,10 @@ Auto-detection options:
 Output options:
 
 --output <file>    Name the exe to generate. Defaults to ./<scriptname>.exe.
+--output-dir <dir> Output all files to a directory with a launch script instead of an exe.
+--output-zip <file> Output a zip archive containing all files and a launch script.
+--macosx-bundle    Build a macOS .app bundle. Use --output to name it (default: <scriptname>.app).
+--bundle-id <id>   Bundle identifier for the macOS app bundle (default: com.example.<appname>).
 --no-lzma          Disable LZMA compression of the executable.
 --innosetup <file> Use given Inno Setup script (.iss) to create an installer.
 
@@ -110,6 +119,16 @@ EOF
         when "--output"
           path = argv.shift
           @options[:output_override] = Pathname.new(path).expand_path if path
+        when "--output-dir"
+          path = argv.shift
+          @options[:output_dir] = Pathname.new(path).expand_path if path
+        when "--output-zip"
+          path = argv.shift
+          @options[:output_zip] = Pathname.new(path).expand_path if path
+        when "--macosx-bundle"
+          @options[:macosx_bundle?] = true
+        when "--bundle-id"
+          @options[:bundle_identifier] = argv.shift
         when "--dll"
           path = argv.shift
           @options[:extra_dlls] << path if path
@@ -164,14 +183,20 @@ EOF
           puts usage
           raise SystemExit
         else
-          raise "#{arg} not found!" unless File.exist?(arg)
+          expanded = Dir.glob(arg)
+          if expanded.empty?
+            raise "#{arg} not found!" unless File.exist?(arg)
+            expanded = [arg]
+          end
 
-          if File.directory?(arg)
-            raise "#{arg} is empty!" if Dir.empty?(arg)
-            # If a directory is passed, we want all files under that directory
-            @options[:source_files] += Pathname.new(arg).find.reject(&:directory?).map(&:expand_path)
-          else
-            @options[:source_files] << Pathname.new(arg).expand_path
+          expanded.each do |f|
+            if File.directory?(f)
+              raise "#{f} is empty!" if Dir.empty?(f)
+              # If a directory is passed, we want all files under that directory
+              @options[:source_files] += Pathname.new(f).find.reject(&:directory?).map(&:expand_path)
+            else
+              @options[:source_files] << Pathname.new(f).expand_path
+            end
           end
         end
       end
@@ -190,8 +215,14 @@ EOF
           # If debug mode is enabled, append "-debug" to the filename
           executable = executable.append_to_filename("-debug") if enable_debug_mode?
           # Build output files are created in the current directory
-          executable.basename.sub_ext(".exe").expand_path
+          ext = Gem.win_platform? ? ".exe" : ""
+          executable.basename.sub_ext(ext).expand_path
         end
+
+      if @options[:macosx_bundle?]
+        bundle_base = output_override || script.basename
+        @options[:macosx_bundle] = Pathname(bundle_base).sub_ext(".app").expand_path
+      end
 
       @options[:use_inno_setup?] = !!inno_setup_script
 
@@ -212,6 +243,14 @@ EOF
           raise "Chdir-first mode must be enabled (--chdir-first) when using Inno Setup"
         end
       end
+
+      if output_dir && output_zip
+        raise "--output-dir and --output-zip cannot be used together"
+      end
+
+      if macosx_bundle && (output_dir || output_zip || inno_setup_script)
+        raise "--macosx-bundle cannot be combined with --output-dir, --output-zip, or --innosetup"
+      end
     end
 
     def add_all_core? = @options[__method__]
@@ -219,6 +258,10 @@ EOF
     def add_all_encoding? = @options[__method__]
 
     def argv = @options[__method__]
+
+    def bundle_identifier = @options[__method__]
+
+    def macosx_bundle = @options[__method__]
 
     def auto_detect_dlls? = @options[__method__]
 
@@ -248,9 +291,13 @@ EOF
 
     def load_autoload? = @options[__method__]
 
+    def output_dir = @options[__method__]
+
     def output_executable = @options[__method__]
 
     def output_override = @options[__method__]
+
+    def output_zip = @options[__method__]
 
     def quiet? = @options[__method__]
 
@@ -268,6 +315,9 @@ EOF
 
     def warning? = @options[__method__]
 
-    def windowed? = @options[__method__]
+    def windowed?
+      return false unless Gem.win_platform?
+      @options[:windowed?]
+    end
   end
 end

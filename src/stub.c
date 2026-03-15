@@ -4,10 +4,10 @@
   and files in a temporary directory, launching a program.
 */
 
-#include <windows.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "error.h"
 #include "system_utils.h"
 #include "inst_dir.h"
@@ -51,8 +51,8 @@ int main(int argc, char *argv[])
     /* Read header of packed data */
     op_modes = GetOperationModes(unpack_ctx);
 
-    /* Enable debug mode when the flag is set */
-    if (IsDebugMode(op_modes)) {
+    /* Enable debug mode when the flag is set or OCRAN_DEBUG env var is set */
+    if (IsDebugMode(op_modes) || getenv("OCRAN_DEBUG")) {
         EnableDebugMode();
         DEBUG("Ocran stub running in debug mode");
     }

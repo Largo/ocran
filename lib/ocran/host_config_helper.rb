@@ -18,8 +18,20 @@ module Ocran
       @bindir ||= Pathname.new(RbConfig::CONFIG["bindir"])
     end
 
+    def libdir
+      @libdir ||= Pathname.new(RbConfig::CONFIG["libdir"])
+    end
+
     def libruby_so
-      @libruby_so ||= Pathname.new(RbConfig::CONFIG["LIBRUBY_SO"])
+      name = RbConfig::CONFIG["LIBRUBY_SO"]
+      return nil if name.nil? || name.empty?
+      @libruby_so ||= Pathname.new(name)
+    end
+
+    def libruby_aliases
+      aliases = RbConfig::CONFIG["LIBRUBY_ALIASES"]
+      return [] if aliases.nil? || aliases.empty?
+      aliases.split.map { |name| Pathname.new(name) }
     end
 
     def exe_extname
@@ -27,6 +39,7 @@ module Ocran
     end
 
     def rubyw_exe
+      return nil unless Gem.win_platform?
       @rubyw_exe ||= (RbConfig::CONFIG["rubyw_install_name"] || "rubyw") + exe_extname
     end
 

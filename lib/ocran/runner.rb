@@ -94,7 +94,17 @@ module Ocran
       direction = Direction.new(@post_env, @pre_env, @option)
 
       if @option.use_inno_setup?
-        direction.build_inno_setup_installer
+        if Gem.win_platform?
+          direction.build_inno_setup_installer
+        else
+          raise "Inno Setup is only supported on Windows"
+        end
+      elsif @option.macosx_bundle
+        direction.build_macosx_bundle(@option.macosx_bundle)
+      elsif @option.output_dir
+        direction.build_output_dir(@option.output_dir)
+      elsif @option.output_zip
+        direction.build_zip(@option.output_zip)
       else
         direction.build_stab_exe
       end

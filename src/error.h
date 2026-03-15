@@ -31,9 +31,11 @@ void PrintFatalMessage(const char *format, ...);
  * @param format The format of the error message to be displayed. This is a printf-like
  * format string followed by additional arguments.
  */
+#ifdef _WIN32
 void PrintFatalMessageBox(const char *format, ...);
+#endif
 
-#ifdef _CONSOLE
+#if defined(_CONSOLE) || !defined(_WIN32)
 #define FATAL(...) PrintFatalMessage(__VA_ARGS__)
 #else
 #define FATAL(...) PrintFatalMessageBox(__VA_ARGS__)

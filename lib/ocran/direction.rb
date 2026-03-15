@@ -30,12 +30,13 @@ module Ocran
       # modifications that may occur during script execution.
       @rubyopt = @option.rubyopt || pre_env.env["RUBYOPT"] || ""
 
-      # FIXME: Remove the absolute path to bundler/setup from RUBYOPT
-      # This is a temporary measure to ensure compatibility with self-extracting executables
-      # built in a bundle exec environment, particularly for Ruby 3.2 and later where
-      # absolute paths are included in RUBYOPT.
-      # In the future, we plan to implement a more appropriate solution.
-      @rubyopt = @rubyopt.gsub(%r(-r#{Regexp.escape(RbConfig::TOPDIR)}(/.*/bundler/setup)), "")
+      # Remove any absolute path to bundler/setup from RUBYOPT.
+      # When building under `bundle exec`, RUBYOPT contains `-r/absolute/path/bundler/setup`.
+      # That path doesn't exist inside the packed executable's environment, causing Ruby to
+      # print "RubyGems were not loaded" / "did_you_mean was not loaded" warnings on startup.
+      # We strip the flag regardless of install prefix because the gem may live in a user gem
+      # directory that doesn't share a prefix with RbConfig::TOPDIR (e.g. on CI runners).
+      @rubyopt = @rubyopt.gsub(/-r\S*\/bundler\/setup/, "").strip
     end
 
     # Resolves the common root directory prefix from an array of absolute paths.
@@ -63,7 +64,11 @@ module Ocran
     end
 
     def detect_dlls
-      require_relative "library_detector"
+      if Gem.win_platform?
+        require_relative "library_detector"
+      else
+        require_relative "library_detector_posix"
+      end
       LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
     end
 
@@ -93,8 +98,15 @@ module Ocran
       features = @post_env.loaded_features.map { |feature| Pathname(feature) }
 
       # Since https://github.com/rubygems/rubygems/commit/cad4cf16cf8fcc637d9da643ef97cf0be2ed63cb
-      # rubygems/core_ext/kernel_require.rb is evaled and thus missing in $LOADED_FEATURES, so we can't find it and need to add it manually
-      features.push(Pathname("rubygems/core_ext/kernel_require.rb"))
+      # rubygems/core_ext/kernel_require.rb is loaded via IO.read+eval rather than require,
+      # so it never appears in $LOADED_FEATURES and must be added manually.
+      # Use RbConfig::CONFIG["rubylibdir"] directly so the path is always correct,
+      # regardless of Ruby version or platform path separator conventions.
+      kernel_require_rel = "rubygems/core_ext/kernel_require.rb"
+      unless features.any? { |f| f.to_posix.end_with?(kernel_require_rel) }
+        kernel_require_path = Pathname(RbConfig::CONFIG["rubylibdir"]) / kernel_require_rel
+        features.push(kernel_require_path) if kernel_require_path.exist?
+      end
 
       # Convert all relative paths to absolute paths before building.
       # NOTE: In the future, different strategies may be needed before and after script execution.
@@ -127,11 +139,29 @@ module Ocran
       say "Adding ruby executable #{ruby_executable}"
       builder.copy_to_bin(bindir / ruby_executable, ruby_executable)
       if libruby_so
-        builder.copy_to_bin(bindir / libruby_so, libruby_so)
+        # On POSIX systems, libruby.so is in libdir; on Windows, it's in bindir
+        libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
+        builder.copy_to_bin(libruby_src, libruby_so)
+
+        # On POSIX systems, create symlinks (aliases) for libruby.so
+        unless Gem.win_platform?
+          libruby_aliases.each do |libruby_alias|
+            builder.symlink_in_bin(libruby_so, libruby_alias)
+          end
+        end
       end
 
-      # Add detected DLLs
-      if @option.auto_detect_dlls?
+      # On POSIX systems, set LD_LIBRARY_PATH to find bundled shared libraries
+      unless Gem.win_platform?
+        extract_bin = File.join(EXTRACT_ROOT, BINDIR.to_s)
+        builder.export("LD_LIBRARY_PATH", extract_bin)
+        if RUBY_PLATFORM.include?("darwin")
+          builder.export("DYLD_LIBRARY_PATH", extract_bin)
+        end
+      end
+
+      # Windows-only: Add detected DLLs
+      if Gem.win_platform? && @option.auto_detect_dlls?
         detect_dlls.each do |dll|
           next unless dll.subpath?(exec_prefix) && dll.extname?(".dll") && dll.basename != libruby_so
 
@@ -144,42 +174,44 @@ module Ocran
         end
       end
 
-      # Add external manifest and builtin DLLs
-      if (manifest = ruby_builtin_manifest)
-        manifest.dirname.each_child do |path|
-          next if path.directory?
-          say "Adding builtin DLL/manifest #{path}"
-          builder.duplicate_to_exec_prefix(path)
+      # Windows-only: Add external manifest and builtin DLLs
+      if Gem.win_platform?
+        if (manifest = ruby_builtin_manifest)
+          manifest.dirname.each_child do |path|
+            next if path.directory?
+            say "Adding builtin DLL/manifest #{path}"
+            builder.duplicate_to_exec_prefix(path)
+          end
         end
-      end
 
-      # Include SxS assembly manifests for native extensions.
-      # Each .so file may have an embedded manifest referencing a companion
-      # *.so-assembly.manifest file in the same directory. Without these
-      # manifests the SxS activation context fails (error 14001) at runtime.
-      # Scan archdir and the extension dirs of all loaded gems.
-      sxs_manifest_dirs = []
-      archdir = Pathname(RbConfig::CONFIG["archdir"])
-      sxs_manifest_dirs << archdir if archdir.exist? && archdir.subpath?(exec_prefix)
-      if defined?(Gem)
-        Gem.loaded_specs.each_value do |spec|
-          next if spec.extensions.empty?
-          ext_dir = Pathname(spec.extension_dir)
-          sxs_manifest_dirs << ext_dir if ext_dir.exist? && ext_dir.subpath?(exec_prefix)
+        # Include SxS assembly manifests for native extensions.
+        # Each .so file may have an embedded manifest referencing a companion
+        # *.so-assembly.manifest file in the same directory. Without these
+        # manifests the SxS activation context fails (error 14001) at runtime.
+        # Scan archdir and the extension dirs of all loaded gems.
+        sxs_manifest_dirs = []
+        archdir = Pathname(RbConfig::CONFIG["archdir"])
+        sxs_manifest_dirs << archdir if archdir.exist? && archdir.subpath?(exec_prefix)
+        if defined?(Gem)
+          Gem.loaded_specs.each_value do |spec|
+            next if spec.extensions.empty?
+            ext_dir = Pathname(spec.extension_dir)
+            sxs_manifest_dirs << ext_dir if ext_dir.exist? && ext_dir.subpath?(exec_prefix)
+          end
         end
-      end
-      sxs_manifest_dirs.each do |dir|
-        dir.each_child do |path|
-          next unless path.extname == ".manifest"
-          say "Adding native extension assembly manifest #{path}"
-          builder.duplicate_to_exec_prefix(path)
+        sxs_manifest_dirs.each do |dir|
+          dir.each_child do |path|
+            next unless path.extname == ".manifest"
+            say "Adding native extension assembly manifest #{path}"
+            builder.duplicate_to_exec_prefix(path)
+          end
         end
-      end
 
-      # Add extra DLLs specified on the command line
-      @option.extra_dlls.each do |dll|
-        say "Adding supplied DLL #{dll}"
-        builder.copy_to_bin(bindir / dll, dll)
+        # Add extra DLLs specified on the command line
+        @option.extra_dlls.each do |dll|
+          say "Adding supplied DLL #{dll}"
+          builder.copy_to_bin(bindir / dll, dll)
+        end
       end
 
       # Searches for features that are loaded from gems, then produces a
@@ -210,6 +242,14 @@ module Ocran
         say "Detected gem #{spec.full_name} (#{include.join(", ")})"
 
         spec.extend(GemSpecQueryable)
+
+        verbose "\tgem_dir: #{spec.gem_dir}"
+        verbose "\tgem_dir exists: #{File.directory?(spec.gem_dir)}"
+        loaded_matches = include.include?(:loaded) ? features.select { |f| f.subpath?(spec.gem_dir) } : []
+        verbose "\t:loaded candidates in features: #{loaded_matches.size}"
+        loaded_matches.each { |f| verbose "\t  loaded: #{f}" }
+        resource_count = include.include?(:files) && File.directory?(spec.gem_dir) ? spec.resource_files.size : 0
+        verbose "\t:files (resource_files) count: #{resource_count}"
 
         actual_files = spec.find_gem_files(include, features)
         say "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
@@ -267,9 +307,12 @@ module Ocran
         say "Not including encoding support files"
       end
 
-      # Workaround: RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
-      # Add an empty file to /msys64/usr/bin/msys-2.0.dll if the dll was not required otherwise
-      builder.touch('msys64/usr/bin/msys-2.0.dll')
+      # Windows-only: Workaround for RubyInstaller MSYS folder detection
+      if Gem.win_platform?
+        # RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present
+        # (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
+        builder.touch('msys64/usr/bin/msys-2.0.dll')
+      end
 
       # Find the source root and adjust paths
       source_files = @option.source_files.dup
@@ -286,23 +329,28 @@ module Ocran
       features.each do |feature|
         load_path = @post_env.find_load_path(feature)
         if load_path.nil?
+          verbose "\tlibfile: #{feature} -> src (no load path)"
           source_files << feature
           next
         end
         abs_load_path = Pathname(@post_env.expand_path(load_path))
         if abs_load_path == pre_working_directory
+          verbose "\tlibfile: #{feature} -> src (pre-working-dir load path)"
           source_files << feature
         elsif feature.subpath?(exec_prefix)
           # Features found in the Ruby installation are put in the
           # temporary Ruby installation.
+          verbose "\tlibfile: #{feature} -> exec_prefix"
           builder.duplicate_to_exec_prefix(feature)
         elsif (gem_path = GemSpecQueryable.find_gem_path(feature))
           # Features found in any other Gem path (e.g. ~/.gems) is put
           # in a special 'gems' folder.
+          verbose "\tlibfile: #{feature} -> gem_home"
           builder.duplicate_to_gem_home(feature, gem_path)
         elsif feature.subpath?(src_prefix) || abs_load_path == working_directory
           # Any feature found inside the src_prefix automatically gets
           # added as a source file (to go in 'src').
+          verbose "\tlibfile: #{feature} -> src (src_prefix/working_dir)"
           source_files << feature
           # Add the load path unless it was added by the script while
           # running (or we assume that the script can also set it up
@@ -312,13 +360,22 @@ module Ocran
           # Any feature that exist in a load path added by the script
           # itself is added as a file to go into the 'src' (src_prefix
           # will be adjusted below to point to the common parent).
+          verbose "\tlibfile: #{feature} -> src (script-added load path)"
           source_files << feature
         else
           # All other feature that can not be resolved go in the the
           # Ruby sitelibdir. This is automatically in the load path
-          # when Ruby starts.
-          inst_sitelibdir = sitelibdir.relative_path_from(exec_prefix)
-          builder.cp(feature, inst_sitelibdir / feature.relative_path_from(abs_load_path))
+          # when Ruby starts on Windows.
+          # On POSIX systems the ruby binary has a compile-time prefix so the
+          # extraction dir's sitelibdir is not on the load path; put
+          # the file in src instead and add the load path to RUBYLIB.
+          if Gem.win_platform?
+            inst_sitelibdir = sitelibdir.relative_path_from(exec_prefix)
+            builder.cp(feature, inst_sitelibdir / feature.relative_path_from(abs_load_path))
+          else
+            source_files << feature
+            src_load_path << abs_load_path unless src_load_path.include?(abs_load_path)
+          end
         end
       end
 
@@ -389,8 +446,37 @@ module Ocran
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
       load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
+
+      # On POSIX systems, also add the packed Ruby standard library directories
+      # to RUBYLIB. The Ruby binary has a compiled-in prefix pointing to the build
+      # host, which doesn't exist on other systems (e.g., Docker with no Ruby).
+      # By adding the extract-dir equivalents of rubylibdir, sitelibdir, etc. to
+      # RUBYLIB, Ruby can find rubygems and the standard library in the packed tree.
+      unless Gem.win_platform?
+        core_lib_paths = all_core_dir
+          .select { |dir| dir.subpath?(exec_prefix) }
+          .map { |dir| dir.relative_path_from(exec_prefix) }
+        archdir = Pathname(RbConfig::CONFIG["archdir"])
+        if archdir.subpath?(exec_prefix)
+          core_lib_paths << archdir.relative_path_from(exec_prefix)
+        end
+        load_path = core_lib_paths + load_path
+      end
+
       builder.set_env_path("RUBYLIB", *load_path)
-      builder.set_env_path("GEM_PATH", GEMDIR)
+      builder.set_env_path("GEM_HOME", GEMDIR)
+
+      gem_paths = [GEMDIR]
+      # On POSIX, default gems (e.g. error_highlight) are stored under the Ruby
+      # installation's gem dir (Gem.default_dir), not in GEMDIR. Include it in
+      # GEM_PATH so RubyGems can find and activate them in the extracted tree.
+      unless Gem.win_platform?
+        default_gem_dir = Pathname(Gem.default_dir)
+        if default_gem_dir.subpath?(exec_prefix)
+          gem_paths << default_gem_dir.relative_path_from(exec_prefix)
+        end
+      end
+      builder.set_env_path("GEM_PATH", *gem_paths)
 
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / ruby_executable
@@ -434,6 +520,85 @@ module Ocran
       iss_builder.compile(verbose: @option.verbose?)
 
       say "Finished building installer file"
+    end
+
+    def build_output_dir(path)
+      require_relative "dir_builder"
+
+      path = Pathname(path)
+      say "Building directory #{path}"
+      DirBuilder.new(path, &to_proc)
+      say "Finished building directory #{path}"
+    end
+
+    def build_zip(path)
+      require_relative "dir_builder"
+      require "tmpdir"
+
+      path = Pathname(path)
+      say "Building zip #{path}"
+      Dir.mktmpdir("ocran") do |tmpdir|
+        build_output_dir(tmpdir)
+        DirBuilder.create_zip(path, tmpdir)
+      end
+      say "Finished building #{path} (#{File.size(path)} bytes)"
+    end
+
+    def build_macosx_bundle(bundle_path)
+      require_relative "stub_builder"
+      require "fileutils"
+
+      bundle_path  = Pathname(bundle_path)
+      app_name     = bundle_path.basename.sub_ext("").to_s
+      contents_dir = bundle_path / "Contents"
+      macos_dir    = contents_dir / "MacOS"
+      resources_dir = contents_dir / "Resources"
+
+      FileUtils.mkdir_p(macos_dir.to_s)
+
+      executable_path = macos_dir / app_name
+      say "Building app bundle #{bundle_path}"
+
+      StubBuilder.new(executable_path,
+                      chdir_before: @option.chdir_before?,
+                      debug_extract: @option.enable_debug_extract?,
+                      debug_mode: @option.enable_debug_mode?,
+                      enable_compression: @option.enable_compression?,
+                      gui_mode: false,
+                      icon_path: nil,
+                      &to_proc) => builder
+
+      if @option.icon_filename
+        FileUtils.mkdir_p(resources_dir.to_s)
+        icon_dest = resources_dir / "AppIcon#{@option.icon_filename.extname}"
+        FileUtils.cp(@option.icon_filename.to_s, icon_dest.to_s)
+      end
+
+      bundle_id  = @option.bundle_identifier || "com.example.#{app_name}"
+      icon_entry = @option.icon_filename ? "    <key>CFBundleIconFile</key>\n    <string>AppIcon</string>\n" : ""
+
+      File.write(contents_dir / "Info.plist", <<~PLIST)
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>CFBundleName</key>
+          <string>#{app_name}</string>
+          <key>CFBundleDisplayName</key>
+          <string>#{app_name}</string>
+          <key>CFBundleIdentifier</key>
+          <string>#{bundle_id}</string>
+          <key>CFBundleVersion</key>
+          <string>1.0</string>
+          <key>CFBundlePackageType</key>
+          <string>APPL</string>
+          <key>CFBundleExecutable</key>
+          <string>#{app_name}</string>
+        #{icon_entry}</dict>
+        </plist>
+      PLIST
+
+      say "Finished building #{bundle_path} (#{builder.data_size} bytes decompressed)"
     end
 
     def build_stab_exe
