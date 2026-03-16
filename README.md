@@ -1,7 +1,6 @@
 # ocran
 
 home   :: https://github.com/largo/ocran/
-
 issues :: http://github.com/largo/ocran/issues
 
 ## Description
@@ -23,18 +22,19 @@ Ruby 3.2+ compatibility.
 
 ## Recommended usage
 
-The most common use-case is shipping a program to Windows servers or users
-who do not have Ruby installed. By default, each time the `.exe` is opened it
+The most common use-case is shipping a program to users running Windows / Linux / macOS
+who do not have Ruby installed. By default, each time the `.exe` / executable is opened it
 extracts the Ruby interpreter and your code to a temporary directory and runs
 them from there.
 
-Because extraction takes time on each launch, consider using the Inno Setup
+Because extraction takes time on each launch, use `--output-dir` or
+`--output-zip` to produce a portable directory/archive that runs with the
+bundled Ruby on Linux, macOS, or Windows.
+If using Windows you can use  the Inno Setup
 option (`--innosetup`) to produce a proper installer that extracts once to a
 permanent directory.
 
-For cross-platform packaging or CI artifacts, use `--output-dir` or
-`--output-zip` to produce a portable directory/archive that runs with the
-bundled Ruby on Linux, macOS, or Windows.
+You can easily generate binaries for the supported Operating Systems with GitHub Actions.
 
 ## Features
 
@@ -74,12 +74,12 @@ https://github.com/largo/ocran/releases/.
 
 ## Synopsis
 
-### Building a Windows executable:
+### Building an executable:
 
     ocran script.rb
 
 Packages `script.rb`, the Ruby interpreter, and all dependencies (gems and
-DLLs) into `script.exe`.
+DLLs) into `script.exe` or `script` on Linux or macOS.
 
 ### Building a portable directory (Linux / macOS / Windows):
 
@@ -243,7 +243,8 @@ a Linux runner for Linux builds).
 ## Requirements
 
 * Ruby 3.2+
-* For building Windows `.exe`: Windows with RubyInstaller DevKit (mingw-w64), or Wine on Linux/macOS
+* For building Windows `.exe`: Windows with [RubyInstaller DevKit](https://rubyinstaller.org/downloads/) (mingw-w64), or Wine on Linux/macOS
+* For building Linux and MacOS binaries: the respective build tools
 * For `--output-dir` / `--output-zip`: any platform with Ruby 3.2+
 * For `--output-zip` on Linux/macOS: the `zip` command must be available
 * For `--output-zip` on Windows: PowerShell (included in Windows 8+)
@@ -525,6 +526,11 @@ file:
         f.puts e.backtrace
       end
     end
+
+## See elsewhere
+
+- [State of Ruby Packagers](https://gist.github.com/YOU54F/3775e66e6090e0371c11601e6b75c305)
+- [Traveling Ruby](https://github.com/trubygems/traveling-ruby)
 
 ## Credits
 
