@@ -78,27 +78,45 @@ int main(int argc, char *argv[])
     // Prevent accidental use of the freed map.
     unpack_ctx = NULL;
 
-    /* Launching the script, provided there are no errors in file extraction from the image */
-    DEBUG("*** Starting application script in %s", extract_dir);
+    /* Write script info to file for the Ruby launcher */
+    if (IsScriptInfoSet()) {
+        if (!WriteScriptInfoFile()) {
+            FATAL("Failed to write script info file");
+            goto cleanup;
+        }
+    }
 
-    DEBUG("Set the 'OCRAN_EXECUTABLE' environment variable to %s", image_path);
+    /* Set environment variables for the Ruby launcher */
+    DEBUG("Set OCRAN_EXECUTABLE to %s", image_path);
     if (!SetEnvVar("OCRAN_EXECUTABLE", image_path)) {
-        FATAL("The script cannot be launched due to a configuration error");
+        FATAL("Failed to set OCRAN_EXECUTABLE");
         goto cleanup;
     }
 
-    /*
-       RunScript uses the current value of status as its initial value
-       and then overwrites it with the external script’s return code.
-    */
-    DEBUG("Run application script");
-    if (!RunScript(argv, IsChdirBeforeScript(op_modes), &status)) {
-        FATAL("Failed to run script");
+    DEBUG("Set OCRAN_INST_DIR to %s", extract_dir);
+    if (!SetEnvVar("OCRAN_INST_DIR", extract_dir)) {
+        FATAL("Failed to set OCRAN_INST_DIR");
         goto cleanup;
     }
-    /*
-       If the script executes successfully, its return code is stored in status.
-    */
+
+    char modes_str[16];
+    snprintf(modes_str, sizeof(modes_str), "%u", (unsigned)op_modes);
+    if (!SetEnvVar("OCRAN_OPERATION_MODES", modes_str)) {
+        FATAL("Failed to set OCRAN_OPERATION_MODES");
+        goto cleanup;
+    }
+
+    /* Launch the Ruby launcher, which handles script execution */
+    if (IsScriptInfoSet()) {
+        DEBUG("*** Launching Ruby launcher in %s", extract_dir);
+        if (!LaunchLauncher(argv, &status)) {
+            FATAL("Failed to launch Ruby launcher");
+            goto cleanup;
+        }
+    } else {
+        DEBUG("No script info set, skipping launcher");
+        status = EXIT_CODE_SUCCESS;
+    }
 
 cleanup:
     /*

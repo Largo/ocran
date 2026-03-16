@@ -1,7 +1,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-char **GetScriptInfo(void);
+bool IsScriptInfoSet(void);
 bool SetScriptInfo(const char *info, size_t info_size);
 void FreeScriptInfo(void);
-bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code);
+bool WriteScriptInfoFile(void);
+bool LaunchLauncher(char *argv[], int *exit_code);

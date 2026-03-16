@@ -151,6 +151,10 @@ module Ocran
       # Add the ruby executable and DLL
       say "Adding ruby executable #{ruby_executable}"
       builder.copy_to_bin(bindir / ruby_executable, ruby_executable)
+
+      # Add the OCRAN hybrid launcher script
+      launcher_source = Pathname(File.expand_path("launcher.rb", __dir__))
+      builder.copy_to_bin(launcher_source, Pathname("ocran_launcher.rb"))
       if libruby_so
         # On POSIX systems, libruby.so is in libdir; on Windows, it's in bindir
         libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
