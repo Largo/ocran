@@ -185,6 +185,22 @@ module Ocran
             builder.copy_to_bin(dll, dll.basename)
           end
         end
+
+        # Proactively include companion DLLs for loaded native extensions.
+        # Native extensions (.so) may depend on DLLs in the same archdir
+        # directory (e.g., libssl-3-x64.dll alongside openssl.so) that are
+        # loaded lazily on first use. Scanning .so directories ensures those
+        # DLLs are bundled even when the extension is required but not
+        # exercised during the OCRAN dependency scan.
+        features.select { |f| f.extname?(".so") && f.subpath?(exec_prefix) }
+                .map(&:dirname).uniq
+                .each do |dir|
+          dir.each_child do |path|
+            next unless path.file? && path.extname?(".dll")
+            say "Adding companion DLL #{path}"
+            builder.duplicate_to_exec_prefix(path)
+          end
+        end
       end
 
       # Windows-only: Add external manifest and builtin DLLs

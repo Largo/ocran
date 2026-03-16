@@ -2,11 +2,11 @@ require "net/http"
 require "uri"
 require "openssl"
 
-uri = URI("https://github.com")
-response = Net::HTTP.get_response(uri)
-raise "HTTPS request failed with status #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-
 unless defined?(Ocran)
+  uri = URI("https://github.com")
+  response = Net::HTTP.get_response(uri)
+  raise "HTTPS request failed with status #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
   puts "SSL connection to #{uri.host} succeeded (HTTP #{response.code})"
   # Write the cert file path actually used so the test can verify it is bundled
   # inside the OCRAN extraction directory.
