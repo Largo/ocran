@@ -6,6 +6,15 @@ module Ocran
   # Utility class that produces the actual executable. Opcodes
   # (create_file, mkdir etc) are added by invoking methods on an
   # instance of OcranBuilder.
+  #
+  # The packed data has two sections:
+  #   Bootstrap section: Processed by C stub (Ruby interpreter, launcher,
+  #     shared libs, OCRAN_RUBY_PATH). Always uncompressed.
+  #   Main section: Processed by Ruby launcher (gems, source files, env vars,
+  #     script info). Optionally LZMA compressed.
+  #
+  # Footer layout (12 bytes):
+  #   [main_data_size (4 bytes)] [offset_to_header (4 bytes)] [signature (4 bytes)]
   class StubBuilder
     Signature = [0x41, 0xb6, 0xba, 0x4e].freeze
 
@@ -101,6 +110,7 @@ module Ocran
       @dirs = FilePathSet.new
       @files = FilePathSet.new
       @data_size = 0
+      @enable_compression = enable_compression
 
       if icon_path && !File.exist?(icon_path)
         raise "Icon file #{icon_path} not found"
@@ -131,21 +141,25 @@ module Ocran
 
         write_header(debug_mode, debug_extract, chdir_before, enable_compression)
 
-        b = proc {
-          yield(self)
-        }
+        yield(self)
 
-        if enable_compression && LZMA_CMD
-          compress(&b)
-        else
-          b.yield
-        end
+        finalize_main_section if @main_buffer
 
         write_footer
       end
 
       File.rename(stub, path)
       File.chmod(0755, path) unless WINDOWS
+    end
+
+    # Marks the end of the bootstrap section. All subsequent opcodes will be
+    # written to a temporary buffer for the main section, which is processed
+    # by the Ruby launcher at runtime instead of the C stub.
+    def end_bootstrap
+      @main_buffer = Tempfile.new(["ocran_main", ".bin"])
+      @main_buffer.binmode
+      @bootstrap_of = @of
+      @of = @main_buffer
     end
 
     def mkdir(target)
@@ -195,23 +209,37 @@ module Ocran
       write_string(value.to_s)
     end
 
-    def compress
-      raise "No LZMA compressor found" unless LZMA_CMD
+    private
 
-      IO.popen(LZMA_CMD, "r+b") do |lzma|
-        _of, @of = @of, lzma
-        Thread.new { yield(self); lzma.close_write }
-        IO.copy_stream(lzma, _of)
-        @of = _of
+    def finalize_main_section
+      @main_buffer.flush
+      @of = @bootstrap_of
+
+      if @enable_compression && LZMA_CMD
+        compress_main_section
+      else
+        @main_buffer.rewind
+        @main_file_size = IO.copy_stream(@main_buffer, @of)
       end
 
-      # Calculate the position to write the LZMA decompressed size (64-bit unsigned integer)
-      # @opcode_offset: start position of the data section
-      # 1: size of the header byte
-      # 5: size of the LZMA header in bytes
-      File.binwrite(@of.path, [@data_size].pack("Q<"), @opcode_offset + 1 + 5)
+      @main_buffer.close!
     end
-    private :compress
+
+    def compress_main_section
+      @main_buffer.rewind
+      uncompressed_size = @main_buffer.size
+      lzma_start_pos = @of.pos
+
+      IO.popen(LZMA_CMD, "r+b") do |lzma|
+        writer = Thread.new { IO.copy_stream(@main_buffer, lzma); lzma.close_write }
+        @main_file_size = IO.copy_stream(lzma, @of)
+        writer.join
+      end
+
+      # Patch the LZMA uncompressed size in the header
+      # LZMA format: 5 bytes properties + 8 bytes uncompressed size
+      File.binwrite(@of.path, [uncompressed_size].pack("Q<"), lzma_start_pos + 5)
+    end
 
     def write_header(debug_mode, debug_extract, chdir_before, compressed)
       next_to_exe, delete_after = debug_extract, !debug_extract
@@ -223,13 +251,11 @@ module Ocran
                 (compressed ? DATA_COMPRESSED : 0)
       ].pack("C")
     end
-    private :write_header
 
     def write_opcode(op)
       @of << [op].pack("C")
       @data_size += 1
     end
-    private :write_opcode
 
     def write_size(i)
       if i > 0xFFFF_FFFF
@@ -239,7 +265,6 @@ module Ocran
       @of << [i].pack("V")
       @data_size += 4
     end
-    private :write_size
 
     def write_string(str)
       len = str.bytesize + 1 # +1 to account for the null terminator
@@ -252,7 +277,6 @@ module Ocran
       @of << [str].pack("Z*")
       @data_size += len
     end
-    private :write_string
 
     def write_string_array(*str_array)
       ary = str_array.map(&:to_s)
@@ -270,7 +294,6 @@ module Ocran
       ary.each_slice(1) { |a| @of << a.pack("Z*") }
       @data_size += size
     end
-    private :write_string_array
 
     def write_file(src)
       size = File.size(src)
@@ -278,21 +301,19 @@ module Ocran
       IO.copy_stream(src, @of)
       @data_size += size
     end
-    private :write_file
 
     def write_path(path)
       write_string(convert_to_native(path))
     end
-    private :write_path
 
     def write_footer
-      @of << ([@opcode_offset] + Signature).pack("VC*")
+      main_size = @main_file_size || 0
+      @of << [main_size, @opcode_offset].pack("VV")
+      @of << Signature.pack("C*")
     end
-    private :write_footer
 
     def convert_to_native(path)
       WINDOWS ? path.to_s.tr(File::SEPARATOR, "\\") : path.to_s
     end
-    private :convert_to_native
   end
 end

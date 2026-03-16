@@ -177,6 +177,16 @@ module Ocran
         end
       end
 
+      # Set OCRAN_RUBY_PATH so the C stub can locate the Ruby executable
+      # to launch the Ruby launcher script.
+      builder.export("OCRAN_RUBY_PATH", File.join(EXTRACT_ROOT, BINDIR.to_s, ruby_executable.to_s))
+
+      # Mark end of bootstrap section. Everything above (Ruby executable,
+      # launcher script, shared libs, library paths, OCRAN_RUBY_PATH) is
+      # extracted by the C stub. Everything below (gems, source files,
+      # env vars, script info) is processed by the Ruby launcher.
+      builder.end_bootstrap if builder.respond_to?(:end_bootstrap)
+
       # Windows-only: Add detected DLLs
       if Gem.win_platform? && @option.auto_detect_dlls?
         detect_dlls.each do |dll|

@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stddef.h>
 
 typedef enum {
     OP_CREATE_DIRECTORY = 1,
@@ -28,8 +29,8 @@ typedef enum {
  * - CHDIR_BEFORE_SCRIPT: Changes the current directory to the script's
  *   location before its execution.
  *
- * - DATA_COMPRESSED: Indicates that the data to be processed is compressed and
- *   requires decompression.
+ * - DATA_COMPRESSED: Indicates that the main data section is compressed and
+ *   requires decompression by the Ruby launcher.
  *
  * By adjusting these flags, developers and users can tailor the program's
  * execution to suit specific scenarios, enhancing both usability and
@@ -62,8 +63,8 @@ typedef enum {
     CHDIR_BEFORE_SCRIPT = 0x08,
 
     /**
-     * Indicates that the data to be extracted is compressed. Decompression is
-     * required before using the data.
+     * Indicates that the main data section is compressed. The Ruby launcher
+     * will decompress this data before processing opcodes.
      */
     DATA_COMPRESSED     = 0x10,
 } OperationModes;
@@ -81,5 +82,27 @@ UnpackContext *OpenPackFile(const char *self_path);
 bool ClosePackFile(UnpackContext *context);
 
 OperationModes GetOperationModes(const UnpackContext *context);
+
+/**
+ * @brief Returns the file offset of the main data section.
+ *
+ * The main data section contains opcodes processed by the Ruby launcher
+ * (gems, source files, environment variables, script info).
+ *
+ * @param context A valid UnpackContext returned by OpenPackFile.
+ * @return File offset in bytes, or 0 if context is NULL.
+ */
+size_t GetMainDataOffset(const UnpackContext *context);
+
+/**
+ * @brief Returns the size of the main data section in bytes.
+ *
+ * If compression is enabled (DATA_COMPRESSED flag), this is the compressed
+ * size. The Ruby launcher handles decompression.
+ *
+ * @param context A valid UnpackContext returned by OpenPackFile.
+ * @return Size in bytes, or 0 if context is NULL or no main data exists.
+ */
+size_t GetMainDataSize(const UnpackContext *context);
 
 bool ProcessImage(const UnpackContext *context);

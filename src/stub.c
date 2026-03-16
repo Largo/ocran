@@ -11,8 +11,13 @@
 #include "error.h"
 #include "system_utils.h"
 #include "inst_dir.h"
-#include "script_info.h"
 #include "unpack.h"
+
+#ifdef _WIN32
+#define LAUNCHER_REL_PATH "bin\\ocran_launcher.rb"
+#else
+#define LAUNCHER_REL_PATH "bin/ocran_launcher.rb"
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -21,6 +26,8 @@ int main(int argc, char *argv[])
     OperationModes op_modes = 0;
     const char *extract_dir = NULL;
     char *image_path = NULL;
+    char *launcher_path = NULL;
+    char **launch_argv = NULL;
 
     /*
        Initialize signal and control handling so the parent process remains
@@ -66,25 +73,21 @@ int main(int argc, char *argv[])
 
     DEBUG("Created extraction directory: %s", extract_dir);
 
-    /* Unpacking process */
+    /* Unpack bootstrap section (Ruby interpreter, launcher, shared libs) */
     if (!ProcessImage(unpack_ctx)) {
         FATAL("Failed to unpack image due to invalid or corrupted data");
         goto cleanup;
     }
+
+    /* Retrieve main data location before closing the memory map */
+    size_t main_data_offset = GetMainDataOffset(unpack_ctx);
+    size_t main_data_size = GetMainDataSize(unpack_ctx);
 
     // Memory map no longer needed after unpacking; free its resources.
     ClosePackFile(unpack_ctx);
 
     // Prevent accidental use of the freed map.
     unpack_ctx = NULL;
-
-    /* Write script info to file for the Ruby launcher */
-    if (IsScriptInfoSet()) {
-        if (!WriteScriptInfoFile()) {
-            FATAL("Failed to write script info file");
-            goto cleanup;
-        }
-    }
 
     /* Set environment variables for the Ruby launcher */
     DEBUG("Set OCRAN_EXECUTABLE to %s", image_path);
@@ -106,16 +109,60 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Launch the Ruby launcher, which handles script execution */
-    if (IsScriptInfoSet()) {
-        DEBUG("*** Launching Ruby launcher in %s", extract_dir);
-        if (!LaunchLauncher(argv, &status)) {
-            FATAL("Failed to launch Ruby launcher");
-            goto cleanup;
-        }
-    } else {
-        DEBUG("No script info set, skipping launcher");
-        status = EXIT_CODE_SUCCESS;
+    /* Pass main data location to the Ruby launcher */
+    char offset_str[32], size_str[32];
+    snprintf(offset_str, sizeof(offset_str), "%zu", main_data_offset);
+    snprintf(size_str, sizeof(size_str), "%zu", main_data_size);
+
+    if (!SetEnvVar("OCRAN_DATA_OFFSET", offset_str)) {
+        FATAL("Failed to set OCRAN_DATA_OFFSET");
+        goto cleanup;
+    }
+
+    if (!SetEnvVar("OCRAN_DATA_SIZE", size_str)) {
+        FATAL("Failed to set OCRAN_DATA_SIZE");
+        goto cleanup;
+    }
+
+    /* Launch the Ruby launcher */
+    const char *ruby_path = getenv("OCRAN_RUBY_PATH");
+    if (!ruby_path || !*ruby_path) {
+        FATAL("OCRAN_RUBY_PATH not set (bootstrap section incomplete)");
+        goto cleanup;
+    }
+
+    launcher_path = ExpandInstDirPath(LAUNCHER_REL_PATH);
+    if (!launcher_path) {
+        FATAL("Failed to expand launcher path");
+        goto cleanup;
+    }
+
+    /* Count user arguments (skip argv[0] which is the exe name) */
+    size_t user_argc = 0;
+    if (argv) {
+        for (char **p = argv + 1; p && *p; p++) user_argc++;
+    }
+
+    /* Build argv: ruby_path, launcher_path, [user_args...], NULL */
+    size_t total = 2 + user_argc + 1;
+    launch_argv = calloc(total, sizeof(char *));
+    if (!launch_argv) {
+        FATAL("Memory allocation failed for launcher argv");
+        goto cleanup;
+    }
+
+    launch_argv[0] = (char *)ruby_path;
+    launch_argv[1] = launcher_path;
+    for (size_t i = 0; i < user_argc; i++) {
+        launch_argv[2 + i] = argv[1 + i];
+    }
+    launch_argv[2 + user_argc] = NULL;
+
+    DEBUG("*** Launching Ruby launcher: %s %s", ruby_path, launcher_path);
+
+    if (!CreateAndWaitForProcess(ruby_path, launch_argv, &status)) {
+        FATAL("Failed to launch Ruby launcher");
+        goto cleanup;
     }
 
 cleanup:
@@ -123,6 +170,14 @@ cleanup:
        Suppress GUI error dialogs during cleanup to avoid blocking the user.
        Cleanup failures are non-critical and logged as DEBUG only.
     */
+
+    if (launch_argv) {
+        free(launch_argv);
+    }
+
+    if (launcher_path) {
+        free(launcher_path);
+    }
 
     if (image_path) {
         free(image_path);
@@ -132,8 +187,6 @@ cleanup:
         ClosePackFile(unpack_ctx);
         unpack_ctx = NULL;
     }
-
-    FreeScriptInfo();
 
     /*
        If AUTO_CLEAN_INST_DIR is set, delete the extraction directory.

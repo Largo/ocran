@@ -3,7 +3,7 @@ UNAME           := $(shell uname -s 2>/dev/null || echo Windows)
 IS_POSIX        := $(filter $(UNAME),Linux Darwin)
 
 CC              := gcc
-CFLAGS          := -Wall -O2 -DWITH_LZMA -Ilzma
+CFLAGS          := -Wall -O2
 LDFLAGS         := -s
 
 ifneq ($(IS_POSIX),)
@@ -28,11 +28,8 @@ endif
 BINDIR          := $(CURDIR)/../share/ocran
 BINARIES        := $(addsuffix $(EXEEXT), $(PROG_NAMES))
 
-LZMA_SRCS       := lzma/LzmaDec.c
-LZMA_OBJS       := $(LZMA_SRCS:.c=.o)
-
-COMMON_SRCS     := $(SYSTEM_UTILS_SRC) inst_dir.c script_info.c unpack.c
-COMMON_OBJS     := $(COMMON_SRCS:.c=.o) $(LZMA_OBJS) $(RESOURCE_OBJ)
+COMMON_SRCS     := $(SYSTEM_UTILS_SRC) inst_dir.c unpack.c
+COMMON_OBJS     := $(COMMON_SRCS:.c=.o) $(RESOURCE_OBJ)
 
 VARIANT_SRCS    := stub.c error.c
 CONSOLE_OBJS    := $(VARIANT_SRCS:.c=_console.o)
@@ -45,7 +42,7 @@ all: $(BINARIES)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %_console.o: %.c
-	$(CC) $(STUB_CFLAGS) -c $< -o $@ 
+	$(CC) $(STUB_CFLAGS) -c $< -o $@
 
 %_window.o: %.c
 	$(CC) $(STUBW_CFLAGS) -c $< -o $@
