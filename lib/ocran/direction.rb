@@ -144,6 +144,24 @@ module Ocran
       # Store the currently loaded files
       features = normalized_features
 
+      # If net/http was loaded but openssl wasn't (it is only required lazily
+      # at the point of an actual HTTPS connection), require it now inside the
+      # OCRAN build process so that every transitive dependency — openssl.rb,
+      # digest.so, and any other files pulled in by the extension — appears in
+      # $LOADED_FEATURES and gets bundled alongside the application.
+      openssl_so = Pathname(RbConfig::CONFIG["archdir"]) / "openssl.so"
+      if openssl_so.exist? &&
+          features.any? { |f| f.to_posix.end_with?("/net/http.rb") } &&
+          features.none? { |f| f == openssl_so }
+        say "Auto-loading openssl (net/http loaded but openssl not yet required)"
+        before = $LOADED_FEATURES.dup
+        require "openssl"
+        ($LOADED_FEATURES - before).each do |f|
+          path = Pathname(f).cleanpath
+          features << path if path.absolute?
+        end
+      end
+
       say "Building #{@option.output_executable}"
       require_relative "build_helper"
       builder.extend(BuildHelper)

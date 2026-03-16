@@ -1,3 +1,5 @@
+return if defined?(Ocran)
+
 Dir.chdir File.dirname(__FILE__)
 
 expected_name = "äあ💎.txt"
