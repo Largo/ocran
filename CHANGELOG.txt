@@ -1,3 +1,8 @@
+=== 1.4.2
+- Auto-bundle OpenSSL and all its transitive dependencies (openssl.rb, digest.so, etc.) when net/http is loaded but no HTTPS request was made during the dependency scan. OpenSSL is now required inside the OCRAN build process so every file it pulls in appears in the bundled executable.
+- Add companion DLL scan on windows: when a native extension (.so) within the Ruby installation is loaded, all DLLs in the same directory are proactively included. This ensures libssl-3-x64.dll, libcrypto-3-x64.dll, libwinpthread-1.dll, and libyaml-0-2.dll are bundled even when no HTTPS connection is made during the build scan.
+- Add `return if defined?(Ocran)` guards to test fixtures that have runtime-only side effects (file writes, Dir.chdir, file existence checks, network requests) to prevent them from running during the dependency scan, so we can check if the dependencies are included correctly.
+
 === 1.4.1
 - Fix kernel_require.rb packed at wrong path when rubygems-update is installed (e.g. via asdf on Linux/macOS). kernel_require.rb is now located relative to the actually-loaded rubygems.rb from $LOADED_FEATURES, falling back to rubylibdir for standard Ruby installations.
 
