@@ -16,7 +16,7 @@ STUB_DIR   = "share/ocran"
 BUILD_DIR  = "src"
 
 if WINDOWS
-  STUB_NAMES = %w[stub stubw edicon]
+  STUB_NAMES = %w[stub stubw]
   STUB_EXE_EXT = ".exe"
 else
   STUB_NAMES = %w[stub]

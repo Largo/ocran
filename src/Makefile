@@ -21,7 +21,7 @@ else
   STUB_CFLAGS     := $(CFLAGS) -D_CONSOLE
   STUBW_CFLAGS    := $(CFLAGS)
   SYSTEM_UTILS_SRC := system_utils.c
-  PROG_NAMES      := stub stubw edicon
+  PROG_NAMES      := stub stubw
   RESOURCE_OBJ    := stub.res
 endif
 
@@ -62,13 +62,11 @@ ifeq ($(IS_POSIX),)
 stubw$(EXEEXT): $(COMMON_OBJS) $(WINDOW_OBJS)
 	$(CC) $(LDFLAGS) $(GUI_LDFLAGS) $^ $(LDLIBS) -o $@
 
-edicon$(EXEEXT): edicon.o
-	$(CC) $(LDFLAGS) $^ -o $@
 endif
 
 clean:
 	rm -f $(BINARIES) $(COMMON_OBJS) $(CONSOLE_OBJS) $(WINDOW_OBJS) \
-	      edicon.o $(RESOURCE_OBJ)
+	      $(RESOURCE_OBJ)
 
 install: $(BINARIES)
 	mkdir -p $(BINDIR)
