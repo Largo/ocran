@@ -1056,6 +1056,22 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Regression test: FXRuby (fox16) ships native extension DLLs that must be
+  # bundled by OCRAN. Without them the packaged exe raises a LoadError for
+  # fox16 at runtime even though the build step succeeds. The fixture exits
+  # immediately so we can verify a clean load without needing a display.
+  def test_fxruby
+    skip "fxruby gem not available" unless Gem::Specification.find_all_by_name("fxruby").any?
+    with_fixture "fxruby" do
+      assert system("ruby", ocran, "fxruby.rb", *DefaultArgs)
+      exe = exe_name("fxruby")
+      assert File.exist?(exe)
+      pristine_env exe do
+        assert system(exe)
+      end
+    end
+  end
+
   # Tests that a packaged Glimmer DSL for LibUI application builds and runs
   # successfully. libui ships its own libui.dll in the gem's vendor/ directory
   # and loads it via Fiddle; OCRAN detects it through DLL scanning because the

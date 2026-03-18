@@ -8,6 +8,7 @@ gem "minitest", "~> 6.0"
 
 gem "fiddle", "~> 1.0"
 gem "glimmer-dsl-libui"
+gem "fxruby"
 
 gem 'logger'
 gem 'csv'

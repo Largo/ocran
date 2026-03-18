@@ -10,6 +10,8 @@ GEM
     equalizer (0.0.11)
     facets (3.1.0)
     fiddle (1.1.8)
+    fxruby (1.6.50)
+      mini_portile2 (~> 2.1)
     glimmer (2.8.1)
       array_include_methods (>= 1.4.0, < 1.6.0)
       facets (>= 3.1.0, < 4.0.0)
@@ -36,6 +38,7 @@ GEM
     logger (1.7.0)
     matrix (0.4.3)
     method_source (1.1.0)
+    mini_portile2 (2.8.9)
     minitest (6.0.2)
       drb (~> 2.0)
       prism (~> 1.5)
@@ -78,6 +81,7 @@ PLATFORMS
 DEPENDENCIES
   csv
   fiddle (~> 1.0)
+  fxruby
   glimmer-dsl-libui
   hoe (~> 4.6)
   logger
