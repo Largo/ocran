@@ -514,14 +514,15 @@ module Ocran
       builder.set_env_path("GEM_HOME", GEMDIR)
 
       gem_paths = [GEMDIR]
-      # On POSIX, default gems (e.g. error_highlight) are stored under the Ruby
-      # installation's gem dir (Gem.default_dir), not in GEMDIR. Include it in
-      # GEM_PATH so RubyGems can find and activate them in the extracted tree.
-      unless Gem.win_platform?
-        default_gem_dir = Pathname(Gem.default_dir)
-        if default_gem_dir.subpath?(exec_prefix)
-          gem_paths << default_gem_dir.relative_path_from(exec_prefix)
-        end
+      # Gems installed under the Ruby prefix (exec_prefix) have their specs and
+      # extension dirs placed there via duplicate_to_exec_prefix. Include
+      # Gem.default_dir (relative to exec_prefix) in GEM_PATH so RubyGems can
+      # find and activate them at runtime. This is required on both Windows
+      # (e.g. fxruby/fox16 whose fox16_c.so lives in extension_dir under the
+      # Ruby prefix) and POSIX (e.g. error_highlight default gems).
+      default_gem_dir = Pathname(Gem.default_dir)
+      if default_gem_dir.subpath?(exec_prefix)
+        gem_paths << default_gem_dir.relative_path_from(exec_prefix)
       end
       builder.set_env_path("GEM_PATH", *gem_paths)
 
