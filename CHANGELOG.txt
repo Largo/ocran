@@ -1,3 +1,10 @@
+=== 1.4.3
+- Migrate edicon from C to Ruby: replace edicon.exe with a pure-Ruby implementation (ed_icon.rb), fixing incorrect BeginUpdateResource error checking and wrong GroupIconSize calculation. Shortens build times and removes the C binary from the build.
+- Include Gem.default_dir in GEM_PATH on all platforms: previously the exec_prefix gem directory was excluded on Windows, causing native-extension gems (e.g. fxruby/fox16) to fail at runtime with a LoadError even though they were bundled correctly.
+- Add FXRuby (fox16) test: verify that native extension DLLs are bundled correctly so the packaged executable does not raise a LoadError at runtime.
+- CI: start a virtual display (xpra + Xorg dummy driver with GLX) on Linux before running tests so FXRuby's X11 requirement is satisfied.
+- CI: install XQuartz on macOS runners and add it to the portability test job so FXRuby can connect to a display on both test and portability jobs.
+
 === 1.4.2
 - Auto-bundle OpenSSL and all its transitive dependencies (openssl.rb, digest.so, etc.) when net/http is loaded but no HTTPS request was made during the dependency scan. OpenSSL is now required inside the OCRAN build process so every file it pulls in appears in the bundled executable.
 - Add companion DLL scan on windows: when a native extension (.so) within the Ruby installation is loaded, all DLLs in the same directory are proactively included. This ensures libssl-3-x64.dll, libcrypto-3-x64.dll, libwinpthread-1.dll, and libyaml-0-2.dll are bundled even when no HTTPS connection is made during the build scan.
