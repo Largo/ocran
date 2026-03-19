@@ -27,18 +27,18 @@ jobs:
 
       - name: Build stub and run tests
         env:
-          OCRAN_DEBUG: "1"
+          OCRAN_DEBUG: "0"
         run: |
           bundle exec rake build
           bundle exec rake test
 
       - name: Build zlib fixture for cross-distro test
         env:
-          OCRAN_DEBUG: "1"
+          OCRAN_DEBUG: "0"
         run: ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output /tmp/zlib_packed
 
       - name: Run packed executable on Debian (no Ruby installed)
-        run: docker run --rm -e OCRAN_DEBUG=1 -v /tmp:/mnt debian:stable-slim /mnt/zlib_packed
+        run: docker run --rm -e OCRAN_DEBUG=0 -v /tmp:/mnt debian:stable-slim /mnt/zlib_packed
 
   run-tests-macos:
     strategy:
