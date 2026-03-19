@@ -21,15 +21,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby-pkgs@v1
         with:
           ruby-version: '4.0'
           bundler-cache: true
           mingw: "fox swig"
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y xz-utils gcc xpra xserver-xorg-video-dummy libxrandr-dev libfox-1.6-dev swig
+          apt-get: "xz-utils gcc xpra xserver-xorg-video-dummy libxrandr-dev libfox-1.6-dev swig"
+          brew: "xz fox swig"
 
       - name: Start xpra to enable GLX
         if: runner.os == 'Linux'
@@ -37,10 +35,6 @@ jobs:
           mkdir -p ${HOME}/.xpra
           xpra --xvfb="Xorg +extension GLX -config `pwd`/test/dummy.xorg.conf -logfile ${HOME}/.xpra/xorg.log" start :9
           echo "DISPLAY=:9" >> $GITHUB_ENV
-
-      - name: Install macOS build dependencies
-        if: runner.os == 'macOS'
-        run: brew install xz fox swig
 
       - name: Install and start XQuartz
         if: runner.os == 'macOS'
