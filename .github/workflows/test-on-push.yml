@@ -56,8 +56,10 @@ jobs:
           bundler-cache: true
           brew: "xz fox swig"
 
-      - name: Start XQuartz
-        run: open -a XQuartz
+      - name: Install and start XQuartz
+        run: |
+          brew install --cask xquartz
+          open -a XQuartz
 
       - name: Build stub and run tests
         run: |
@@ -83,6 +85,11 @@ jobs:
         ruby: [ '3.2', '3.3', '3.4', '4.0' ]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Install XQuartz
+        run: |
+          brew install --cask xquartz
+          open -a XQuartz
+
       - name: Download packed binary
         uses: actions/download-artifact@v4
         with:
