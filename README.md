@@ -1,11 +1,6 @@
-# ocran
+# OCRAN
 
-home   :: https://github.com/largo/ocran/
-issues :: http://github.com/largo/ocran/issues
-
-## Description
-
-OCRAN (One-Click Ruby Application Next) packages Ruby applications for
+[OCRAN (One-Click Ruby Application Next)](https://github.com/largo/ocran) packages Ruby applications for
 distribution. It bundles your script, the Ruby interpreter, gems, and native
 libraries into a single self-contained artifact that runs without requiring
 Ruby to be installed on the target machine.
@@ -19,6 +14,8 @@ OCRAN supports four output formats, all cross-platform:
 
 OCRAN is a fork of [OCRA](https://github.com/larsch/ocra) maintained for
 Ruby 3.2+ compatibility.
+
+If you run into errors while using OCRAN, please check the [OCRAN issues](https://github.com/largo/ocran/issues) first.
 
 ## Recommended usage
 
@@ -534,10 +531,12 @@ file:
 
 ## Credits
 
-Lars Christensen and contributors for the OCRA project which this is forked from.
+[Andi Idogawa](https://github.com/largo), [Shinokaro](https://github.com/shinokaro)
+[Lars Christensen](https://github.com/larsch) and contributors for the OCRA project which this is forked from.
 
-Kevin Walzer of codebykevin, Maxim Samsonov for ocra2, John Mair for
-codesigning support.
+Special thanks to Ruby on Windows maintainers such as [Nobuyoshi Nakada](https://github.com/nobu), [Lars Kanis](https://github.com/larskanis), and [MSP-Greg](https://github.com/MSP-Greg)
+
+[Kevin Walzer](https://github.com/codebykevin) of codebykevin, [Maxim Samsonov](https://github.com/maxirmx), and [John Mair](https://github.com/banister) for codesigning support.
 
 Igor Pavlov for the LZMA compressor and decompressor (Public Domain).
 
@@ -551,7 +550,7 @@ http://ruby.morphball.net/vit-ruby-ico_en.html).
 (The MIT License)
 
 Copyright (c) 2009-2020 Lars Christensen
-Copyright (c) 2020-2025 The OCRAN Committers Team
+Copyright (c) 2020-2026 The OCRAN Committers Team
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
