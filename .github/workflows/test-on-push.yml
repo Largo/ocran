@@ -13,13 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby-pkgs@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-
-      - name: Install dependencies
-        run: sudo apt-get install -y xz-utils gcc
+          apt-get: "xz-utils gcc xpra xserver-xorg-video-dummy libxrandr-dev libfox-1.6-dev swig"
 
       - name: Build stub and run tests
         env:
@@ -46,13 +44,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby-pkgs@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+          brew: "xz fox swig"
 
-      - name: Install dependencies
-        run: brew install xz
+      - name: Start XQuartz
+        run: open -a XQuartz
 
       - name: Build stub and run tests
         run: |
@@ -165,10 +164,11 @@ jobs:
         shell: pwsh
         run: echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby-pkgs@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+          mingw: "fox swig"
 
       - name: Install bundle
         run: bundle install
