@@ -75,13 +75,13 @@ jobs:
           echo "ascli --version -> $out"
           echo "$out" | grep -Eq '[0-9]+\.[0-9]+' || { echo "unexpected version output"; exit 1; }
 
-      - name: Run packed ascli on clean Ubuntu (cross-distro, informational)
-        # A Fedora-built executable may depend on distro-specific system
-        # libraries (glibc version, libcrypt/OpenSSL sonames) that OCRAN does
-        # not bundle. This step documents in the job summary whether the
-        # bundle happens to be portable to Ubuntu without failing the
-        # workflow when it is not. Remove continue-on-error to enforce it.
-        continue-on-error: true
+      - name: Run packed ascli on clean Ubuntu (cross-distro)
+        # OCRAN bundles detected non-glibc shared libraries (libyaml,
+        # libcrypt, libssl, ...) on Linux, so a Fedora-built executable runs
+        # on Ubuntu. The remaining constraint is glibc itself, which can
+        # never be bundled: the target's glibc must be at least as new as
+        # the build host's (e.g. Debian stable is often too old for a
+        # fedora:latest build).
         run: |
           set +e
           out=$(docker run --rm -v /tmp/ascli-out:/mnt:ro ubuntu:latest bash -euc '

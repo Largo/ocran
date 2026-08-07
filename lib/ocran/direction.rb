@@ -18,6 +18,12 @@ module Ocran
     # - /ruby/vendor_ruby/3.0.0/
     RUBY_LIBRARY_PATH_REGEX = %r{/(ruby/(?:site_ruby/|vendor_ruby/)?\d+\.\d+\.\d+)/?$}i
 
+    # Core libraries provided by glibc and the dynamic loader. These must
+    # never be bundled: they are tightly coupled to the target system's
+    # ld.so, and shipping a foreign copy breaks the dynamic linker. The
+    # libnss_* plugins are dlopened by the target's glibc and must match it.
+    LINUX_SYSTEM_LIBRARY_RE = /\A(?:ld-linux|ld64|libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|libutil\.so|libnsl\.so|libresolv\.so|libmvec\.so|libanl\.so|libBrokenLocale\.so|libnss_)/
+
     include BuildConstants, CommandOutput, HostConfigHelper
 
     attr_reader :ruby_executable, :rubyopt
@@ -231,6 +237,44 @@ module Ocran
             next unless path.file? && path.extname?(".dll")
             say "Adding companion DLL #{path}"
             builder.duplicate_to_exec_prefix(path)
+          end
+        end
+      end
+
+      # Linux: bundle detected shared libraries (e.g. libyaml, libssl,
+      # libcrypt) next to libruby so the executable also runs on systems
+      # where they are missing or have different sonames (the stub already
+      # points LD_LIBRARY_PATH at the packed bin directory). Core glibc
+      # libraries and the loader are never bundled - they must come from the
+      # target system. Ruby native extensions are packed as features, not
+      # here.
+      if RUBY_PLATFORM.include?("linux") && @option.auto_detect_dlls?
+        feature_set = features.to_set
+        feature_realpaths = features.filter_map { |f| f.realpath rescue nil }.to_set
+        # Ruby native extensions live in these directories and are packed as
+        # features; they must not be duplicated into bin.
+        ruby_arch_dirs = RbConfig::CONFIG.values_at("archdir", "sitearchdir", "vendorarchdir")
+          .compact.map { |dir| Pathname(dir) }
+        detect_dlls.each do |dll|
+          basename = dll.basename.to_s
+          next unless basename.match?(/\.so(\.|\z)/)
+          next if basename.match?(LINUX_SYSTEM_LIBRARY_RE)
+          # libruby is packed with its aliases already
+          next if basename.start_with?("libruby")
+          next if feature_set.include?(dll) || feature_realpaths.include?(dll)
+          next if ruby_arch_dirs.any? { |dir| dll.subpath?(dir) } || dll.to_posix.match?(%r{/gems/})
+          next unless dll.file?
+
+          say "Adding detected shared library #{dll}"
+          builder.copy_to_bin(dll, basename)
+          # The loader may request a library by a less specific soname than
+          # the fully versioned file name recorded in the memory map (e.g.
+          # libssl.so.3 for libssl.so.3.2.4). Provide symlink aliases for
+          # each shorter version suffix.
+          alias_name = basename
+          while (shorter = alias_name.sub(/\.\d+[^.]*\z/, "")) != alias_name && shorter.include?(".so")
+            builder.symlink_in_bin(basename, shorter)
+            alias_name = shorter
           end
         end
       end
