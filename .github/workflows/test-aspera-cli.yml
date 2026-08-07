@@ -74,3 +74,33 @@ jobs:
           ')
           echo "ascli --version -> $out"
           echo "$out" | grep -Eq '[0-9]+\.[0-9]+' || { echo "unexpected version output"; exit 1; }
+
+      - name: Run packed ascli on clean Ubuntu (cross-distro, informational)
+        # A Fedora-built executable may depend on distro-specific system
+        # libraries (glibc version, libcrypt/OpenSSL sonames) that OCRAN does
+        # not bundle. This step documents in the job summary whether the
+        # bundle happens to be portable to Ubuntu without failing the
+        # workflow when it is not. Remove continue-on-error to enforce it.
+        continue-on-error: true
+        run: |
+          set +e
+          out=$(docker run --rm -v /tmp/ascli-out:/mnt:ro ubuntu:latest bash -euc '
+            if command -v ruby > /dev/null; then
+              echo "test container unexpectedly has Ruby installed - not a clean-system test" >&2
+              exit 1
+            fi
+            /mnt/ascli-packed --version
+          ' 2>&1)
+          status=$?
+          echo "$out"
+          if [ $status -eq 0 ] && echo "$out" | grep -Eq '[0-9]+\.[0-9]+'; then
+            echo "### Cross-distro (Fedora-Build auf Ubuntu): laeuft" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Cross-distro (Fedora-Build auf Ubuntu): laeuft NICHT (Exitcode $status)"
+              echo '```'
+              echo "$out" | tail -15
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
