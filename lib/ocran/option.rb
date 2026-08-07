@@ -104,7 +104,9 @@ Executable options:
 --console          Force console application (ruby.exe)
 --chdir-first      When exe starts, change working directory to app dir.
 --icon <ico>       Replace icon with a custom one.
---rubyopt <str>    Set the RUBYOPT environment variable when running the executable
+--rubyopt <str>    Set the RUBYOPT environment variable when running the executable.
+                   -I/-r entries with absolute build-machine paths are
+                   translated to their packed locations at build time.
 --debug            Executable will be verbose.
 --debug-extract    Executable will unpack to local dir and not delete after.
 EOF
