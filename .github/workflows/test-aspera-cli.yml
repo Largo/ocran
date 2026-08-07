@@ -1,0 +1,76 @@
+# Integration test: package a real-world third-party gem (aspera-cli, see
+# issue #44) with OCRAN on Linux and verify the result runs on a clean
+# system without Ruby.
+#
+# SECURITY: aspera-cli is third-party code, and OCRAN executes the
+# target script while detecting dependencies. This workflow is deliberately
+# isolated from the release pipeline (gem-release.yml):
+#   - it never runs on tags and produces no artifacts consumed by the release
+#   - the GITHUB_TOKEN is restricted to read-only repository access
+#   - the gem is installed and executed only inside throwaway Docker
+#     containers, never on the runner itself, and the token is not passed
+#     into the containers (the repository checkout is mounted read-only)
+#   - the packed executable is also only ever run inside a container
+name: Test aspera-cli packaging (Linux)
+
+on:
+  push:
+    branches:
+      - '*'
+  workflow_dispatch:
+  schedule:
+    # Weekly: catches breakage caused by new aspera-cli releases
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  package-aspera-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package ascli with OCRAN on Fedora (distro Ruby)
+        # Fedora's distro Ruby uses the split /usr/share/gems layout where
+        # default gems (fiddle, singleton, ...) have a gemspec but no
+        # materialized gem directory - the exact environment of issue #44.
+        run: |
+          mkdir -p /tmp/ascli-out
+          docker run --rm \
+            -v "$PWD":/ocran-src:ro \
+            -v /tmp/ascli-out:/out \
+            fedora:latest bash -euxc '
+              # Weak deps matter here: Fedora ships default gems (json,
+              # psych, ...) as separate RPMs pulled in as weak deps of ruby
+              dnf install -y \
+                ruby ruby-devel rubygems gcc gcc-c++ make redhat-rpm-config \
+                openssl-devel libffi-devel zlib-devel xz which
+              cp -r /ocran-src /ocran
+              cd /ocran
+              make -C src
+              cp src/stub share/ocran/stub
+              chmod 755 share/ocran/stub
+              gem install aspera-cli --no-document
+              ruby -Ilib exe/ocran "$(command -v ascli)" --verbose \
+                --output /out/ascli-packed -- --version
+            '
+
+      - name: Run packed ascli on clean Fedora (no Ruby installed)
+        # Same distro, fresh container without Ruby: verifies the executable
+        # is self-contained. (Running a Fedora-built executable on another
+        # distro would additionally require bundling system libraries such as
+        # libcrypt, which OCRAN does not do; the ubuntu-to-debian test in
+        # test-on-push.yml covers the cross-distro case for toolchain-built
+        # rubies.)
+        run: |
+          out=$(docker run --rm -v /tmp/ascli-out:/mnt:ro fedora:latest bash -euc '
+            if command -v ruby > /dev/null; then
+              echo "test container unexpectedly has Ruby installed - not a clean-system test" >&2
+              exit 1
+            fi
+            /mnt/ascli-packed --version
+          ')
+          echo "ascli --version -> $out"
+          echo "$out" | grep -Eq '[0-9]+\.[0-9]+' || { echo "unexpected version output"; exit 1; }
