@@ -233,6 +233,21 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # A Gemfile that references a local development gem via a `path:` source
+  # (or the `gemspec` directive) has its gemspec outside both the Ruby
+  # installation and every gem path. The build must not abort; the gem is
+  # packed into the bundled GEM_HOME and is usable in the packaged app
+  # (github issue #34).
+  def test_gemfile_local_path_gem
+    with_fixture 'localgem' do
+      assert system("ruby", ocran, "localgem.rb", *(DefaultArgs + ["--gemfile", "Gemfile"]))
+      exe = exe_name("localgem")
+      pristine_env exe do
+        assert system(exe)
+      end
+    end
+  end
+
   # With --debug-extract option, exe should unpack to local directory and leave it in place
   def test_debug_extract
     with_fixture 'helloworld' do
