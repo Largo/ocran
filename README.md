@@ -31,7 +31,8 @@ If using Windows you can use  the Inno Setup
 option (`--innosetup`) to produce a proper installer that extracts once to a
 permanent directory.
 
-You can easily generate binaries for the supported Operating Systems with GitHub Actions.
+You can easily generate binaries for the supported Operating Systems with GitHub
+Actions — see [Building for multiple platforms with GitHub Actions](#building-for-multiple-platforms-with-github-actions).
 
 ## Features
 
@@ -235,7 +236,92 @@ OCRAN on the same platform (and architecture) as the intended target**:
 There is no support for building a Windows `.exe` from a Linux or macOS host,
 or vice versa. If you need builds for multiple platforms, run OCRAN in CI on
 each target platform separately (e.g., a Windows runner for `.exe` builds and
-a Linux runner for Linux builds).
+a Linux runner for Linux builds). See
+[Building for multiple platforms with GitHub Actions](#building-for-multiple-platforms-with-github-actions)
+for a ready-made setup.
+
+### Linux binary portability (glibc)
+
+On Linux, OCRAN bundles the shared libraries your application loaded during
+the build (libyaml, libssl, libcrypt, libgmp, libz, ...) next to the bundled
+Ruby, so the executable also runs on distributions where those libraries are
+missing or have different sonames. It works with distro-packaged Ruby too
+(e.g. `dnf install ruby` on Fedora), including its split gem layout and
+`rubypick` wrapper.
+
+One thing can never be bundled: **glibc itself** (and its dynamic loader).
+Those always come from the target system, and glibc is only
+backward-compatible. In practice:
+
+* A Linux binary runs on any distribution whose glibc is **at least as new**
+  as the build machine's.
+* Build on the **oldest** distribution you want to support. For example, a
+  binary built on the oldest available `ubuntu-*` GitHub runner runs on that
+  Ubuntu version and everything newer, while a binary built on a
+  cutting-edge distribution (e.g. `fedora:latest`) will not run on older
+  Debian/Ubuntu releases (`` version `GLIBC_2.4x' not found ``).
+
+Use `--no-autodll` to disable shared library bundling.
+
+## Building for multiple platforms with GitHub Actions
+
+Since OCRAN is not a cross-compiler, the recommended way to ship your app for
+Windows, Linux, and macOS is a GitHub Actions matrix that runs OCRAN natively
+on each platform. A minimal workflow:
+
+```yaml
+name: Build binaries
+
+on:
+  push:
+    tags: ['v*']      # build releases from version tags
+  workflow_dispatch:   # allow manual runs
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest   # x86-64 Windows .exe
+          - os: ubuntu-22.04     # x86-64 Linux; oldest runner = widest glibc compatibility
+          - os: macos-14         # Apple Silicon macOS
+          - os: macos-15-intel   # Intel macOS
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true    # if your app has a Gemfile
+
+      - run: gem install ocran
+
+      # Run OCRAN on your entry script. Add "-- <args>" if your script needs
+      # arguments to exit cleanly during the dependency-detection run.
+      - run: ocran myapp.rb --output myapp
+        # produces myapp.exe on Windows, myapp on Linux/macOS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: myapp-${{ matrix.os }}
+          path: myapp*
+```
+
+Notes:
+
+* Pick the **oldest** `ubuntu-*` runner GitHub offers for the Linux build so
+  the binary runs on as many distributions as possible (see
+  [Linux binary portability](#linux-binary-portability-glibc)).
+* On macOS, each architecture needs its own build: `macos-14` (and newer
+  numbered ARM runners) produce Apple Silicon binaries, `macos-15-intel`
+  produces Intel binaries.
+* Swap the `ocran` invocation for `--output-dir`, `--output-zip`,
+  `--macosx-bundle`, or `--innosetup` depending on how you want to ship
+  (see [Recommended usage](#recommended-usage)).
+* For tag pushes you can attach the artifacts to a GitHub release with a
+  follow-up job (e.g. `softprops/action-gh-release`).
 
 ## Requirements
 
@@ -317,8 +403,12 @@ If your script uses `Kernel#autoload`, OCRAN will attempt to load those
 constants so they are included in the output. Missing modules are ignored
 with a warning.
 
-Dynamic link libraries (.dll files, for example WxWidgets, or other
-source files) will be detected and included by OCRAN.
+Dynamic link libraries are detected and included by OCRAN: `.dll` files on
+Windows (for example WxWidgets), and on Linux the non-glibc shared libraries
+the process loaded (libyaml, libssl, libcrypt, ...), which are placed next to
+the bundled Ruby with appropriate soname symlinks (see
+[Linux binary portability](#linux-binary-portability-glibc)). Disable with
+`--no-autodll`.
 
 ### Including libraries non-automatically
 
