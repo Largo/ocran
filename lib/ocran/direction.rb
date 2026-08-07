@@ -762,6 +762,23 @@ module Ocran
       say "Finished building installer file"
     end
 
+    # Returns the path to the stub built from source with cosmocc when
+    # --cosmo was given, or nil to use the pre-built stub shipped with
+    # the gem. The build result is memoized (and CosmoToolchain caches
+    # compiled stubs across runs), so multiple stubs per build (e.g.
+    # wrapper executables) compile at most once.
+    def cosmo_stub_path
+      return nil unless @option.cosmo_cc
+
+      @cosmo_stub_path ||= begin
+        require_relative "cosmo_toolchain"
+        say "Building launcher stub from source with cosmocc (#{@option.cosmo_cc})"
+        path = CosmoToolchain.build_stub(@option.cosmo_cc)
+        say "Using APE stub #{path}"
+        path
+      end
+    end
+
     # Builds the small RUN_IN_EXE_DIR wrapper stub that starts the deployed
     # application directly from the directory the wrapper resides in.
     def build_wrapper_exe(wrapper_path)
@@ -772,7 +789,8 @@ module Ocran
                       debug_mode: @option.enable_debug_mode?,
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
-                      run_in_exe_dir: true) do |stub|
+                      run_in_exe_dir: true,
+                      stub_path: cosmo_stub_path) do |stub|
         yield(stub)
       end
     end
@@ -835,6 +853,7 @@ module Ocran
                       enable_compression: @option.enable_compression?,
                       gui_mode: false,
                       icon_path: nil,
+                      stub_path: cosmo_stub_path,
                       &to_proc) => builder
 
       if @option.icon_filename
@@ -884,6 +903,7 @@ module Ocran
                       enable_compression: @option.enable_compression?,
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
+                      stub_path: cosmo_stub_path,
                       &to_proc) => builder
       say "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
       say "After decompression, the data will expand to #{builder.data_size} bytes."

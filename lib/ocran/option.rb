@@ -16,6 +16,7 @@ module Ocran
         :macosx_bundle => nil,
         :macosx_bundle? => false,
         :chdir_before? => false,
+        :cosmo_cc => nil,
         :enable_compression? => true,
         :enable_debug_extract? => false,
         :enable_debug_mode? => false,
@@ -107,6 +108,15 @@ Executable options:
 --rubyopt <str>    Set the RUBYOPT environment variable when running the executable
 --debug            Executable will be verbose.
 --debug-extract    Executable will unpack to local dir and not delete after.
+
+Experimental options:
+
+--cosmo <path>     Build the launcher stub from source with the given
+                   Cosmopolitan toolchain (cosmocc) and package with the
+                   resulting Actually Portable Executable (APE) stub.
+                   <path> is the cosmocc executable or its install dir.
+                   Console-only; output defaults to <scriptname>.com.
+                   (Alias: --cosmo-toolchain)
 EOF
     end
 
@@ -155,6 +165,9 @@ EOF
           @options[:icon_filename] = Pathname.new(path).expand_path
         when "--rubyopt"
           @options[:rubyopt] = argv.shift
+        when "--cosmo", "--cosmo-toolchain"
+          require_relative "cosmo_toolchain"
+          @options[:cosmo_cc] = CosmoToolchain.resolve_cc(argv.shift)
         when "--gemfile"
           path = argv.shift
           raise "Gemfile #{path} not found" unless path && File.exist?(path)
@@ -219,8 +232,15 @@ EOF
           executable = script
           # If debug mode is enabled, append "-debug" to the filename
           executable = executable.append_to_filename("-debug") if enable_debug_mode?
-          # Build output files are created in the current directory
-          ext = Gem.win_platform? ? ".exe" : ""
+          # Build output files are created in the current directory.
+          # APE binaries built with cosmocc conventionally use .com.
+          ext = if cosmo_cc
+                  ".com"
+                elsif Gem.win_platform?
+                  ".exe"
+                else
+                  ""
+                end
           executable.basename.sub_ext(ext).expand_path
         end
 
@@ -253,6 +273,16 @@ EOF
         raise "--output-dir and --output-zip cannot be used together"
       end
 
+      if cosmo_cc
+        if Gem.win_platform?
+          raise "--cosmo is not supported when building on Windows (build the APE stub on a Linux/macOS host)"
+        end
+
+        if force_windows?
+          raise "--windows cannot be used with --cosmo: cosmocc has no GUI (stubw) equivalent; APE stubs are console-only"
+        end
+      end
+
       if macosx_bundle && (output_dir || output_zip || inno_setup_script)
         raise "--macosx-bundle cannot be combined with --output-dir, --output-zip, or --innosetup"
       end
@@ -271,6 +301,8 @@ EOF
     def auto_detect_dlls? = @options[__method__]
 
     def chdir_before? = @options[__method__]
+
+    def cosmo_cc = @options[__method__]
 
     def enable_compression? = @options[__method__]
 
