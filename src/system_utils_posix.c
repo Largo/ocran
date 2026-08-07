@@ -1,6 +1,9 @@
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
+#ifdef __COSMOPOLITAN__
+#include <cosmo.h>  /* GetProgramExecutableName() */
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -360,6 +363,23 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size) {
 /* ===== Path utilities ===== */
 
 char *GetImagePath(void) {
+#ifdef __COSMOPOLITAN__
+    /* Cosmopolitan Libc defines neither __linux__ nor __APPLE__; it resolves
+       the executable path itself on every OS the APE binary runs on. */
+    const char *exe = GetProgramExecutableName();
+    if (!exe || !*exe) {
+        FATAL("GetImagePath: GetProgramExecutableName failed");
+        return NULL;
+    }
+
+    char *result = strdup(exe);
+    if (!result) {
+        FATAL("GetImagePath: strdup failed");
+        return NULL;
+    }
+
+    return result;
+#else
     static char path_buffer[4096];
 #ifdef __APPLE__
     uint32_t size = sizeof(path_buffer);
@@ -388,6 +408,7 @@ char *GetImagePath(void) {
 
     strcpy(result, path_buffer);
     return result;
+#endif /* __COSMOPOLITAN__ */
 }
 
 char *GetTempDirectoryPath(void) {

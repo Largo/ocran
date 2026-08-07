@@ -1,4 +1,9 @@
 # Detect host OS
+#
+# Experimental: the POSIX stub also builds with Cosmopolitan Libc
+# (https://github.com/jart/cosmopolitan) into an Actually Portable
+# Executable:  make CC=cosmocc
+# See ../docs/cosmocc-port-plan.md for status and caveats.
 UNAME           := $(shell uname -s 2>/dev/null || echo Windows)
 IS_POSIX        := $(filter $(UNAME),Linux Darwin)
 
@@ -67,6 +72,10 @@ endif
 clean:
 	rm -f $(BINARIES) $(COMMON_OBJS) $(CONSOLE_OBJS) $(WINDOW_OBJS) \
 	      $(RESOURCE_OBJ)
+	# cosmocc (CC=cosmocc) byproducts
+	rm -f $(addsuffix .com.dbg, $(PROG_NAMES)) \
+	      $(addsuffix .aarch64.elf, $(PROG_NAMES))
+	rm -rf .aarch64 lzma/.aarch64
 
 install: $(BINARIES)
 	mkdir -p $(BINDIR)
