@@ -1267,8 +1267,10 @@ class TestOcran < Minitest::Test
       assert File.exist?(wrapper)
       assert system(wrapper.to_s)
 
-      # The placeholder must resolve to the executable's own directory
-      assert_equal File.join(appdir, "src"), File.read(File.join(appdir, "result.txt"))
+      # The placeholder must resolve to the executable's own directory.
+      # The stub reports native separators on Windows - compare normalized.
+      assert_equal File.join(appdir, "src").tr("\\", "/"),
+                   File.read(File.join(appdir, "result.txt")).tr("\\", "/")
       # The application directory must survive (no auto-clean, no extraction)
       assert File.exist?(File.join(appdir, "src", "check.rb"))
       assert File.exist?(File.join(appdir, "bin", ruby_name))
