@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 require "rbconfig"
 require "pathname"
+require "set"
 require_relative "refine_pathname"
 require_relative "host_config_helper"
 require_relative "command_output"
@@ -168,7 +169,20 @@ module Ocran
 
       # Add the ruby executable and DLL
       say "Adding ruby executable #{ruby_executable}"
-      builder.copy_to_bin(bindir / ruby_executable, ruby_executable)
+      ruby_source = bindir / ruby_executable
+      if !Gem.win_platform? && File.binread(ruby_source, 2) == "#!"
+        # On some distros (e.g. Fedora), bindir/ruby is a dispatcher shell
+        # script ("rubypick") rather than the interpreter itself, which
+        # cannot run on a system without Ruby. Pack the currently running
+        # interpreter binary under the expected name instead.
+        real_ruby = Pathname("/proc/self/exe")
+        raise "#{ruby_source} is a wrapper script and the real interpreter could not be determined" unless real_ruby.exist?
+
+        say "#{ruby_source} is a wrapper script; packing #{real_ruby.realpath} instead"
+        builder.copy_to_bin(real_ruby.realpath, ruby_executable)
+      else
+        builder.copy_to_bin(ruby_source, ruby_executable)
+      end
       if libruby_so
         # On POSIX systems, libruby.so is in libdir; on Windows, it's in bindir
         libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
@@ -284,6 +298,45 @@ module Ocran
           raise "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
         end
 
+        spec_dir = spec_file.dirname
+        default_spec = spec_dir.basename.to_s == "default"
+        # The gem's base directory: specs live in <base_dir>/specifications[/default]
+        base_dir = default_spec ? spec_dir.dirname.dirname : spec_dir.dirname
+        # Relative packed location of base_dir; nil when the gem lives outside
+        # the Ruby prefix, in which case its files are packed under GEMDIR
+        # with the same layout.
+        packed_base = base_dir.subpath?(exec_prefix) ? base_dir.relative_path_from(exec_prefix) : GEMDIR
+
+        # Default gemspecs live in a "specifications/default" directory, which
+        # RubyGems only scans under Gem.default_dir. On rubies with a
+        # compiled-in absolute prefix (e.g. distro Ruby on Fedora), that path
+        # points to the build host and does not exist on the target system, so
+        # activating such a gem (e.g. via a binstub) fails. Also place a copy
+        # in the regular specifications directory of the same packed base
+        # directory, where GEM_PATH makes it discoverable and its require
+        # paths resolve to the packed gem files.
+        if !Gem.win_platform? && default_spec
+          builder.cp(spec_file, packed_base / "specifications" / spec_file.basename)
+        end
+
+        # Native-extension gems record successful builds in a gem.build_complete
+        # marker under <base_dir>/extensions/...; without it RubyGems refuses to
+        # activate the gem ("Ignoring x because its extensions are not built").
+        # The marker can be absent from the packed tree either because the
+        # distro relocates it (e.g. Fedora keeps it under /usr/lib64/gems/ruby
+        # via a default_ext_dir_for override) or because the gem is a default
+        # gem, which is exempt from the check on the host while its packed
+        # regular-spec copy is not. Recreate the marker where RubyGems expects
+        # it at runtime.
+        if !Gem.win_platform? && spec.extensions.any?
+          api_version = Gem.respond_to?(:extension_api_version) ? Gem.extension_api_version : Gem.ruby_api_version
+          packed_ext_dir = Pathname("extensions") / Gem::Platform.local.to_s / api_version / spec.full_name
+          host_marker = Pathname(spec.gem_build_complete_path)
+          if default_spec || (File.exist?(host_marker) && !host_marker.subpath?(base_dir))
+            builder.touch(packed_base / packed_ext_dir / "gem.build_complete")
+          end
+        end
+
         # Determine which set of files to include for this particular gem
         include = GemSpecQueryable.gem_inclusion_set(spec.name, @option.gem_options)
         say "Detected gem #{spec.full_name} (#{include.join(", ")})"
@@ -292,6 +345,9 @@ module Ocran
 
         verbose "\tgem_dir: #{spec.gem_dir}"
         verbose "\tgem_dir exists: #{File.directory?(spec.gem_dir)}"
+        unless File.directory?(spec.gem_dir)
+          verbose "\tGem directory does not exist (default gem?); packing loaded files via load path instead"
+        end
         loaded_matches = include.include?(:loaded) ? features.select { |f| f.subpath?(spec.gem_dir) } : []
         verbose "\t:loaded candidates in features: #{loaded_matches.size}"
         loaded_matches.each { |f| verbose "\t  loaded: #{f}" }
@@ -313,11 +369,72 @@ module Ocran
           end
         end
 
+        # When a distro builds native extensions outside the gem's base_dir
+        # and loads them from there (e.g. Fedora's /usr/lib64/gems/ruby), the
+        # loaded .so would be packed at a mirror path that is never on the
+        # runtime load path. Pack such loaded extension files ONLY into the
+        # extension directory RubyGems computes at runtime, which gem
+        # activation puts on the load path. Appended to actual_files after
+        # the generic copy above so they are claimed as gem files (and thus
+        # excluded from the plain feature packing, where a bare .so on
+        # RUBYLIB would shadow the gem) without also being mirrored at their
+        # host location. The extension dir and the load location may be
+        # aliased via symlinks in either direction, so match features against
+        # the extension dir by realpath both ways.
+        if !Gem.win_platform? && spec.extensions.any?
+          host_ext_dir = Pathname(spec.extension_dir)
+          if host_ext_dir.directory? && !host_ext_dir.subpath?(base_dir)
+            alias_map = {}
+            host_ext_dir.find.select(&:file?).each do |entry|
+              real = begin
+                entry.realpath
+              rescue SystemCallError
+                next
+              end
+              alias_map[real] = entry
+            end
+            features.each do |feature|
+              real = begin
+                feature.realpath
+              rescue SystemCallError
+                feature
+              end
+              entry = if feature.subpath?(host_ext_dir)
+                        feature
+                      elsif real.subpath?(host_ext_dir)
+                        real
+                      else
+                        alias_map[feature] || alias_map[real]
+                      end
+              next unless entry
+
+              builder.cp(feature, packed_base / packed_ext_dir / entry.relative_path_from(host_ext_dir))
+              actual_files << feature
+            end
+          end
+        end
+
         actual_files
       end
       gem_files.uniq!
 
-      features -= gem_files
+      # On some distros parts of a gem are reachable through symlinks at other
+      # locations (e.g. Fedora symlinks /usr/share/ruby/psych.rb into the
+      # psych gem directory), so a feature and a packed gem file can denote
+      # the same file under different paths. Compare realpaths when removing
+      # gem files from the feature list; otherwise a stdlib-level duplicate
+      # would be packed as well and shadow the packed gem at runtime.
+      gem_file_set = (gem_files + gem_files.filter_map { |file| file.realpath rescue nil }).to_set
+      features = features.reject do |feature|
+        next true if gem_file_set.include?(feature)
+
+        real = begin
+          feature.realpath
+        rescue SystemCallError
+          nil
+        end
+        real && gem_file_set.include?(real)
+      end
 
       # If requested, add all ruby standard libraries
       if @option.add_all_core?
@@ -500,13 +617,16 @@ module Ocran
       # By adding the extract-dir equivalents of rubylibdir, sitelibdir, etc. to
       # RUBYLIB, Ruby can find rubygems and the standard library in the packed tree.
       unless Gem.win_platform?
-        core_lib_paths = all_core_dir
+        # Use the build Ruby's actual default load path in addition to the
+        # RbConfig directories: some distros compile in extra entries that
+        # RbConfig does not expose (e.g. Fedora's /usr/share/rubygems, where
+        # rubygems.rb lives outside rubylibdir).
+        default_load_paths = @pre_env.load_path.map { |dir| Pathname(@pre_env.expand_path(dir)) }
+        archdir = Pathname(RbConfig::CONFIG["archdir"])
+        core_lib_paths = (default_load_paths + all_core_dir + [archdir])
           .select { |dir| dir.subpath?(exec_prefix) }
           .map { |dir| dir.relative_path_from(exec_prefix) }
-        archdir = Pathname(RbConfig::CONFIG["archdir"])
-        if archdir.subpath?(exec_prefix)
-          core_lib_paths << archdir.relative_path_from(exec_prefix)
-        end
+          .uniq
         load_path = core_lib_paths + load_path
       end
 
@@ -515,15 +635,19 @@ module Ocran
 
       gem_paths = [GEMDIR]
       # Gems installed under the Ruby prefix (exec_prefix) have their specs and
-      # extension dirs placed there via duplicate_to_exec_prefix. Include
-      # Gem.default_dir (relative to exec_prefix) in GEM_PATH so RubyGems can
-      # find and activate them at runtime. This is required on both Windows
-      # (e.g. fxruby/fox16 whose fox16_c.so lives in extension_dir under the
-      # Ruby prefix) and POSIX (e.g. error_highlight default gems).
-      default_gem_dir = Pathname(Gem.default_dir)
-      if default_gem_dir.subpath?(exec_prefix)
-        gem_paths << default_gem_dir.relative_path_from(exec_prefix)
-      end
+      # extension dirs placed there via duplicate_to_exec_prefix. Include every
+      # Gem.path entry located under exec_prefix (relative to it) in GEM_PATH so
+      # RubyGems can find and activate them at runtime. This is required on both
+      # Windows (e.g. fxruby/fox16 whose fox16_c.so lives in extension_dir under
+      # the Ruby prefix) and POSIX (e.g. error_highlight default gems). Distros
+      # can split gems over several such directories - e.g. Fedora uses
+      # /usr/share/gems for RPM-packaged (default) gems and /usr/local/share/gems
+      # for user-installed ones - so Gem.default_dir alone is not enough.
+      prefix_gem_dirs = (Gem.path.map { |dir| Pathname(dir) } + [Pathname(Gem.default_dir)])
+        .select { |dir| dir.subpath?(exec_prefix) }
+        .map { |dir| dir.relative_path_from(exec_prefix) }
+        .uniq
+      gem_paths += prefix_gem_dirs
       builder.set_env_path("GEM_PATH", *gem_paths)
 
       # Add the opcode to launch the script

@@ -131,8 +131,11 @@ module Ocran
 
     def gem_root = Pathname(gem_dir)
 
-    # Find the selected files
-    def gem_root_files = gem_root.find.select(&:file?)
+    # Find the selected files. Default gems (e.g. fiddle, singleton on
+    # Homebrew or distro-packaged Ruby) may have a gemspec without a
+    # materialized gem directory - their files live in Ruby's stdlib and
+    # are packed via the load path instead.
+    def gem_root_files = gem_root.directory? ? gem_root.find.select(&:file?) : []
 
     def script_files
       gem_root_files.select { |path| path.extname =~ GEM_SCRIPT_RE }
@@ -154,7 +157,25 @@ module Ocran
         when :spec
           files.map { |file| Pathname(file) }
         when :loaded
-          features_from_gems.select { |feature| feature.subpath?(gem_dir) }
+          # Some distros expose gem files under additional paths via symlinks
+          # (e.g. Fedora symlinks /usr/share/ruby/psych.rb into the psych gem
+          # directory) and $LOADED_FEATURES records the symlink path. Resolve
+          # each feature to its realpath so such files count as gem files and
+          # are packed inside the gem directory. Packing them at the symlink
+          # location instead would break require_relative, which resolves
+          # against the realpath on the build host but not in the packed app.
+          features_from_gems.filter_map do |feature|
+            if feature.subpath?(gem_dir)
+              feature
+            else
+              real = begin
+                feature.realpath
+              rescue SystemCallError
+                next
+              end
+              real if real.subpath?(gem_dir)
+            end
+          end
         when :files
           resource_files
         when :extras
