@@ -1,3 +1,7 @@
+=== Unreleased
+- New experimental `--cosmo <path>` option (alias `--cosmo-toolchain`): build the launcher stub from its C sources with a Cosmopolitan Libc toolchain (cosmocc) at packaging time and package the application with the resulting Actually Portable Executable (APE) stub instead of the pre-built stub (issue #26). `<path>` is the cosmocc executable or the toolchain directory (containing bin/cosmocc). Console applications only (`--windows` is rejected); requires make and a Linux/macOS build host. The default output name uses the `.com` extension (APE convention); an explicit `--output` is used verbatim. Compiled stubs are cached in ~/.cache/ocran keyed on the toolchain and stub sources; compile errors surface the compiler output.
+- Ship the stub C sources (src/) in the binary platform gems so `--cosmo` can rebuild the stub from an installed gem, not only from a source checkout.
+
 === 1.4.4
 - Fix crash on distro-packaged and Homebrew Ruby when a default gem (e.g. fiddle, singleton) has a gemspec but no materialized gem directory: file collection now treats the missing directory as an empty set instead of raising Errno::ENOENT from Find.find (issue #44). The gem's files, which live in the stdlib, are still packed via the load path.
 - Pack the real Ruby interpreter when bindir/ruby is a dispatcher script (e.g. Fedora's rubypick): the running interpreter binary (/proc/self/exe) is packed under the expected name instead, so the packed executable no longer requires Ruby on the target system.

@@ -88,7 +88,16 @@ resolves the executable path on every OS the APE runs on.
 
 ## Build integration
 
-* Today: `make -C src CC=cosmocc` with `cosmocc` on `PATH`
+* **Build-at-packaging-time (implemented):** `ocran script.rb --cosmo
+  <path-to-toolchain>` compiles the stub sources with the given cosmocc
+  during the packaging run and packages the app with the fresh APE stub
+  (default output extension `.com`). Implementation:
+  `lib/ocran/cosmo_toolchain.rb` (path resolution, compile via `make -C
+  src stub CC=cosmocc` in a temp copy of `src/`, compiler output
+  surfaced on failure, results cached in `~/.cache/ocran` keyed on
+  toolchain + source hash). The binary platform gems now ship `src/` so
+  this works from an installed gem, not just a checkout.
+* Manual: `make -C src CC=cosmocc` with `cosmocc` on `PATH`
   (single ~440 MB zip from <https://cosmo.zip/pub/cosmocc/cosmocc.zip>).
 * CI sketch (phase 1): a Linux job that caches the pinned cosmocc zip,
   builds `src` with `CC=cosmocc`, and runs the existing POSIX test path
@@ -126,9 +135,16 @@ resolves the executable path on every OS the APE runs on.
 
 ## Milestones
 
-* **Phase 0 (this branch)** — `make CC=cosmocc` compiles and links;
+* **Phase 0 (done)** — `make CC=cosmocc` compiles and links;
   `GetImagePath()` has a `__COSMOPOLITAN__` implementation; smoke test
   passes on Linux; this document.
+* **Phase 0.5 (done — runtime build)** — build the stub with cosmocc at
+  packaging time: the `--cosmo <toolchain>` command-line option compiles
+  `src/` with the user's toolchain and packages with the resulting APE
+  stub (console only, `.com` default extension, stub cache in
+  `~/.cache/ocran`); end-to-end test `test_cosmo_helloworld` (skipped
+  unless a cosmocc toolchain is found via `COSMOCC` or `PATH`) builds
+  and runs a packed app on Linux.
 * **Phase 1** — CI job building the stub with a pinned cosmocc and
   running the POSIX smoke/test suite against the APE artifact on Linux.
 * **Phase 2** — Exercise the packed APE stub on Windows and macOS

@@ -171,6 +171,30 @@ Fine-tuning flags:
 * `--debug`: Enable verbose output when the generated executable runs.
 * `--debug-extract`: Unpack to a local directory and do not delete after execution (useful for troubleshooting).
 
+#### Experimental options:
+
+* `--cosmo <path>` (alias `--cosmo-toolchain`): Build the launcher stub
+  from its C sources with a
+  [Cosmopolitan Libc](https://github.com/jart/cosmopolitan) `cosmocc`
+  toolchain at packaging time, and package the application with the
+  resulting Actually Portable Executable (APE) stub instead of the
+  pre-built stub shipped with the gem. `<path>` is either the `cosmocc`
+  executable itself or the toolchain directory (one containing
+  `bin/cosmocc`, e.g. an unpacked
+  [cosmocc.zip](https://cosmo.zip/pub/cosmocc/cosmocc.zip)).
+  Notes:
+  * Requires `make` and a Linux/macOS build host; console applications
+    only (`--windows` is rejected — cosmocc has no GUI `stubw`
+    equivalent).
+  * The default output name uses the `.com` extension (APE convention),
+    e.g. `script.rb` → `script.com`; an explicit `--output` is used
+    verbatim.
+  * Compiled stubs are cached in `~/.cache/ocran` (keyed on the
+    toolchain and stub sources), so only the first build compiles.
+  * The packaged Ruby runtime is still the host platform's Ruby — the
+    APE property currently applies to the launcher stub, not to the
+    bundled application. See `docs/cosmocc-port-plan.md` for status.
+
 ### Compilation:
 
 * OCRAN runs your script (using `Kernel#load`) and builds the output when it exits.
