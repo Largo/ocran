@@ -3,6 +3,8 @@
 - Add `run_in_exe_dir` option to StubBuilder and a RUN_IN_EXE_DIR (0x20) stub header flag. In this mode the stub never deletes its directory (double-guarded in the stub itself, since the directory is the real application directory).
 - Allow `--innosetup` on POSIX hosts when an ISCC command is available in PATH (e.g. a Wine wrapper); previously it was rejected on non-Windows unconditionally. Fix the ISCC presence check to use `command -v` instead of the Windows-only `where`/`>NUL` on POSIX.
 - Inno Setup builds from POSIX hosts no longer crash on symlink entries (symlinks cannot be expressed in an installer script and are skipped; they are only generated for POSIX shared-library aliases).
+- `--output-dir` and `--output-zip` now also include the wrapper executable (named after `--output`) next to the launch script, so the unpacked output has a doubleclickable, pinnable, signable entry point that can even be registered as a Windows service. The launch script (`.bat`/`.sh`) is still generated.
+- New `--no-wrapper-exe` option: omit the wrapper executable from installer, directory and zip output.
 
 === 1.4.3
 - Migrate edicon from C to Ruby: replace edicon.exe with a pure-Ruby implementation (ed_icon.rb), fixing incorrect BeginUpdateResource error checking and wrong GroupIconSize calculation. Shortens build times and removes the C binary from the build.

@@ -37,6 +37,7 @@ module Ocran
         :source_files => [],
         :verbose? => false,
         :warning? => true,
+        :wrapper_exe? => true,
       }
     end
 
@@ -90,6 +91,8 @@ Output options:
 --output <file>    Name the exe to generate. Defaults to ./<scriptname>.exe.
 --output-dir <dir> Output all files to a directory with a launch script instead of an exe.
 --output-zip <file> Output a zip archive containing all files and a launch script.
+--no-wrapper-exe   Do not add the wrapper executable to installer, directory or
+                   zip output (a launch script is always included there).
 --macosx-bundle    Build a macOS .app bundle. Use --output to name it (default: <scriptname>.app).
 --bundle-id <id>   Bundle identifier for the macOS app bundle (default: com.example.<appname>).
 --no-lzma          Disable LZMA compression of the executable.
@@ -125,6 +128,8 @@ EOF
         when "--output-zip"
           path = argv.shift
           @options[:output_zip] = Pathname.new(path).expand_path if path
+        when "--no-wrapper-exe"
+          @options[:wrapper_exe?] = false
         when "--macosx-bundle"
           @options[:macosx_bundle?] = true
         when "--bundle-id"
@@ -300,6 +305,8 @@ EOF
     def output_zip = @options[__method__]
 
     def quiet? = @options[__method__]
+
+    def wrapper_exe? = @options[__method__]
 
     def rubyopt = @options[__method__]
 

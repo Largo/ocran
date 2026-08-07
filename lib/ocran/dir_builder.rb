@@ -13,6 +13,9 @@ module Ocran
     WINDOWS = Gem.win_platform?
 
     attr_reader :data_size
+    # Recorded launch data (environment variables and exec arguments), used
+    # by Direction to build the optional wrapper executable.
+    attr_reader :env, :exec_args
 
     def initialize(path)
       @path = Pathname(path)

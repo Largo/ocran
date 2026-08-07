@@ -565,25 +565,18 @@ module Ocran
       verbose File.read(launcher_path)
       builder.cp(launcher_path, "launcher.bat")
 
-      require_relative "stub_builder"
       require "tmpdir"
       Dir.mktmpdir("ocran") do |tmpdir|
-        # Wrapper executable (pre-1.4/OCRA behavior): a small stub without
-        # embedded files that runs the installed application directly from
-        # {app}. It is installed next to the application files so that user
-        # Inno Setup scripts can reference it by the --output name, e.g. in
-        # [Run]/[UninstallRun] entries or for Windows service registration.
-        wrapper_path = Pathname(tmpdir) / @option.output_executable.basename
-        say "Build wrapper executable #{wrapper_path.basename}"
-        StubBuilder.new(wrapper_path,
-                        chdir_before: @option.chdir_before?,
-                        debug_mode: @option.enable_debug_mode?,
-                        gui_mode: @option.windowed?,
-                        icon_path: @option.icon_filename,
-                        run_in_exe_dir: true) do |stub|
-          recorder.replay(stub)
+        if @option.wrapper_exe?
+          # Wrapper executable (pre-1.4/OCRA behavior): a small stub without
+          # embedded files that runs the installed application directly from
+          # {app}. It is installed next to the application files so that user
+          # Inno Setup scripts can reference it by the --output name, e.g. in
+          # [Run]/[UninstallRun] entries or for Windows service registration.
+          wrapper_path = Pathname(tmpdir) / @option.output_executable.basename
+          build_wrapper_exe(wrapper_path) { |stub| recorder.replay(stub) }
+          builder.cp(wrapper_path, wrapper_path.basename)
         end
-        builder.cp(wrapper_path, wrapper_path.basename)
 
         say "Build inno setup script file"
         iss_path = iss_builder.build
@@ -596,12 +589,41 @@ module Ocran
       say "Finished building installer file"
     end
 
+    # Builds the small RUN_IN_EXE_DIR wrapper stub that starts the deployed
+    # application directly from the directory the wrapper resides in.
+    def build_wrapper_exe(wrapper_path)
+      require_relative "stub_builder"
+      say "Build wrapper executable #{wrapper_path.basename}"
+      StubBuilder.new(wrapper_path,
+                      chdir_before: @option.chdir_before?,
+                      debug_mode: @option.enable_debug_mode?,
+                      gui_mode: @option.windowed?,
+                      icon_path: @option.icon_filename,
+                      run_in_exe_dir: true) do |stub|
+        yield(stub)
+      end
+    end
+
     def build_output_dir(path)
       require_relative "dir_builder"
 
       path = Pathname(path)
       say "Building directory #{path}"
-      DirBuilder.new(path, &to_proc)
+      builder = DirBuilder.new(path, &to_proc)
+
+      if @option.wrapper_exe?
+        # Same wrapper as in Inno Setup builds: a doubleclickable executable
+        # next to the launch script, usable e.g. for Windows service
+        # registration from an unpacked zip. Disable with --no-wrapper-exe.
+        build_wrapper_exe(path / @option.output_executable.basename) do |stub|
+          builder.env.each { |name, value| stub.export(name, value) }
+          if builder.exec_args
+            image, script, argv = builder.exec_args
+            stub.exec(image, script, *argv)
+          end
+        end
+      end
+
       say "Finished building directory #{path}"
     end
 

@@ -273,13 +273,34 @@ class TestOcran < Minitest::Test
                       end
       assert File.exist?(launch_script), "Launch script not found: #{launch_script}"
 
+      # The wrapper executable is included by default and must run the app
+      wrapper = File.join(outdir, exe_name("helloworld"))
+      assert File.exist?(wrapper), "Wrapper executable not found: #{wrapper}"
+
       Bundler.with_original_env do
         if Gem.win_platform?
           assert system("cmd", "/c", launch_script)
         else
           assert system("sh", launch_script)
         end
+        assert system(wrapper), "Wrapper executable failed to run"
       end
+      # Running the wrapper must not delete the deployed directory
+      assert File.exist?(launch_script)
+    ensure
+      FileUtils.rm_rf(outdir)
+    end
+  end
+
+  # --no-wrapper-exe must omit the wrapper executable from directory output.
+  def test_output_dir_no_wrapper_exe
+    with_fixture 'helloworld' do
+      outdir = File.expand_path("helloworld_dir")
+      assert system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output-dir", outdir, "--no-wrapper-exe"]))
+
+      launch_script = File.join(outdir, Gem.win_platform? ? "helloworld.bat" : "helloworld.sh")
+      assert File.exist?(launch_script), "Launch script not found: #{launch_script}"
+      refute File.exist?(File.join(outdir, exe_name("helloworld"))), "Wrapper executable should be omitted with --no-wrapper-exe"
     ensure
       FileUtils.rm_rf(outdir)
     end
@@ -1262,6 +1283,21 @@ class TestOcran < Minitest::Test
       # Wrapper executable installed to {app} under the --output name
       assert_match(/^Source: "[^"]*myapp\.exe"; DestDir: "\{app\}(\/\.)?";/, iss)
       # The launcher batch file is still part of the installation
+      assert_match(/launcher\.bat/, iss)
+
+      # With --no-wrapper-exe the wrapper must be omitted from the installer
+      rm "saved.iss"
+      orig_path = ENV["PATH"]
+      begin
+        ENV["PATH"] = fakebin + File::PATH_SEPARATOR + orig_path
+        assert system("ruby", ocran, "innosetup.rb", "--quiet", "--no-lzma",
+                      "--chdir-first", "--innosetup", "innosetup.iss",
+                      "--output", "myapp.exe", "--no-wrapper-exe")
+      ensure
+        ENV["PATH"] = orig_path
+      end
+      iss = File.read("saved.iss")
+      refute_match(/myapp\.exe/, iss)
       assert_match(/launcher\.bat/, iss)
     end
   end
