@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: [ '3.3', '3.4', '4.0' ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-14, macos-15-intel]
-        ruby: ['3.2', '3.3', '3.4', '4.0']
+        ruby: ['3.3', '3.4', '4.0']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ macos-14, macos-15-intel ]
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: [ '3.3', '3.4', '4.0' ]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install XQuartz
@@ -141,7 +141,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ windows-latest ]
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: [ '3.3', '3.4', '4.0' ]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -211,7 +211,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ windows-latest ]
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: [ '3.3', '3.4', '4.0' ]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Download packed binary
