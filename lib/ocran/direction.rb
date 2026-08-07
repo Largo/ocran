@@ -72,7 +72,16 @@ module Ocran
 
     def detect_dlls
       if Gem.win_platform?
-        require_relative "library_detector"
+        begin
+          require_relative "library_detector"
+        rescue LoadError => e
+          # LibraryDetector needs fiddle, a bundled gem since Ruby 3.5. In a
+          # Bundler context (e.g. building with --gemfile) requiring it is
+          # refused unless the Gemfile lists fiddle, so degrade to no DLL
+          # auto-detection instead of aborting the build.
+          warning "DLL auto-detection disabled (#{e.message}). Add fiddle to the Gemfile, or use --dll to include DLLs manually."
+          return []
+        end
       else
         require_relative "library_detector_posix"
       end

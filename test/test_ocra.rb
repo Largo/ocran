@@ -238,9 +238,14 @@ class TestOcran < Minitest::Test
   # installation and every gem path. The build must not abort; the gem is
   # packed into the bundled GEM_HOME and is usable in the packaged app
   # (github issue #34).
+  #
+  # Built with --no-autodll: on Ruby >= 3.5 fiddle is a bundled gem, so DLL
+  # auto-detection cannot load fiddle/import under a Bundler context unless
+  # the Gemfile lists fiddle. The fixture gem is pure Ruby and needs no
+  # extra DLLs anyway.
   def test_gemfile_local_path_gem
     with_fixture 'localgem' do
-      assert system("ruby", ocran, "localgem.rb", *(DefaultArgs + ["--gemfile", "Gemfile"]))
+      assert system("ruby", ocran, "localgem.rb", *(DefaultArgs + ["--gemfile", "Gemfile", "--no-autodll"]))
       exe = exe_name("localgem")
       pristine_env exe do
         assert system(exe)
