@@ -103,6 +103,20 @@ char *GetImagePath(void);
 char *GetTempDirectoryPath(void);
 
 /**
+ * @brief Normalizes a path to its long form.
+ *
+ * On Windows, converts 8.3 short names (e.g. "C:\\Users\\RUNNER~1") to the
+ * full long path via GetLongPathName. Two spellings of the same directory
+ * would otherwise defeat Ruby's $LOADED_FEATURES deduplication, causing
+ * files to be loaded twice ("already initialized constant" warnings).
+ * On POSIX this simply returns a copy of the given path.
+ *
+ * @return A newly allocated string (caller frees), or NULL on allocation
+ *         failure. Falls back to a copy of the input if conversion fails.
+ */
+char *ToLongPath(const char *path);
+
+/**
  * @brief Writes the contents of a buffer to the specified file path.
  *        Creates any missing parent directories and overwrites existing files.
  *

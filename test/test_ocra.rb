@@ -277,6 +277,19 @@ class TestOcran < Minitest::Test
       wrapper = File.join(outdir, exe_name("helloworld"))
       assert File.exist?(wrapper), "Wrapper executable not found: #{wrapper}"
 
+      # The packed default gem dir must exist even if empty - RubyGems probes
+      # it for writability at startup and warns when it is missing.
+      default_gem_dir = Pathname(Gem.default_dir)
+      exec_prefix = Pathname(RbConfig::CONFIG["exec_prefix"])
+      begin
+        rel = default_gem_dir.relative_path_from(exec_prefix).to_s
+        unless rel.start_with?("..")
+          assert Dir.exist?(File.join(outdir, rel)), "packed default gem dir missing: #{rel}"
+        end
+      rescue ArgumentError
+        # default gem dir outside exec_prefix (e.g. some distro layouts) - not packed
+      end
+
       Bundler.with_original_env do
         if Gem.win_platform?
           assert system("cmd", "/c", launch_script)

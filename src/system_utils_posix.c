@@ -498,3 +498,9 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
 
     return true;
 }
+
+/* POSIX has no short-path aliases - return a plain copy. */
+char *ToLongPath(const char *path)
+{
+    return path ? strdup(path) : NULL;
+}

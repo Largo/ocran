@@ -96,6 +96,32 @@ char *JoinPath(const char *p1, const char *p2)
     return joined_path;
 }
 
+char *ToLongPath(const char *path)
+{
+    if (!path) {
+        return NULL;
+    }
+
+    DWORD required = GetLongPathName(path, NULL, 0);
+    if (required == 0) {
+        return _strdup(path); /* e.g. path does not exist - keep as is */
+    }
+
+    char *buf = malloc(required);
+    if (!buf) {
+        APP_ERROR("Memory allocation failed for long path");
+        return NULL;
+    }
+
+    DWORD written = GetLongPathName(path, buf, required);
+    if (written == 0 || written >= required) {
+        free(buf);
+        return _strdup(path);
+    }
+
+    return buf;
+}
+
 char *GetParentPath(const char *path)
 {
     if (!path) {

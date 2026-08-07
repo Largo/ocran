@@ -648,6 +648,11 @@ module Ocran
         .map { |dir| dir.relative_path_from(exec_prefix) }
         .uniq
       gem_paths += prefix_gem_dirs
+      # RubyGems probes the default gem dir for writability at startup and
+      # prints "Can't determine writability of default gem path" on stderr
+      # when the directory does not exist in the packed layout - so always
+      # create the packed prefix gem dirs, even when no specs landed there.
+      prefix_gem_dirs.each { |dir| builder.mkdir(dir) }
       builder.set_env_path("GEM_PATH", *gem_paths)
 
       # Add the opcode to launch the script

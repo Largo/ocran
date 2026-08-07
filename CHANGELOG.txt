@@ -15,6 +15,8 @@
 - Inno Setup builds from POSIX hosts no longer crash on symlink entries (symlinks cannot be expressed in an installer script and are skipped; they are only generated for POSIX shared-library aliases).
 - `--output-dir` and `--output-zip` now also include the wrapper executable (named after `--output`) next to the launch script, so the unpacked output has a doubleclickable, pinnable, signable entry point that can even be registered as a Windows service. The launch script (`.bat`/`.sh`) is still generated.
 - New `--no-wrapper-exe` option: omit the wrapper executable from installer, directory and zip output.
+- Always create the packed prefix gem directories (e.g. lib/ruby/gems/<api>) even when empty: RubyGems probes the default gem dir for writability at startup and printed "Can't determine writability of default gem path" on stderr for every packed executable on newer RubyGems.
+- Stub: normalize the extraction/application directory to its long path form on Windows (GetLongPathName). With an 8.3 short TEMP path (e.g. C:\Users\RUNNER~1) the same file could be loaded under two spellings, defeating $LOADED_FEATURES deduplication and causing "already initialized constant" warnings.
 
 === 1.4.3
 - Migrate edicon from C to Ruby: replace edicon.exe with a pure-Ruby implementation (ed_icon.rb), fixing incorrect BeginUpdateResource error checking and wrong GroupIconSize calculation. Shortens build times and removes the C binary from the build.

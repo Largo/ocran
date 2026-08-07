@@ -98,8 +98,16 @@ const char *CreateInstDir(bool is_extract_to_exe_dir)
         return NULL;
     }
 
-    InstDir = inst_dir;
-    return inst_dir;
+    /* Normalize 8.3 short names (e.g. a TEMP under C:\Users\RUNNER~1) so all
+       paths derived from the extraction dir use one consistent spelling. */
+    char *long_dir = ToLongPath(inst_dir);
+    free(inst_dir);
+    if (!long_dir) {
+        return NULL;
+    }
+
+    InstDir = long_dir;
+    return InstDir;
 }
 
 // Sets the installation directory to the executable's own directory
@@ -125,7 +133,14 @@ const char *SetInstDirToExeDir(void)
         return NULL;
     }
 
-    InstDir = image_dir;
+    /* Normalize 8.3 short names for a consistent spelling (see CreateInstDir) */
+    char *long_dir = ToLongPath(image_dir);
+    free(image_dir);
+    if (!long_dir) {
+        return NULL;
+    }
+
+    InstDir = long_dir;
     return InstDir;
 }
 
