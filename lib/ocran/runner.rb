@@ -94,10 +94,12 @@ module Ocran
       direction = Direction.new(@post_env, @pre_env, @option)
 
       if @option.use_inno_setup?
-        if Gem.win_platform?
+        # Native on Windows; on POSIX allow it when an ISCC command is
+        # available (e.g. via Wine wrapper scripts or in tests).
+        if Gem.win_platform? || system("command -v ISCC > /dev/null 2>&1")
           direction.build_inno_setup_installer
         else
-          raise "Inno Setup is only supported on Windows"
+          raise "Inno Setup is only supported on Windows (no ISCC command found in PATH)"
         end
       elsif @option.macosx_bundle
         direction.build_macosx_bundle(@option.macosx_bundle)

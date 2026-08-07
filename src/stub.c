@@ -57,14 +57,23 @@ int main(int argc, char *argv[])
         DEBUG("Ocran stub running in debug mode");
     }
 
-    /* Create extraction directory */
-    extract_dir = CreateInstDir(IsExtractToExeDir(op_modes));
-    if (!extract_dir) {
-        FATAL("Failed to create extraction directory");
-        goto cleanup;
+    /* Create extraction directory, or run in place next to the executable
+       (installer/wrapper mode, see RUN_IN_EXE_DIR) */
+    if (IsRunInExeDir(op_modes)) {
+        extract_dir = SetInstDirToExeDir();
+        if (!extract_dir) {
+            FATAL("Failed to resolve the executable directory");
+            goto cleanup;
+        }
+        DEBUG("Running in executable directory: %s", extract_dir);
+    } else {
+        extract_dir = CreateInstDir(IsExtractToExeDir(op_modes));
+        if (!extract_dir) {
+            FATAL("Failed to create extraction directory");
+            goto cleanup;
+        }
+        DEBUG("Created extraction directory: %s", extract_dir);
     }
-
-    DEBUG("Created extraction directory: %s", extract_dir);
 
     /* Unpacking process */
     if (!ProcessImage(unpack_ctx)) {
@@ -120,7 +129,9 @@ cleanup:
     /*
        If AUTO_CLEAN_INST_DIR is set, delete the extraction directory.
     */
-    if (IsAutoCleanInstDir(op_modes)) {
+    /* Never delete in RUN_IN_EXE_DIR mode: the "installation directory"
+       is the real application directory, not a temporary extraction dir. */
+    if (IsAutoCleanInstDir(op_modes) && !IsRunInExeDir(op_modes)) {
         DEBUG("Deleting extraction directory: %s", extract_dir);
         if (!DeleteInstDir()) {
             DEBUG("Failed to delete extraction directory");

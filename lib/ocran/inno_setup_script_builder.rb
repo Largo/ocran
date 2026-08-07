@@ -14,7 +14,14 @@ module Ocran
 
     class << self
       def compile(iss_filename, quiet: false)
-        unless Gem.win_platform? || system("where #{quote_and_escape(ISCC_CMD)} >NUL 2>&1")
+        # "where" and ">NUL" only exist on Windows; use "command -v" on POSIX
+        # (e.g. when testing the pipeline with a fake ISCC on Linux/macOS).
+        iscc_found = if Gem.win_platform?
+                       true # ISCC is invoked directly; failure is reported below
+                     else
+                       system("command -v #{quote_and_escape(ISCC_CMD)} > /dev/null 2>&1")
+                     end
+        unless iscc_found
           raise "ISCC command not found. Is the InnoSetup directory in your PATH?"
         end
 
@@ -77,6 +84,13 @@ module Ocran
 
     def mkdir(target)
       @dirs.add?("/", target)
+    end
+
+    # Symbolic links cannot be expressed in an Inno Setup script. They only
+    # occur when building from POSIX hosts (e.g. libruby.so links); Windows
+    # installations do not need them, so they are skipped.
+    def symlink(_target, _link_name)
+      nil
     end
 
     def cp(source, target)

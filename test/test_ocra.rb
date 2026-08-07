@@ -1195,4 +1195,74 @@ class TestOcran < Minitest::Test
       assert File.exist?(File.join(bundle, "Contents", "MacOS", "MyApp"))
     end
   end
+
+  # The RUN_IN_EXE_DIR wrapper stub runs the application directly from the
+  # directory the executable resides in - no extraction directory is created
+  # and the application directory must never be deleted on exit.
+  # This is the wrapper used for Inno Setup builds (pre-1.4/OCRA behavior).
+  def test_run_in_exe_dir_stub
+    require_relative "../lib/ocran/stub_builder"
+    require_relative "../lib/ocran/build_constants"
+    with_tmpdir do
+      appdir = File.expand_path("app")
+      mkdir_p File.join(appdir, "bin")
+      mkdir_p File.join(appdir, "src")
+      ruby_name = File.basename(RbConfig.ruby)
+      cp RbConfig.ruby, File.join(appdir, "bin", ruby_name)
+      File.write(File.join(appdir, "src", "check.rb"), <<~RUBY)
+        File.write(File.join(__dir__, "..", "result.txt"), ENV["OCRAN_TEST_VAR"].to_s)
+      RUBY
+
+      wrapper = Pathname(appdir) / exe_name("wrapper")
+      Ocran::StubBuilder.new(wrapper, run_in_exe_dir: true) do |stub|
+        stub.export("OCRAN_TEST_VAR", File.join(Ocran::BuildConstants::EXTRACT_ROOT, "src"))
+        stub.exec(Pathname("bin") / ruby_name, Pathname("src") / "check.rb")
+      end
+
+      assert File.exist?(wrapper)
+      assert system(wrapper.to_s)
+
+      # The placeholder must resolve to the executable's own directory
+      assert_equal File.join(appdir, "src"), File.read(File.join(appdir, "result.txt"))
+      # The application directory must survive (no auto-clean, no extraction)
+      assert File.exist?(File.join(appdir, "src", "check.rb"))
+      assert File.exist?(File.join(appdir, "bin", ruby_name))
+    end
+  end
+
+  # Inno Setup builds must produce a wrapper executable named like --output
+  # and install it into {app}, so that user ISS scripts can reference it
+  # (e.g. [Run]/[UninstallRun] entries, Windows service registration).
+  # Uses a fake ISCC so the pipeline also runs where InnoSetup is missing.
+  def test_innosetup_wrapper_exe
+    with_fixture 'innosetup' do
+      fakebin = File.expand_path("fakebin")
+      mkdir_p fakebin
+      if Gem.win_platform?
+        fake_iscc = File.join(fakebin, "ISCC.bat")
+        File.write(fake_iscc, "@echo off\r\nfor %%a in (%*) do set last=%%a\r\ncopy /y %last% saved.iss >nul\r\n")
+      else
+        fake_iscc = File.join(fakebin, "ISCC")
+        File.write(fake_iscc, "#!/bin/sh\nfor a; do last=$a; done\ncp \"$last\" saved.iss\n")
+        File.chmod(0755, fake_iscc)
+      end
+
+      orig_path = ENV["PATH"]
+      begin
+        ENV["PATH"] = fakebin + File::PATH_SEPARATOR + orig_path
+        assert system("ruby", ocran, "innosetup.rb", "--quiet", "--no-lzma",
+                      "--chdir-first", "--innosetup", "innosetup.iss",
+                      "--output", "myapp.exe")
+      ensure
+        ENV["PATH"] = orig_path
+      end
+
+      assert File.exist?("saved.iss"), "fake ISCC was not invoked"
+      iss = File.read("saved.iss")
+      # Wrapper executable installed to {app} under the --output name
+      assert_match(/^Source: "[^"]*myapp\.exe"; DestDir: "\{app\}(\/\.)?";/, iss)
+      # The launcher batch file is still part of the installation
+      assert_match(/launcher\.bat/, iss)
+    end
+  end
 end

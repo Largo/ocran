@@ -102,6 +102,33 @@ const char *CreateInstDir(bool is_extract_to_exe_dir)
     return inst_dir;
 }
 
+// Sets the installation directory to the executable's own directory
+// (installer/wrapper mode, RUN_IN_EXE_DIR). No directory is created and
+// the directory must never be deleted by the stub.
+const char *SetInstDirToExeDir(void)
+{
+    if (InstDir != NULL) {
+        APP_ERROR("Installation directory has already been set");
+        return NULL;
+    }
+
+    char *image_path = GetImagePath();
+    if (!image_path) {
+        APP_ERROR("Failed to get executable name");
+        return NULL;
+    }
+
+    char *image_dir = GetParentPath(image_path);
+    free(image_path);
+    if (!image_dir) {
+        APP_ERROR("Failed to obtain the directory path of the executable file");
+        return NULL;
+    }
+
+    InstDir = image_dir;
+    return InstDir;
+}
+
 // Frees the allocated memory for the installation directory path.
 void FreeInstDir(void)
 {

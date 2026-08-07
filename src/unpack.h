@@ -66,6 +66,14 @@ typedef enum {
      * required before using the data.
      */
     DATA_COMPRESSED     = 0x10,
+
+    /**
+     * Runs the application directly from the executable's own directory
+     * instead of creating an extraction directory. Used by installer builds
+     * (e.g. Inno Setup) where the application files are installed next to
+     * the stub executable. Restores the pre-1.4 (OCRA) wrapper behavior.
+     */
+    RUN_IN_EXE_DIR      = 0x20,
 } OperationModes;
 
 bool IsDebugMode(OperationModes modes);
@@ -73,6 +81,7 @@ bool IsExtractToExeDir(OperationModes modes);
 bool IsAutoCleanInstDir(OperationModes modes);
 bool IsChdirBeforeScript(OperationModes modes);
 bool IsDataCompressed(OperationModes modes);
+bool IsRunInExeDir(OperationModes modes);
 
 typedef struct UnpackContext UnpackContext;
 

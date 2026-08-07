@@ -21,6 +21,20 @@
 const char *CreateInstDir(bool is_extract_to_exe_dir);
 
 /**
+ * @brief Sets the installation directory to the executable's own directory.
+ *
+ * Unlike CreateInstDir, no new directory is created: the stub runs the
+ * application directly from the directory the executable resides in
+ * (installer/wrapper mode, RUN_IN_EXE_DIR). The directory must never be
+ * deleted by the stub.
+ *
+ * @return
+ *   A pointer to the directory path if successful, NULL if an error
+ *   occurred. The returned path should not be freed by the caller.
+ */
+const char *SetInstDirToExeDir(void);
+
+/**
  * @brief Free the allocated installation directory path
  *        and reset the internal pointer to NULL.
  *

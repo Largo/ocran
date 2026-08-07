@@ -536,6 +536,10 @@ bool IsDataCompressed(OperationModes modes) {
     return IsMode(modes, DATA_COMPRESSED);
 }
 
+bool IsRunInExeDir(OperationModes modes) {
+    return IsMode(modes, RUN_IN_EXE_DIR);
+}
+
 bool ProcessImage(const UnpackContext *context)
 {
     if (!context) {

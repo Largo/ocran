@@ -20,6 +20,7 @@ module Ocran
     AUTO_CLEAN_INST_DIR = 0x04
     CHDIR_BEFORE_SCRIPT = 0x08
     DATA_COMPRESSED     = 0x10
+    RUN_IN_EXE_DIR      = 0x20
 
     WINDOWS = Gem.win_platform?
 
@@ -95,8 +96,16 @@ module Ocran
     # icon_path:
     # Specifies the path to the icon file to be embedded in the stub's resources.
     #
+    # run_in_exe_dir:
+    # When set to true, the stub runs the application directly from its own
+    # directory instead of extracting to a temporary directory. Used for
+    # installer (Inno Setup) wrapper executables where the application files
+    # are installed next to the stub (pre-1.4/OCRA behavior). The directory
+    # is never deleted on exit.
+    #
     def initialize(path, chdir_before: nil, debug_extract: nil, debug_mode: nil,
-                   enable_compression: nil, gui_mode: nil, icon_path: nil)
+                   enable_compression: nil, gui_mode: nil, icon_path: nil,
+                   run_in_exe_dir: nil)
       @dirs = FilePathSet.new
       @files = FilePathSet.new
       @data_size = 0
@@ -129,7 +138,7 @@ module Ocran
         @of = of
         @opcode_offset = @of.size
 
-        write_header(debug_mode, debug_extract, chdir_before, enable_compression)
+        write_header(debug_mode, debug_extract, chdir_before, enable_compression, run_in_exe_dir)
 
         b = proc {
           yield(self)
@@ -213,14 +222,20 @@ module Ocran
     end
     private :compress
 
-    def write_header(debug_mode, debug_extract, chdir_before, compressed)
+    def write_header(debug_mode, debug_extract, chdir_before, compressed, run_in_exe_dir = nil)
       next_to_exe, delete_after = debug_extract, !debug_extract
+      if run_in_exe_dir
+        # Wrapper mode: run in place next to the executable — never extract,
+        # and (critically) never delete the application directory on exit.
+        next_to_exe, delete_after = false, false
+      end
       @of << [0 |
                 (debug_mode ? DEBUG_MODE : 0) |
                 (next_to_exe ? EXTRACT_TO_EXE_DIR : 0) |
                 (delete_after ? AUTO_CLEAN_INST_DIR : 0) |
                 (chdir_before ? CHDIR_BEFORE_SCRIPT : 0) |
-                (compressed ? DATA_COMPRESSED : 0)
+                (compressed ? DATA_COMPRESSED : 0) |
+                (run_in_exe_dir ? RUN_IN_EXE_DIR : 0)
       ].pack("C")
     end
     private :write_header

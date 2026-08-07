@@ -1,3 +1,9 @@
+=== 1.4.4
+- Restore the OCRA-compatible wrapper executable for Inno Setup builds: `--innosetup` now additionally builds a small stub executable named after `--output` and installs it into `{app}` alongside the application files. The wrapper runs the installed application directly from its own directory (new RUN_IN_EXE_DIR stub mode) — no extraction, no cleanup of the application directory. This behavior existed in OCRA and ocran <= 1.3.x but was lost in the 1.4.0 rewrite, breaking user ISS scripts that reference the executable, e.g. in [Run]/[UninstallRun] entries or for Windows service registration (`myapp.exe --register-service`). The launcher.bat is still generated and installed as before.
+- Add `run_in_exe_dir` option to StubBuilder and a RUN_IN_EXE_DIR (0x20) stub header flag. In this mode the stub never deletes its directory (double-guarded in the stub itself, since the directory is the real application directory).
+- Allow `--innosetup` on POSIX hosts when an ISCC command is available in PATH (e.g. a Wine wrapper); previously it was rejected on non-Windows unconditionally. Fix the ISCC presence check to use `command -v` instead of the Windows-only `where`/`>NUL` on POSIX.
+- Inno Setup builds from POSIX hosts no longer crash on symlink entries (symlinks cannot be expressed in an installer script and are skipped; they are only generated for POSIX shared-library aliases).
+
 === 1.4.3
 - Migrate edicon from C to Ruby: replace edicon.exe with a pure-Ruby implementation (ed_icon.rb), fixing incorrect BeginUpdateResource error checking and wrong GroupIconSize calculation. Shortens build times and removes the C binary from the build.
 - Include Gem.default_dir in GEM_PATH on all platforms: previously the exec_prefix gem directory was excluded on Windows, causing native-extension gems (e.g. fxruby/fox16) to fail at runtime with a LoadError even though they were bundled correctly.

@@ -10,6 +10,8 @@ module Ocran
 
     def cp(...) = @filer.__send__(__method__, ...)
 
+    def symlink(...) = @filer.__send__(__method__, ...)
+
     def export(...) = @launcher.__send__(__method__, ...)
 
     def exec(...) = @launcher.__send__(__method__, ...)

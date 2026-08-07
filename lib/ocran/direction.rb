@@ -546,8 +546,13 @@ module Ocran
         title: @option.output_executable.basename.sub_ext("")
       )
 
+      # Record the launch events (exports + exec) so they can be replayed
+      # into the wrapper stub executable below.
+      require_relative "launcher_event_recorder"
+      recorder = LauncherEventRecorder.new(launcher_builder)
+
       require_relative "build_facade"
-      builder = BuildFacade.new(iss_builder, launcher_builder)
+      builder = BuildFacade.new(iss_builder, recorder)
 
       if @option.icon_filename
         builder.cp(@option.icon_filename, File.basename(@option.icon_filename))
@@ -560,12 +565,33 @@ module Ocran
       verbose File.read(launcher_path)
       builder.cp(launcher_path, "launcher.bat")
 
-      say "Build inno setup script file"
-      iss_path = iss_builder.build
-      verbose File.read(iss_path)
+      require_relative "stub_builder"
+      require "tmpdir"
+      Dir.mktmpdir("ocran") do |tmpdir|
+        # Wrapper executable (pre-1.4/OCRA behavior): a small stub without
+        # embedded files that runs the installed application directly from
+        # {app}. It is installed next to the application files so that user
+        # Inno Setup scripts can reference it by the --output name, e.g. in
+        # [Run]/[UninstallRun] entries or for Windows service registration.
+        wrapper_path = Pathname(tmpdir) / @option.output_executable.basename
+        say "Build wrapper executable #{wrapper_path.basename}"
+        StubBuilder.new(wrapper_path,
+                        chdir_before: @option.chdir_before?,
+                        debug_mode: @option.enable_debug_mode?,
+                        gui_mode: @option.windowed?,
+                        icon_path: @option.icon_filename,
+                        run_in_exe_dir: true) do |stub|
+          recorder.replay(stub)
+        end
+        builder.cp(wrapper_path, wrapper_path.basename)
 
-      say "Running Inno Setup Command-Line compiler (ISCC)"
-      iss_builder.compile(verbose: @option.verbose?)
+        say "Build inno setup script file"
+        iss_path = iss_builder.build
+        verbose File.read(iss_path)
+
+        say "Running Inno Setup Command-Line compiler (ISCC)"
+        iss_builder.compile(verbose: @option.verbose?)
+      end
 
       say "Finished building installer file"
     end
