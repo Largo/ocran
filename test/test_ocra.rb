@@ -946,8 +946,23 @@ class TestOcran < Minitest::Test
     with_fixture 'innosetup' do
       icon_file = File.join(OcranRoot, 'src', 'vit-ruby.ico')
       assert system("ruby", ocran, "innosetup.rb", '--icon', icon_file, "--quiet",
-                    "--innosetup", "innosetup.iss", "--chdir-first", "--no-lzma")
+                    "--innosetup", "innosetup.iss", "--chdir-first", "--no-lzma",
+                    "--output", "myapp.exe")
       assert File.exist?("Output/innosetup.exe")
+
+      # Install silently and verify the wrapper executable is deployed to
+      # {app} under the --output name and starts the application in place.
+      target = File.expand_path("installed")
+      assert system("Output/innosetup.exe", "/VERYSILENT", "/SUPPRESSMSGBOXES",
+                    "/NORESTART", "/DIR=#{target}"), "silent install failed"
+      wrapper = File.join(target, "myapp.exe")
+      assert File.exist?(wrapper), "wrapper exe missing from installation"
+      assert File.exist?(File.join(target, "launcher.bat"))
+      Bundler.with_original_env do
+        assert system(wrapper), "installed wrapper exe failed to run"
+      end
+      # Running the wrapper must not delete the installation directory
+      assert File.exist?(wrapper)
     end
   end
 
@@ -1230,6 +1245,15 @@ class TestOcran < Minitest::Test
       mkdir_p File.join(appdir, "src")
       ruby_name = File.basename(RbConfig.ruby)
       cp RbConfig.ruby, File.join(appdir, "bin", ruby_name)
+      if Gem.win_platform?
+        # ruby.exe needs its DLLs next to it at runtime
+        rubydir = File.dirname(RbConfig.ruby)
+        Dir.glob(File.join(rubydir, "*.dll")).each do |dll|
+          cp dll, File.join(appdir, "bin", File.basename(dll))
+        end
+        builtin = File.join(rubydir, "ruby_builtin_dlls")
+        cp_r builtin, File.join(appdir, "bin", "ruby_builtin_dlls") if Dir.exist?(builtin)
+      end
       File.write(File.join(appdir, "src", "check.rb"), <<~RUBY)
         File.write(File.join(__dir__, "..", "result.txt"), ENV["OCRAN_TEST_VAR"].to_s)
       RUBY
@@ -1256,17 +1280,15 @@ class TestOcran < Minitest::Test
   # (e.g. [Run]/[UninstallRun] entries, Windows service registration).
   # Uses a fake ISCC so the pipeline also runs where InnoSetup is missing.
   def test_innosetup_wrapper_exe
+    # On Windows a real ISCC.exe on the runners wins over a fake ISCC.bat in
+    # PATH resolution; the full scenario is covered there by test_innosetup.
+    skip "fake ISCC is not reliable on Windows" if Gem.win_platform?
     with_fixture 'innosetup' do
       fakebin = File.expand_path("fakebin")
       mkdir_p fakebin
-      if Gem.win_platform?
-        fake_iscc = File.join(fakebin, "ISCC.bat")
-        File.write(fake_iscc, "@echo off\r\nfor %%a in (%*) do set last=%%a\r\ncopy /y %last% saved.iss >nul\r\n")
-      else
-        fake_iscc = File.join(fakebin, "ISCC")
-        File.write(fake_iscc, "#!/bin/sh\nfor a; do last=$a; done\ncp \"$last\" saved.iss\n")
-        File.chmod(0755, fake_iscc)
-      end
+      fake_iscc = File.join(fakebin, "ISCC")
+      File.write(fake_iscc, "#!/bin/sh\nfor a; do last=$a; done\ncp \"$last\" saved.iss\n")
+      File.chmod(0755, fake_iscc)
 
       orig_path = ENV["PATH"]
       begin
@@ -1300,5 +1322,21 @@ class TestOcran < Minitest::Test
       refute_match(/myapp\.exe/, iss)
       assert_match(/launcher\.bat/, iss)
     end
+  end
+
+  # Default gems (e.g. fiddle, singleton on Homebrew or distro-packaged Ruby)
+  # have a gemspec but no materialized gem directory. Collecting gem files
+  # must not raise Errno::ENOENT for them (github issue #44).
+  def test_gem_files_with_missing_gem_dir
+    require_relative "../lib/ocran/gem_spec_queryable"
+
+    spec = Gem::Specification.new do |s|
+      s.name = "ocran_phantom_default_gem"
+      s.version = "1.0.0"
+    end
+    spec.extend(Ocran::GemSpecQueryable)
+
+    refute File.directory?(spec.gem_dir)
+    assert_equal [], spec.find_gem_files([:files, :scripts, :extras], [])
   end
 end
