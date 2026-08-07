@@ -92,16 +92,13 @@ jobs:
           merge-multiple: true
 
       - name: Extract changelog for this version
-        id: changelog
+        # Written to a file and passed via --notes-file: interpolating the
+        # notes into the shell command breaks as soon as the changelog
+        # contains quotes or apostrophes.
         run: |
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
-          NOTES=$(awk "/^=== $VERSION/{found=1; next} found && /^===/{exit} found{print}" CHANGELOG.txt)
-          {
-            echo "notes<<EOF"
-            echo "$NOTES"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          awk "/^=== $VERSION/{found=1; next} found && /^===/{exit} found{print}" CHANGELOG.txt > /tmp/release-notes.txt
 
       - name: Create GitHub Release and upload gems
         env:
@@ -110,7 +107,7 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
             --title "Release ${{ github.ref_name }}" \
-            --notes "${{ steps.changelog.outputs.notes }}" \
+            --notes-file /tmp/release-notes.txt \
             *.gem
 
       - name: Push gems to RubyGems
