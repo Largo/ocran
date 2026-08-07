@@ -903,6 +903,40 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Test that the --chdir-exe-dir option starts the script with its working
+  # directory set to the directory containing the executable, regardless of
+  # where the executable is invoked from (issue #32).
+  def test_chdir_exe_dir
+    with_fixture 'writefile' do
+      assert system("ruby", ocran, "writefile.rb", *(DefaultArgs + ["--chdir-exe-dir"]))
+      exe = exe_name("writefile")
+      assert File.exist?(exe)
+      pristine_env exe do
+        exe_dir = Dir.pwd
+        exe_path = File.expand_path(exe)
+        refute File.exist?("output.txt")
+        # Invoke the executable from a different working directory
+        mkdir "elsewhere"
+        cd "elsewhere" do
+          assert system(exe_path)
+          refute File.exist?("output.txt"),
+                 "output.txt must not be created in the invoker's working directory"
+        end
+        assert File.exist?(File.join(exe_dir, "output.txt")),
+               "output.txt must be created next to the executable"
+      end
+    end
+  end
+
+  # --chdir-first and --chdir-exe-dir are mutually exclusive.
+  def test_chdir_exe_dir_conflicts_with_chdir_first
+    with_fixture 'writefile' do
+      refute system("ruby", ocran, "writefile.rb",
+                    *(DefaultArgs + ["--chdir-first", "--chdir-exe-dir"]),
+                    err: File::NULL, out: File::NULL)
+    end
+  end
+
   # Would be nice if OCRAN could build from source located beneath the
   # Ruby installation too.
   def test_exec_prefix

@@ -1,3 +1,7 @@
+=== Unreleased
+- New `--chdir-exe-dir` option (issue #32): the packaged executable starts the script with its working directory set to the directory containing the executable itself, so relative file access (e.g. reading data files placed next to the .exe) works regardless of how the executable is invoked. Implemented as a new CHDIR_TO_EXE_DIR (0x40) stub header flag; the stub passes `-C <exe dir>` to the packed Ruby interpreter. Mutually exclusive with `--chdir-first`.
+- README: document that `__FILE__`/`__dir__`/`$0` point into the temporary extraction directory at runtime (the cause of issue #32) and show the supported `ENV["OCRAN_EXECUTABLE"]` pattern for locating files next to the executable.
+
 === 1.4.4
 - Fix crash on distro-packaged and Homebrew Ruby when a default gem (e.g. fiddle, singleton) has a gemspec but no materialized gem directory: file collection now treats the missing directory as an empty set instead of raising Errno::ENOENT from Find.find (issue #44). The gem's files, which live in the stdlib, are still packed via the load path.
 - Pack the real Ruby interpreter when bindir/ruby is a dispatcher script (e.g. Fedora's rubypick): the running interpreter binary (/proc/self/exe) is packed under the expected name instead, so the packed executable no longer requires Ruby on the target system.

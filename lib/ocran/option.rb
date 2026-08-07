@@ -16,6 +16,7 @@ module Ocran
         :macosx_bundle => nil,
         :macosx_bundle? => false,
         :chdir_before? => false,
+        :chdir_exe_dir? => false,
         :enable_compression? => true,
         :enable_debug_extract? => false,
         :enable_debug_mode? => false,
@@ -103,6 +104,8 @@ Executable options:
 --windows          Force Windows application (rubyw.exe)
 --console          Force console application (ruby.exe)
 --chdir-first      When exe starts, change working directory to app dir.
+--chdir-exe-dir    When exe starts, change working directory to the directory
+                   containing the executable itself.
 --icon <ico>       Replace icon with a custom one.
 --rubyopt <str>    Set the RUBYOPT environment variable when running the executable
 --debug            Executable will be verbose.
@@ -149,6 +152,8 @@ EOF
           @options[:load_autoload?] = false
         when "--chdir-first"
           @options[:chdir_before?] = true
+        when "--chdir-exe-dir"
+          @options[:chdir_exe_dir?] = true
         when "--icon"
           path = argv.shift
           raise "Icon file #{path} not found" unless path && File.exist?(path)
@@ -229,6 +234,10 @@ EOF
         @options[:macosx_bundle] = Pathname(bundle_base).sub_ext(".app").expand_path
       end
 
+      if chdir_before? && chdir_exe_dir?
+        raise "--chdir-first and --chdir-exe-dir cannot be used together"
+      end
+
       @options[:use_inno_setup?] = !!inno_setup_script
 
       @options[:verbose?] &&= !quiet?
@@ -271,6 +280,8 @@ EOF
     def auto_detect_dlls? = @options[__method__]
 
     def chdir_before? = @options[__method__]
+
+    def chdir_exe_dir? = @options[__method__]
 
     def enable_compression? = @options[__method__]
 
