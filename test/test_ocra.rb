@@ -164,6 +164,67 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Locates a cosmocc toolchain for the --cosmo end-to-end test: honors
+  # the COSMOCC environment variable (cosmocc binary or toolchain dir),
+  # otherwise looks for cosmocc in PATH. Returns nil if unavailable.
+  def find_cosmocc
+    env = ENV["COSMOCC"]
+    return env if env && !env.empty? && File.exist?(env)
+    path = `which cosmocc 2>/dev/null`.chomp
+    path.empty? ? nil : path
+  end
+
+  # --cosmo toolchain path resolution: accepts the cosmocc binary itself,
+  # the toolchain root (containing bin/cosmocc), or the bin directory,
+  # and raises clear errors otherwise. Runs without a real toolchain.
+  def test_cosmo_toolchain_resolution
+    require_relative "../lib/ocran/cosmo_toolchain"
+    with_tmpdir do
+      mkdir_p "toolchain/bin"
+      cc = File.expand_path("toolchain/bin/cosmocc")
+      File.write(cc, "#!/bin/sh\n")
+      File.chmod(0755, cc)
+
+      assert_equal cc, Ocran::CosmoToolchain.resolve_cc("toolchain")
+      assert_equal cc, Ocran::CosmoToolchain.resolve_cc("toolchain/bin")
+      assert_equal cc, Ocran::CosmoToolchain.resolve_cc(cc)
+
+      err = assert_raises(RuntimeError) { Ocran::CosmoToolchain.resolve_cc("no/such/path") }
+      assert_match(/cosmocc not found/, err.message)
+
+      err = assert_raises(RuntimeError) { Ocran::CosmoToolchain.resolve_cc(nil) }
+      assert_match(/--cosmo requires a path/, err.message)
+
+      unless Gem.win_platform?
+        File.chmod(0644, cc)
+        err = assert_raises(RuntimeError) { Ocran::CosmoToolchain.resolve_cc("toolchain") }
+        assert_match(/not executable/, err.message)
+      end
+    end
+  end
+
+  # End-to-end --cosmo build: compiles the stub from src/ with cosmocc at
+  # packaging time, packages helloworld with the resulting APE stub
+  # (default output extension .com), and runs the binary. Skipped unless
+  # a cosmocc toolchain is available (COSMOCC env var or cosmocc in PATH).
+  def test_cosmo_helloworld
+    skip "--cosmo requires a POSIX build host" if Gem.win_platform?
+    cosmocc = find_cosmocc
+    skip "cosmocc not found (set COSMOCC or add cosmocc to PATH)" unless cosmocc
+
+    with_fixture 'helloworld' do
+      assert system("ruby", ocran, "helloworld.rb", *DefaultArgs, "--cosmo", cosmocc)
+      assert File.exist?("helloworld.com")
+      # APE binaries start with the "MZqFpD" MZ/shell polyglot magic
+      assert_equal "MZqFpD", File.binread("helloworld.com", 6)
+      pristine_env "helloworld.com" do
+        # Invoke through the shell: an APE bootstraps itself via its
+        # shell-script header on hosts without APE binfmt support.
+        assert system("./helloworld.com")
+      end
+    end
+  end
+
   # Should be able to build executables with LZMA compression
   def test_lzma
     with_fixture 'helloworld' do
