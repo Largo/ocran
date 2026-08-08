@@ -17,6 +17,7 @@ module Ocran
         :macosx_bundle? => false,
         :chdir_before? => false,
         :cosmo_cc => nil,
+        :cosmo_ruby => nil,
         :enable_compression? => true,
         :enable_debug_extract? => false,
         :enable_debug_mode? => false,
@@ -117,6 +118,13 @@ Experimental options:
                    <path> is the cosmocc executable or its install dir.
                    Console-only; output defaults to <scriptname>.com.
                    (Alias: --cosmo-toolchain)
+--cosmo-ruby <ruby.com>  Package the given cosmopolitan-built Ruby (an APE,
+                   e.g. ruby.com) as the interpreter instead of the host
+                   Ruby, making the whole application portable. The APE
+                   must be fully self-contained (stdlib embedded in its
+                   ZIP store). Requires --cosmo. Dependency detection
+                   still runs under the host Ruby; native-extension gems
+                   are rejected (pure-Ruby gems are packed as usual).
 EOF
     end
 
@@ -168,6 +176,9 @@ EOF
         when "--cosmo", "--cosmo-toolchain"
           require_relative "cosmo_toolchain"
           @options[:cosmo_cc] = CosmoToolchain.resolve_cc(argv.shift)
+        when "--cosmo-ruby"
+          require_relative "cosmo_toolchain"
+          @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
         when "--gemfile"
           path = argv.shift
           raise "Gemfile #{path} not found" unless path && File.exist?(path)
@@ -283,6 +294,10 @@ EOF
         end
       end
 
+      if cosmo_ruby && !cosmo_cc
+        raise "--cosmo-ruby requires --cosmo <toolchain>: a packed cosmopolitan Ruby needs an APE launcher stub, and building that stub requires a cosmocc toolchain path that cannot be inferred from the Ruby executable"
+      end
+
       if macosx_bundle && (output_dir || output_zip || inno_setup_script)
         raise "--macosx-bundle cannot be combined with --output-dir, --output-zip, or --innosetup"
       end
@@ -303,6 +318,8 @@ EOF
     def chdir_before? = @options[__method__]
 
     def cosmo_cc = @options[__method__]
+
+    def cosmo_ruby = @options[__method__]
 
     def enable_compression? = @options[__method__]
 

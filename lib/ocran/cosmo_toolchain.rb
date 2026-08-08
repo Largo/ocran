@@ -16,7 +16,63 @@ module Ocran
     # platform gems specifically so this feature works from an installed gem).
     SRC_DIR = File.expand_path("../../src", __dir__)
 
+    # Every APE binary starts with this MZ/shell-script polyglot magic.
+    APE_MAGIC = "MZqFpD"
+
     module_function
+
+    # Resolves the path given to --cosmo-ruby to a cosmopolitan Ruby
+    # executable (conventionally ruby.com). Validates that the file
+    # exists and is an APE binary; returns the absolute path.
+    def resolve_ruby(path)
+      if path.nil? || path.to_s.empty?
+        raise "--cosmo-ruby requires a path to a cosmopolitan Ruby executable (e.g. ruby.com)"
+      end
+
+      path = File.expand_path(path.to_s)
+      unless File.file?(path)
+        raise "cosmopolitan Ruby not found at #{path}"
+      end
+
+      magic = File.binread(path, APE_MAGIC.bytesize)
+      unless magic == APE_MAGIC
+        raise "#{path} does not look like an APE (Actually Portable Executable) — expected the #{APE_MAGIC.inspect} magic (got #{magic.inspect}); --cosmo-ruby needs a cosmopolitan-built ruby.com"
+      end
+
+      path
+    end
+
+    # Runs the given cosmopolitan Ruby once on the build host and returns
+    # { version:, default_gem_dir:, gem_names: }. The version is used to
+    # warn about build-host/payload skew; the default gem dir (inside the
+    # APE's /zip store) must be appended to GEM_PATH in the package,
+    # because setting GEM_PATH stops RubyGems from scanning its
+    # compiled-in default directory, where the APE's bundled gems live;
+    # the gem names are the default/bundled gems the payload provides
+    # itself (used to decide whether a host native-extension gem can be
+    # dropped in favor of the payload's own copy).
+    #
+    # The binary is executed through /bin/sh: an APE bootstraps itself
+    # via its shell-script header on kernels without APE binfmt support,
+    # while on kernels that do support it, sh's ENOEXEC fallback is
+    # simply never needed. This also validates that the payload actually
+    # runs on the build host. GEM_HOME/GEM_PATH are cleared so the query
+    # sees only the payload's embedded gems, not the build host's.
+    def query_ruby(ruby)
+      script = 'print RUBY_VERSION; print "\t"; print Gem.default_dir; ' \
+               'print "\t"; print Gem::Specification.map(&:name).uniq.sort.join(",")'
+      out = IO.popen([{ "GEM_HOME" => nil, "GEM_PATH" => nil, "RUBYOPT" => nil, "RUBYLIB" => nil },
+                      "/bin/sh", ruby, "-e", script],
+                     err: IO::NULL, &:read)
+      ok = $?.success?
+      version, default_gem_dir, gem_names = out.to_s.split("\t", 3)
+      unless ok && version =~ /\A\d+\.\d+/ && default_gem_dir && !default_gem_dir.empty?
+        raise "Failed to run the cosmopolitan Ruby #{ruby} on this host (exit status #{$?.exitstatus.inspect}, output #{out.inspect}); cannot package it with --cosmo-ruby"
+      end
+      { version: version,
+        default_gem_dir: default_gem_dir,
+        gem_names: gem_names.to_s.split(",") }
+    end
 
     # Resolves the path given on the command line to the cosmocc compiler
     # driver. Accepts either the cosmocc executable itself, the toolchain
