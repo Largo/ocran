@@ -225,6 +225,118 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Locates a cosmopolitan-built Ruby APE (ruby.com) for the --cosmo-ruby
+  # end-to-end tests via the COSMO_RUBY environment variable. Returns nil
+  # if unavailable.
+  def find_cosmo_ruby
+    env = ENV["COSMO_RUBY"]
+    env && !env.empty? && File.file?(env) ? env : nil
+  end
+
+  # Common gate for the --cosmo-ruby end-to-end tests: requires a POSIX
+  # build host, a cosmocc toolchain and a cosmopolitan Ruby payload.
+  def cosmo_ruby_prereqs
+    skip "--cosmo requires a POSIX build host" if Gem.win_platform?
+    cosmocc = find_cosmocc
+    skip "cosmocc not found (set COSMOCC or add cosmocc to PATH)" unless cosmocc
+    cosmo_ruby = find_cosmo_ruby
+    skip "cosmopolitan Ruby not found (set COSMO_RUBY to a ruby.com APE)" unless cosmo_ruby
+    [cosmocc, cosmo_ruby]
+  end
+
+  # --cosmo-ruby path validation: accepts an existing APE file, rejects
+  # missing paths and non-APE files. Runs without a real payload.
+  def test_cosmo_ruby_resolution
+    require_relative "../lib/ocran/cosmo_toolchain"
+    with_tmpdir do
+      File.binwrite("ruby.com", "MZqFpD='\n" + "\0" * 16)
+      assert_equal File.expand_path("ruby.com"), Ocran::CosmoToolchain.resolve_ruby("ruby.com")
+
+      File.binwrite("not-an-ape", "\x7fELF\0\0\0\0")
+      err = assert_raises(RuntimeError) { Ocran::CosmoToolchain.resolve_ruby("not-an-ape") }
+      assert_match(/does not look like an APE/, err.message)
+
+      err = assert_raises(RuntimeError) { Ocran::CosmoToolchain.resolve_ruby("missing.com") }
+      assert_match(/not found/, err.message)
+
+      err = assert_raises(RuntimeError) { Ocran::CosmoToolchain.resolve_ruby(nil) }
+      assert_match(/--cosmo-ruby requires a path/, err.message)
+    end
+  end
+
+  # --cosmo-ruby without --cosmo is rejected at option parsing: the APE
+  # payload needs an APE launcher stub, which needs a cosmocc toolchain.
+  def test_cosmo_ruby_requires_cosmo
+    require_relative "../lib/ocran/option"
+    with_fixture "helloworld" do
+      File.binwrite("fake-ruby.com", "MZqFpD='\n")
+      err = assert_raises(RuntimeError) do
+        Ocran::Option.new.parse(["helloworld.rb", "--cosmo-ruby", "fake-ruby.com"])
+      end
+      assert_match(/--cosmo-ruby requires --cosmo/, err.message)
+    end
+  end
+
+  # End-to-end --cosmo-ruby build: the produced .com bundles an APE stub
+  # AND an APE Ruby, so in an isolated environment (env -i, empty dir)
+  # the app must run under the EMBEDDED x86_64-cosmo interpreter — not
+  # the build host's Ruby.
+  def test_cosmo_ruby_helloworld
+    cosmocc, cosmo_ruby = cosmo_ruby_prereqs
+    with_fixture "cosmoruby" do
+      assert system("ruby", ocran, "cosmoruby.rb", *DefaultArgs,
+                    "--cosmo", cosmocc, "--cosmo-ruby", cosmo_ruby)
+      assert File.exist?("cosmoruby.com")
+      assert_equal "MZqFpD", File.binread("cosmoruby.com", 6)
+      pristine_env "cosmoruby.com" do
+        out = `env -i ./cosmoruby.com`
+        assert $?.success?, "cosmoruby.com failed, output: #{out}"
+        assert_match(/x86_64-cosmo/, out)
+        refute_match(/#{Regexp.escape(RUBY_PLATFORM)}/, out) unless RUBY_PLATFORM.include?("cosmo")
+      end
+    end
+  end
+
+  # An app requiring stdlib (json, yaml) must resolve it from the
+  # cosmopolitan Ruby's embedded standard library, not the host's.
+  def test_cosmo_ruby_stdlib
+    cosmocc, cosmo_ruby = cosmo_ruby_prereqs
+    with_fixture "cosmoruby_stdlib" do
+      assert system("ruby", ocran, "stdlib.rb", *DefaultArgs,
+                    "--cosmo", cosmocc, "--cosmo-ruby", cosmo_ruby)
+      assert File.exist?("stdlib.com")
+      pristine_env "stdlib.com" do
+        out = `env -i ./stdlib.com`
+        assert $?.success?, "stdlib.com failed, output: #{out}"
+        assert_match(/json:42/, out)
+        assert_match(/yaml:value/, out)
+        assert_match(/platform:x86_64-cosmo/, out)
+      end
+    end
+  end
+
+  # A pure-Ruby gem installed on the build host is packed as usual and
+  # activated by the cosmopolitan Ruby through GEM_PATH.
+  def test_cosmo_ruby_gem
+    cosmocc, cosmo_ruby = cosmo_ruby_prereqs
+    begin
+      Gem::Specification.find_by_name("mime-types")
+    rescue Gem::LoadError
+      skip "pure-Ruby test gem 'mime-types' is not installed on the build host"
+    end
+    with_fixture "cosmoruby_gem" do
+      assert system("ruby", ocran, "gemapp.rb", *DefaultArgs,
+                    "--cosmo", cosmocc, "--cosmo-ruby", cosmo_ruby)
+      assert File.exist?("gemapp.com")
+      pristine_env "gemapp.com" do
+        out = `env -i ./gemapp.com`
+        assert $?.success?, "gemapp.com failed, output: #{out}"
+        assert_match(/gem:txt/, out)
+        assert_match(/platform:x86_64-cosmo/, out)
+      end
+    end
+  end
+
   # Should be able to build executables with LZMA compression
   def test_lzma
     with_fixture 'helloworld' do
