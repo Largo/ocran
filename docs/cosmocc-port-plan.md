@@ -227,9 +227,11 @@ Takeaways for application authors and for the OCRAN docs:
   `/X/...` itself. Cosmo does not do it for `File.open` in every path.
 * Startup is dominated by extraction of the ~21 MB payload on every run:
   ~0.80 s on Linux, ~1.7 s on Windows (of which ~0.78 s / ~1.45 s is
-  pure startup — the analysis itself is ~25 ms). A persistent install
-  directory (`--chdir-first`) is the obvious mitigation for
-  latency-sensitive uses.
+  pure startup — the analysis itself is ~25 ms). An installed layout
+  (`--output-dir`/`--output-zip` or the Inno Setup installer, which run
+  in place and skip extraction entirely) is the obvious mitigation for
+  latency-sensitive uses; `--chdir-first` is not one, it still extracts
+  to a temporary directory and only chdirs into it.
 
 Three rough edges found while doing this:
 
@@ -248,9 +250,7 @@ Three rough edges found while doing this:
   reaches its cleanup and leaves a full ~21 MB `%TEMP%\ocranXXXXXX`
   tree behind (reproducible 1:1). Normal exits, non-zero exits and
   `> $null` all clean up correctly, and Linux does not leak on the
-  equivalent `| head -2`. A stale-directory sweep at startup, or
-  extraction into a directory keyed on the executable's hash, would
-  bound the damage.
+  equivalent `| head -2`. See "Known limitation" below.
 * **Dangling gemspecs with `--cosmo-ruby`.** A host gem whose spec lives
   in the RubyGems tree but whose code ships in the host stdlib (Debian's
   `/usr/share/rubygems-integration/all/specifications/csv-3.3.4.gemspec`
@@ -264,6 +264,76 @@ Three rough edges found while doing this:
   `Gem::Specification.find_all_by_name` report a gem that cannot be
   activated. Skipping the spec when the gem contributes no files under
   `--cosmo-ruby` would be the clean fix.
+
+### Known limitation: leaked extraction dirs on abnormal termination
+
+Investigated 2026-08-08 on a Windows 11 VM (PowerShell 5.1) with a
+packed `.com` (APE stub + cosmopolitan Ruby 4.0.0 payload, ~21 MB).
+**Not fixable inside the stub; documented instead of papered over.**
+
+Repro (each run leaks exactly one directory; `before=0`):
+
+```powershell
+PS> .\lines.com | Select-Object -First 2     # app prints 10 lines
+line0
+line1
+PS> $LASTEXITCODE
+-1
+PS> (Get-ChildItem $env:TEMP -Filter ocran* -Directory).Count
+1                                            # ~20 MB, never reclaimed
+PS> .\lines.com > $null; $LASTEXITCODE       # 0, cleans up
+PS> .\lines.com                              # normal run, cleans up
+```
+
+Three consecutive piped runs left three directories (1 → 3); redirects
+and normal/non-zero exits left none. On Linux the same binary with
+`| head -2` leaks nothing: the stub's child dies of `EPIPE`/`SIGPIPE`,
+`waitpid` returns and the normal cleanup path in `main()` runs.
+
+Why no handler can fix it: PowerShell does not close the pipe and let
+the writer notice — it **hard-kills** the upstream native process. The
+control experiment uses no OCRAN code at all:
+
+```powershell
+PS> ruby atexit.rb | Select-Object -First 2   # native x64-mingw-ucrt ruby
+line0
+line1
+PS> $LASTEXITCODE        # -1
+PS> Test-Path atexit.log # False  -> at_exit never ran
+PS> Test-Path sig.log    # False  -> no SIGINT/SIGTERM trap fired
+```
+
+Exit code `-1` is `Process.Kill()` → `TerminateProcess(handle, -1)`
+(a console `CTRL_C_EVENT` would give `0xC000013A`). `TerminateProcess`
+runs no console control handler, no signal handler, no `atexit`, and no
+`DLL_PROCESS_DETACH` — so the `SIGPIPE`/`SIGTERM`/console-close handler
+one would reach for cannot exist, in the cosmo build (POSIX backend) or
+in the mingw build (`SetConsoleCtrlHandler` in `system_utils.c`) alike.
+This is PowerShell behavior for *any* native command, not something the
+cosmo port introduced. `FILE_FLAG_DELETE_ON_CLOSE` is no help either: it
+applies to files, and Windows will not delete a directory that still has
+open handles or children.
+
+Options if this ever needs fixing (all outside the stub's exit path):
+
+1. **Stale-directory sweep at startup.** Hold an open lock handle on a
+   marker file inside the extraction directory for the lifetime of the
+   process (Windows releases handles even on `TerminateProcess`; POSIX
+   `flock` is released on death). A starting stub scans `%TEMP%` for
+   `ocran*` dirs, tries to take the marker lock, and deletes only the
+   ones whose owner is provably gone. Bounded, race-free, but new
+   cross-platform code in `inst_dir.c` and needs its own test matrix.
+2. **Deterministic extraction dir** keyed on a hash of the executable,
+   reused across runs, so at most one stale tree exists per app (also
+   removes the repeated ~1 s extraction cost). Changes concurrency and
+   permission semantics.
+3. **Ship an installed layout instead of a self-extracting binary**:
+   `--output-dir`/`--output-zip` and the Inno Setup installer run the
+   app in place from its own directory (`RUN_IN_EXE_DIR`) and never
+   create a temporary extraction dir. Today's practical answer for apps
+   that will be piped into `Select-Object`/`Select-String`. Note that
+   `--chdir-first` is *not* a workaround: it only chdirs into the
+   temporary extraction directory, which is still created.
 
 The cosmopolitan Ruby payload itself is also worth pinning: **Ruby
 4.0.6 `x86_64-cosmo` segfaults at VM initialization on Windows 11**
