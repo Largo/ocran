@@ -1,7 +1,9 @@
 # Compiling the OCRAN stub with cosmocc (Cosmopolitan Libc)
 
-Status: **experimental — the POSIX stub already compiles and passes an
-end-to-end smoke test with cosmocc**. Tracking issue:
+Status: **experimental — the POSIX stub compiles and passes an
+end-to-end smoke test with cosmocc, and a cosmopolitan-built Ruby can
+now be packaged as the interpreter payload (`--cosmo-ruby`), verified
+end-to-end on Linux**. Tracking issue:
 [#26](https://github.com/largo/ocran/issues/26).
 
 ## Goal
@@ -104,6 +106,75 @@ resolves the executable path on every OS the APE runs on.
   against the APE stub. The mingw/RubyInstaller jobs stay untouched —
   cosmocc is an *additional* backend, not a replacement.
 
+## Cosmopolitan Ruby as the payload (`--cosmo-ruby`)
+
+Phase 2 of the effort: `ocran app.rb --cosmo <toolchain> --cosmo-ruby
+<ruby.com>` packages a cosmopolitan-built Ruby APE as the bundled
+interpreter, so the produced `.com` contains **both** an APE stub and an
+APE Ruby — no host-native code at all. Verified end-to-end on Linux
+against a cosmopolitan Ruby 4.0.0 build (`+PRISM +MIMALLOC`,
+`x86_64-cosmo`, statically linked extensions).
+
+### Findings the design rests on
+
+* **The payload is fully self-contained.** An APE is also a ZIP archive;
+  cosmopolitan Ruby embeds its complete standard library, native
+  extensions (statically linked) and default/bundled gems in that store.
+  Copied alone to an empty directory and run with `env -i`, its
+  `$LOAD_PATH` is entirely `/zip/lib/ruby/...` and `require "json"` /
+  `require "yaml"` work. Nothing of the Ruby installation needs to be
+  packed besides the single APE file (packed as `bin/ruby.com`).
+* **The APE stub can `execv` an APE directly.** Cosmopolitan Libc's own
+  `execve` recognizes APE binaries and bootstraps them itself, so the
+  stub's existing `fork`+`execv` launch path (`system_utils_posix.c`)
+  launches `ruby.com` without changes — even on kernels with no APE
+  binfmt registration and no `ape` loader installed (verified on such a
+  host). Only *outside* processes (shells, `env`) need the ENOEXEC
+  shell-script fallback; that is how the outer `.com` itself starts.
+* **Build-time query.** The payload is executed once at packaging time
+  (via `/bin/sh ruby.com -e ...`, the portable invocation) to validate
+  it runs on the build host and to read `RUBY_VERSION`,
+  `Gem.default_dir` and its provided gem names.
+* **`GEM_PATH` must include the `/zip` gem dir.** Setting `GEM_PATH`
+  stops RubyGems from scanning its compiled-in default directory —
+  which for the payload is `/zip/lib/ruby/gems/<version>` inside the
+  binary. OCRAN appends the queried directory to the packed `GEM_PATH`
+  so the payload's bundled gems stay reachable.
+
+### Packaging semantics
+
+* Dependency detection still runs under the **host** Ruby; a warning is
+  printed when host and payload versions differ (e.g. 3.3 vs 4.0),
+  since stdlib/gem layout may have drifted between them.
+* Host stdlib files, `libruby`, detected shared libraries, encoding
+  `.so` files and `--add-all-core` trees are **not** packed; `RUBYLIB`
+  only carries the app's own load paths. Stdlib requires resolve from
+  `/zip` at runtime.
+* Pure-Ruby gems are packed exactly as before (mirrored under the gem
+  home / prefix layout, activated via `GEM_PATH`); verified with a
+  host-installed pure gem despite the 3.3→4.0 skew.
+* Host default gems are never packed (the payload ships its own).
+  Native-extension gems: if the payload provides the same gem (`json`,
+  `psych`, ...), the host copy is skipped in its favor; otherwise the
+  build **fails** with a clear message rather than producing a broken
+  binary. Stray `.so`/`.bundle` files in gem file lists or features are
+  excluded with a warning.
+
+### Limitations (v1)
+
+* Console-only, POSIX build hosts only (inherited from `--cosmo`).
+* Native-extension gems cannot be used at all unless the payload
+  provides them.
+* Host-vs-payload version skew is only warned about, not resolved; a
+  gem packed for the host Ruby may still misbehave under a much newer
+  payload Ruby.
+* Only the single-file executable output is exercised; `--output-dir`,
+  `--output-zip` and the macOS bundle share the same packaging code but
+  their launch scripts have not been tested with an APE interpreter.
+* The outer `.com` (APE stub + appended OCRAN payload) has been
+  verified on Linux only; Windows/macOS behavior of the appended
+  payload is still the pre-existing open risk 1 below.
+
 ## Risks / open questions
 
 1. **APE file format vs. appended payload.** An APE is itself a
@@ -147,7 +218,17 @@ resolves the executable path on every OS the APE runs on.
   and runs a packed app on Linux.
 * **Phase 1** — CI job building the stub with a pinned cosmocc and
   running the POSIX smoke/test suite against the APE artifact on Linux.
-* **Phase 2** — Exercise the packed APE stub on Windows and macOS
+* **Phase 2 — cosmopolitan Ruby payload (done on Linux)** — the
+  `--cosmo-ruby <ruby.com>` option packages a cosmopolitan-built Ruby
+  APE as the interpreter (see the dedicated section above): stdlib from
+  the payload's `/zip` store, pure-Ruby gems via `GEM_PATH`,
+  native-extension gems rejected or replaced by the payload's own.
+  Gated end-to-end tests (`test_cosmo_ruby_*`, enabled via `COSMOCC` +
+  `COSMO_RUBY` env vars) cover hello-world, stdlib (json/yaml) and a
+  pure-Ruby gem, each run isolated with `env -i` and asserting
+  `x86_64-cosmo`. Cross-OS execution of the produced `.com` remains
+  untested (next phase).
+* **Phase 2.5** — Exercise the packed APE stub on Windows and macOS
   runners: payload discovery (risk 1), process launch of a real packed
   Ruby (risk 2), temp-dir semantics (risk 5).
 * **Phase 3** — Decide the product story: keep cosmocc as a

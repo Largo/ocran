@@ -191,9 +191,34 @@ Fine-tuning flags:
     verbatim.
   * Compiled stubs are cached in `~/.cache/ocran` (keyed on the
     toolchain and stub sources), so only the first build compiles.
-  * The packaged Ruby runtime is still the host platform's Ruby — the
-    APE property currently applies to the launcher stub, not to the
-    bundled application. See `docs/cosmocc-port-plan.md` for status.
+  * Without `--cosmo-ruby` (below), the packaged Ruby runtime is still
+    the host platform's Ruby — the APE property then applies to the
+    launcher stub, not to the bundled application. See
+    `docs/cosmocc-port-plan.md` for status.
+
+* `--cosmo-ruby <ruby.com>`: Package a cosmopolitan-built Ruby (an APE
+  such as `ruby.com`, built from
+  [cosmopolitan's third_party/ruby](https://github.com/jart/cosmopolitan))
+  as the bundled interpreter instead of the host Ruby. Combined with the
+  APE stub from `--cosmo` (which is required), the produced `.com`
+  contains no host-native code at all. The payload APE must be fully
+  self-contained, i.e. carry its standard library in its embedded ZIP
+  store (`/zip/lib/ruby/...`) — upstream cosmopolitan Ruby builds do.
+  Notes:
+  * Requires `--cosmo`; the payload is run once on the build host (via
+    `/bin/sh`, using the APE's shell-script self-bootstrap) to validate
+    it and to query its version and embedded gem directory.
+  * Dependency detection still runs under the **host** Ruby. Standard
+    library requires resolve at runtime from the payload's embedded
+    stdlib (the host stdlib is not packed); a warning is printed when
+    host and payload Ruby versions differ.
+  * Pure-Ruby application files and pure-Ruby gems are packed as usual
+    and activated via `GEM_PATH`. Native-extension gems cannot work
+    (the payload is a statically linked `x86_64-cosmo` binary): gems
+    that the payload provides itself (e.g. `json`, `psych`) are simply
+    not packed; any other native-extension gem aborts the build.
+  * `--add-all-core` and encoding-support packing are no-ops (the
+    payload embeds its complete stdlib and encodings).
 
 ### Compilation:
 
