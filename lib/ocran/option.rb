@@ -128,6 +128,22 @@ Experimental options:
 EOF
     end
 
+    # Pulls in Ocran::CosmoToolchain for the --cosmo/--cosmo-ruby options.
+    #
+    # Deliberately Kernel#load and not require_relative: OCRAN detects the
+    # application's dependencies by diffing $LOADED_FEATURES around the
+    # dependency run, and the "before" snapshot is taken *before* the command
+    # line is parsed (Runner#initialize). Anything require'd from here would
+    # therefore show up in that diff and be packed into the user's
+    # application - packing OCRAN's own source file with it, and (because the
+    # src prefix is the common parent of all source files) moving the whole
+    # application down into a deeper src/ subdirectory. Kernel#load leaves
+    # $LOADED_FEATURES untouched; the same idiom is used for
+    # refine_pathname.rb above.
+    def load_cosmo_toolchain
+      load File.expand_path("cosmo_toolchain.rb", __dir__) unless defined? CosmoToolchain
+    end
+
     def parse(argv)
       while (arg = argv.shift)
         case arg
@@ -174,10 +190,10 @@ EOF
         when "--rubyopt"
           @options[:rubyopt] = argv.shift
         when "--cosmo", "--cosmo-toolchain"
-          require_relative "cosmo_toolchain"
+          load_cosmo_toolchain
           @options[:cosmo_cc] = CosmoToolchain.resolve_cc(argv.shift)
         when "--cosmo-ruby"
-          require_relative "cosmo_toolchain"
+          load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
         when "--gemfile"
           path = argv.shift

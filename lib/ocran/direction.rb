@@ -167,7 +167,10 @@ module Ocran
       # run under the *host* Ruby, so stdlib/gem resolution may differ
       # when the versions diverge.
       if @option.cosmo_ruby
-        require_relative "cosmo_toolchain"
+        # Kernel#load, matching Option#load_cosmo_toolchain: the file may
+        # already have been loaded that way at option-parse time, and
+        # require_relative would then run it a second time.
+        load File.expand_path("cosmo_toolchain.rb", __dir__) unless defined? CosmoToolchain
         @cosmo_ruby_info = CosmoToolchain.query_ruby(@option.cosmo_ruby)
         say "Packaging cosmopolitan Ruby #{@cosmo_ruby_info[:version]} (#{@option.cosmo_ruby})"
         if RUBY_VERSION.split(".").take(2) != @cosmo_ruby_info[:version].split(".").take(2)
@@ -883,7 +886,7 @@ module Ocran
       return nil unless @option.cosmo_cc
 
       @cosmo_stub_path ||= begin
-        require_relative "cosmo_toolchain"
+        load File.expand_path("cosmo_toolchain.rb", __dir__) unless defined? CosmoToolchain
         say "Building launcher stub from source with cosmocc (#{@option.cosmo_cc})"
         path = CosmoToolchain.build_stub(@option.cosmo_cc)
         say "Using APE stub #{path}"

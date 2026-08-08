@@ -178,7 +178,12 @@ class TestOcran < Minitest::Test
   # the toolchain root (containing bin/cosmocc), or the bin directory,
   # and raises clear errors otherwise. Runs without a real toolchain.
   def test_cosmo_toolchain_resolution
-    require_relative "../lib/ocran/cosmo_toolchain"
+    # Kernel#load, guarded: Ocran::Option loads this file the same way (see
+    # Option#load_cosmo_toolchain), and mixing load with require_relative
+    # would run the file twice and warn about redefined constants.
+    unless defined? Ocran::CosmoToolchain
+      load File.expand_path("../lib/ocran/cosmo_toolchain.rb", __dir__)
+    end
     with_tmpdir do
       mkdir_p "toolchain/bin"
       cc = File.expand_path("toolchain/bin/cosmocc")
@@ -247,7 +252,12 @@ class TestOcran < Minitest::Test
   # --cosmo-ruby path validation: accepts an existing APE file, rejects
   # missing paths and non-APE files. Runs without a real payload.
   def test_cosmo_ruby_resolution
-    require_relative "../lib/ocran/cosmo_toolchain"
+    # Kernel#load, guarded: Ocran::Option loads this file the same way (see
+    # Option#load_cosmo_toolchain), and mixing load with require_relative
+    # would run the file twice and warn about redefined constants.
+    unless defined? Ocran::CosmoToolchain
+      load File.expand_path("../lib/ocran/cosmo_toolchain.rb", __dir__)
+    end
     with_tmpdir do
       File.binwrite("ruby.com", "MZqFpD='\n" + "\0" * 16)
       assert_equal File.expand_path("ruby.com"), Ocran::CosmoToolchain.resolve_ruby("ruby.com")
@@ -274,6 +284,34 @@ class TestOcran < Minitest::Test
         Ocran::Option.new.parse(["helloworld.rb", "--cosmo-ruby", "fake-ruby.com"])
       end
       assert_match(/--cosmo-ruby requires --cosmo/, err.message)
+    end
+  end
+
+  # Regression: parsing --cosmo/--cosmo-ruby must not add anything to
+  # $LOADED_FEATURES. OCRAN detects an application's dependencies by diffing
+  # $LOADED_FEATURES around the dependency run, and the "before" snapshot is
+  # taken *before* the command line is parsed (Runner#initialize) - so a
+  # library loaded while parsing is indistinguishable from one the user's
+  # script required and gets packed into the application. When
+  # cosmo_toolchain.rb was pulled in with require_relative it was packed as
+  # an application source file, which also pushed the whole application into
+  # a deeper src/ subdirectory (the src prefix is the common parent of all
+  # source files).
+  def test_cosmo_options_do_not_load_features
+    skip "--cosmo requires a POSIX build host" if Gem.win_platform?
+    require_relative "../lib/ocran/option"
+    with_fixture "helloworld" do
+      File.binwrite("fake-ruby.com", "MZqFpD='\n")
+      mkdir_p "toolchain/bin"
+      cc = File.expand_path("toolchain/bin/cosmocc")
+      File.write(cc, "#!/bin/sh\n")
+      File.chmod(0755, cc)
+
+      before = $LOADED_FEATURES.dup
+      Ocran::Option.new.parse(["helloworld.rb", "--cosmo", "toolchain",
+                               "--cosmo-ruby", "fake-ruby.com"])
+      assert_empty($LOADED_FEATURES - before,
+                   "parsing the cosmo options must not load features; they would be packed into the app")
     end
   end
 

@@ -1,7 +1,12 @@
 # frozen_string_literal: true
-require "digest"
-require "fileutils"
-require "tmpdir"
+#
+# NOTE: no file-scope require of digest/fileutils/tmpdir. This file is
+# loaded while the command line is parsed, i.e. before OCRAN snapshots
+# $LOADED_FEATURES for dependency detection (see
+# Ocran::Option#load_cosmo_toolchain); anything required here would end up
+# in that diff and be packed into the user's application. The three
+# libraries are only needed at build time - after the snapshot - so they
+# are required inside the methods that use them.
 
 module Ocran
   # Builds the launcher stub from the C sources in src/ with a
@@ -109,6 +114,9 @@ module Ocran
     # so repeated packaging runs do not recompile. On compile failure the
     # compiler output is included in the raised error.
     def build_stub(cc)
+      require "fileutils"
+      require "tmpdir"
+
       if Gem.win_platform?
         raise "--cosmo is not supported when building on Windows (build the APE stub on a Linux/macOS host)"
       end
@@ -146,6 +154,8 @@ module Ocran
     # Cache key covering the toolchain (path, mtime, size — so an updated
     # toolchain at the same path recompiles) and every stub source file.
     def cache_key(cc)
+      require "digest"
+
       digest = Digest::SHA256.new
       stat = File.stat(cc)
       digest << cc << stat.mtime.to_i.to_s << stat.size.to_s
@@ -158,6 +168,8 @@ module Ocran
     end
 
     def cache_dir
+      require "tmpdir"
+
       base = ENV["XDG_CACHE_HOME"]
       base = File.join(Dir.home, ".cache") if base.nil? || base.empty?
       File.join(base, "ocran")
