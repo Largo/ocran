@@ -213,10 +213,14 @@ Fine-tuning flags:
     stdlib (the host stdlib is not packed); a warning is printed when
     host and payload Ruby versions differ.
   * Pure-Ruby application files and pure-Ruby gems are packed as usual
-    and activated via `GEM_PATH`. Native-extension gems cannot work
-    (the payload is a statically linked `x86_64-cosmo` binary): gems
-    that the payload provides itself (e.g. `json`, `psych`) are simply
-    not packed; any other native-extension gem aborts the build.
+    and activated via `GEM_PATH`. Native gems cannot work (the payload
+    is a statically linked `x86_64-cosmo` binary that cannot `dlopen`):
+    gems that the payload provides itself (e.g. `json`, `psych`,
+    `sqlite3`) are simply not packed, so the payload's own copy serves;
+    any other native gem aborts the build. This covers gems built from
+    source (`spec.extensions`) as well as **precompiled platform gems**
+    (e.g. `sqlite3-2.9.5-x86_64-linux-gnu`), which declare no
+    extensions but ship a prebuilt `.so` in their `lib` directory.
   * `--add-all-core` and encoding-support packing are no-ops (the
     payload embeds its complete stdlib and encodings).
 

@@ -375,6 +375,119 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Unit test for the --cosmo-ruby gem classification. A gem is native -
+  # and thus unusable under the statically linked, dlopen-less payload -
+  # either because it declares extensions (source install) or because it
+  # ships prebuilt binaries (precompiled platform gem, whose extensions
+  # array is EMPTY). Native gems the payload provides itself must be
+  # skipped so the payload's own copy serves; native gems it does not
+  # provide must fail the build.
+  def test_cosmo_gem_disposition
+    require_relative "../lib/ocran/direction"
+
+    with_tmpdir do
+      # Pure Ruby gem
+      mkdir_p "pure/lib"
+      File.write("pure/lib/pure.rb", "")
+      pure = Gem::Specification.new { |s| s.name = "pure"; s.version = "1.0" }
+      pure.define_singleton_method(:gem_dir) { File.expand_path("pure") }
+      pure.define_singleton_method(:extension_dir) { File.expand_path("no/such/dir") }
+
+      # Precompiled platform gem: no declared extensions, but a prebuilt
+      # .so shipped inside the gem directory (e.g. sqlite3-x86_64-linux-gnu)
+      mkdir_p "prebuilt/lib/prebuilt/3.3"
+      File.write("prebuilt/lib/prebuilt.rb", "")
+      File.write("prebuilt/lib/prebuilt/3.3/prebuilt_native.so", "")
+      prebuilt = Gem::Specification.new { |s| s.name = "prebuilt"; s.version = "1.0" }
+      prebuilt.define_singleton_method(:gem_dir) { File.expand_path("prebuilt") }
+      prebuilt.define_singleton_method(:extension_dir) { File.expand_path("no/such/dir") }
+
+      # Source-installed native gem: declares extensions, the built .so
+      # lives in the separate extension directory
+      mkdir_p "source/lib"
+      mkdir_p "ext_dir"
+      File.write("ext_dir/source.so", "")
+      source = Gem::Specification.new do |s|
+        s.name = "source"
+        s.version = "1.0"
+        s.extensions = ["ext/source/extconf.rb"]
+      end
+      source.define_singleton_method(:gem_dir) { File.expand_path("source") }
+      source.define_singleton_method(:extension_dir) { File.expand_path("ext_dir") }
+
+      assert_empty Ocran::Direction.gem_native_binaries(pure)
+      refute_empty Ocran::Direction.gem_native_binaries(prebuilt)
+      refute_empty Ocran::Direction.gem_native_binaries(source)
+
+      # Pure Ruby gems are packed regardless of what the payload provides
+      assert_equal :pack, Ocran::Direction.cosmo_gem_disposition(pure, [])[0]
+      assert_equal :pack, Ocran::Direction.cosmo_gem_disposition(pure, ["pure"])[0]
+
+      # The precompiled platform gem must be recognized as native even
+      # though spec.extensions is empty
+      assert_empty prebuilt.extensions
+      assert_equal :payload_provides,
+                   Ocran::Direction.cosmo_gem_disposition(prebuilt, ["prebuilt"])[0]
+      assert_equal :incompatible,
+                   Ocran::Direction.cosmo_gem_disposition(prebuilt, [])[0]
+
+      assert_equal :payload_provides,
+                   Ocran::Direction.cosmo_gem_disposition(source, ["source"])[0]
+      assert_equal :incompatible,
+                   Ocran::Direction.cosmo_gem_disposition(source, [])[0]
+
+      # Build messages name the reason a gem counts as native
+      assert_match(/prebuilt_native\.so/,
+                   Ocran::Direction.cosmo_native_reason(prebuilt, Ocran::Direction.gem_native_binaries(prebuilt)))
+      assert_match(/extensions/,
+                   Ocran::Direction.cosmo_native_reason(source, Ocran::Direction.gem_native_binaries(source)))
+    end
+  end
+
+  # End-to-end: a PRECOMPILED PLATFORM gem (sqlite3-x.y.z-x86_64-linux-gnu)
+  # that the cosmopolitan Ruby payload also provides must not be packed at
+  # all - neither its .so (which cannot load) nor its .rb files, which would
+  # shadow the payload's own copy and can mismatch the statically linked C
+  # extension. The app must run against the payload's sqlite3.
+  def test_cosmo_ruby_precompiled_platform_gem
+    cosmocc, cosmo_ruby = cosmo_ruby_prereqs
+    begin
+      spec = Gem::Specification.find_by_name("sqlite3")
+    rescue Gem::LoadError
+      skip "test gem 'sqlite3' is not installed on the build host"
+    end
+    unless spec.extensions.empty? && !Dir.glob("**/*.so", base: spec.gem_dir).empty?
+      skip "installed sqlite3 is not a precompiled platform gem (gem install sqlite3 to get one)"
+    end
+    unless defined? Ocran::CosmoToolchain
+      load File.expand_path("../lib/ocran/cosmo_toolchain.rb", __dir__)
+    end
+    unless Ocran::CosmoToolchain.query_ruby(cosmo_ruby)[:gem_names].include?("sqlite3")
+      skip "the cosmopolitan Ruby payload does not provide sqlite3"
+    end
+
+    with_fixture "cosmoruby_native_gem" do
+      out = IO.popen(["ruby", ocran, "nativegem.rb", "--no-lzma", "--verbose",
+                      "--cosmo", cosmocc, "--cosmo-ruby", cosmo_ruby],
+                     err: [:child, :out], &:read)
+      assert $?.success?, "ocran failed, output: #{out.lines.last(20).join}"
+      # Keep failure output small: only report the sqlite3-related lines.
+      sqlite_lines = out.lines.grep(/sqlite3/).first(10).join
+      assert out.include?("provides its own sqlite3"),
+             "expected the host sqlite3 gem to be skipped as provided by the payload:\n#{sqlite_lines}"
+      packed = out.lines.grep(/\Acp .*sqlite3/)
+      assert_empty packed, "host sqlite3 gem files must not be packed:\n#{packed.first(10).join}"
+
+      assert File.exist?("nativegem.com")
+      pristine_env "nativegem.com" do
+        run = `env -i ./nativegem.com`
+        assert $?.success?, "nativegem.com failed, output: #{run}"
+        assert_match(/sqlite:7/, run)
+        assert_match(/platform:x86_64-cosmo/, run)
+      end
+    end
+  end
+
   # Should be able to build executables with LZMA compression
   def test_lzma
     with_fixture 'helloworld' do

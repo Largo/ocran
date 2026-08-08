@@ -154,11 +154,24 @@ against a cosmopolitan Ruby 4.0.0 build (`+PRISM +MIMALLOC`,
   home / prefix layout, activated via `GEM_PATH`); verified with a
   host-installed pure gem despite the 3.3→4.0 skew.
 * Host default gems are never packed (the payload ships its own).
-  Native-extension gems: if the payload provides the same gem (`json`,
-  `psych`, ...), the host copy is skipped in its favor; otherwise the
+  Native gems: if the payload provides the same gem (`json`, `psych`,
+  `sqlite3`, ...), the host copy is skipped in its favor; otherwise the
   build **fails** with a clear message rather than producing a broken
-  binary. Stray `.so`/`.bundle` files in gem file lists or features are
-  excluded with a warning.
+  binary. Stray `.so`/`.bundle`/`.dll` files in gem file lists or
+  features are excluded with a warning.
+* "Native" is decided by `Direction.cosmo_gem_disposition`, which looks
+  at `spec.extensions` **and** at the binaries the gem actually ships.
+  A *precompiled platform gem* (e.g. `sqlite3-2.9.5-x86_64-linux-gnu`)
+  has an **empty** `extensions` array — nothing is compiled at install
+  time — yet carries `lib/sqlite3/<abi>/sqlite3_native.so`. Judging by
+  `spec.extensions` alone let such a gem take the ordinary packing
+  path: its `.so` files were dropped by the "contains native binaries"
+  filter while its `.rb` files were packed into the app's gem home,
+  where they shadow the payload's own copy of the gem and can mismatch
+  the statically linked C extension the payload pre-registers (it only
+  ran because host and payload happened to ship the same gem version).
+  Both the gem directory and the extension directory are scanned for
+  `.so`/`.bundle`/`.dll`.
 
 ### Limitations (v1)
 
@@ -218,8 +231,17 @@ Takeaways for application authors and for the OCRAN docs:
   directory (`--chdir-first`) is the obvious mitigation for
   latency-sensitive uses.
 
-Two rough edges found while doing this:
+Three rough edges found while doing this:
 
+* **Precompiled platform gems were not recognized as native.** *(fixed)*
+  A `sqlite3` app packed against a payload that has `sqlite3` linked in
+  still got the *host* gem's `.rb` files packed (`.so` dropped by the
+  file filter), because the payload-provides short-circuit was gated on
+  `spec.extensions.any?` — false for `sqlite3-2.9.5-x86_64-linux-gnu`.
+  It ran only because the packed `lib/sqlite3.rb` requires
+  `sqlite3/sqlite3_native`, which the payload pre-registers, and both
+  sides happened to be version 2.9.5. Detection now also looks at the
+  binaries a gem ships; see "Packaging semantics" above.
 * **Extraction directories leak when the process is killed.** On
   Windows, `app.com … | Select-Object -First 2` makes PowerShell
   terminate the native process when it closes the pipe; the stub never

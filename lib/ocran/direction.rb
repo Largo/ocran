@@ -30,6 +30,67 @@ module Ocran
     # used (--cosmo-ruby); the source APE is packed under this name.
     COSMO_RUBY_EXE = "ruby.com"
 
+    # File name extensions of loadable native binaries that a gem may
+    # ship or build. None of them can be loaded by the cosmopolitan Ruby
+    # payload, which is statically linked and has no dlopen.
+    NATIVE_BINARY_EXTENSIONS = %w[.so .bundle .dll].freeze
+
+    # Native binaries a gem ships or has had built for it, i.e. the files
+    # that make it unusable under the cosmopolitan Ruby payload.
+    #
+    # spec.extensions alone does NOT identify a native gem: a precompiled
+    # platform gem (e.g. sqlite3-2.9.5-x86_64-linux-gnu) has an empty
+    # extensions array because nothing is compiled at install time, yet it
+    # ships a prebuilt sqlite3_native.so inside its lib directory. Both the
+    # gem directory and the extension directory (where RubyGems puts the
+    # products of a source build) are scanned.
+    def self.gem_native_binaries(spec)
+      ext_dir =
+        begin
+          spec.extension_dir
+        rescue StandardError
+          nil
+        end
+      pattern = "**/*{#{NATIVE_BINARY_EXTENSIONS.join(",")}}"
+      [spec.gem_dir, ext_dir].compact.uniq.flat_map { |dir|
+        next [] unless File.directory?(dir)
+
+        Dir.glob(pattern, base: dir).map { |rel| Pathname(File.join(dir, rel)) }
+      }.uniq
+    end
+
+    # Decides how a gem detected on the build host has to be treated when
+    # a cosmopolitan Ruby payload is packed (--cosmo-ruby). Returns a pair
+    # of a disposition and the gem's native binaries:
+    #
+    #   [:pack, []]                  pure Ruby gem, pack it as usual
+    #   [:payload_provides, files]   native, but the payload ships the same
+    #                                gem itself: skip the host copy and let
+    #                                the payload's own version serve
+    #   [:incompatible, files]       native and not provided by the payload:
+    #                                the build must fail
+    def self.cosmo_gem_disposition(spec, payload_gem_names)
+      native_files = gem_native_binaries(spec)
+      return [:pack, native_files] if spec.extensions.empty? && native_files.empty?
+
+      if payload_gem_names.include?(spec.name)
+        [:payload_provides, native_files]
+      else
+        [:incompatible, native_files]
+      end
+    end
+
+    # Human readable reason why a gem counts as native, for build messages.
+    def self.cosmo_native_reason(spec, native_files)
+      reasons = []
+      reasons << "declares native extensions" if spec.extensions.any?
+      if native_files.any?
+        names = native_files.map { |file| File.basename(file) }.uniq
+        reasons << "ships prebuilt binaries (#{names.join(", ")})"
+      end
+      reasons.join(" and ")
+    end
+
     attr_reader :ruby_executable, :rubyopt
 
     def initialize(post_env, pre_env, option)
@@ -386,22 +447,34 @@ module Ocran
             verbose "Skipping default gem #{spec.full_name} (provided by the cosmopolitan Ruby's embedded stdlib)"
             next []
           end
-          # Native-extension gems compile against the host Ruby ABI and
-          # platform; they cannot load under the x86_64-cosmo payload.
+          # Native gems compile (or were precompiled) against a host Ruby
+          # ABI and platform; they cannot load under the x86_64-cosmo
+          # payload, which is statically linked and cannot dlopen. This
+          # covers both source-installed gems (spec.extensions) and
+          # precompiled platform gems, which declare no extensions but
+          # ship their .so inside the gem directory.
           # When the payload provides the same gem itself (e.g. json,
           # psych are statically linked into the APE), skip the host copy
-          # so the payload's own version is used; otherwise fail clearly
-          # rather than produce a broken executable.
-          if spec.extensions.any?
-            if @cosmo_ruby_info[:gem_names].include?(spec.name)
-              say "Skipping native-extension gem #{spec.full_name}: the cosmopolitan Ruby provides its own #{spec.name}"
+          # so the payload's own version is used — packing the host .rb
+          # files would shadow the payload's and could mismatch the
+          # linked-in C extension. Otherwise fail clearly rather than
+          # produce a broken executable.
+          disposition, native_files = self.class.cosmo_gem_disposition(spec, @cosmo_ruby_info[:gem_names])
+          if disposition != :pack
+            reason = self.class.cosmo_native_reason(spec, native_files)
+            if disposition == :payload_provides
+              say "Skipping native gem #{spec.full_name} (#{reason}): the cosmopolitan Ruby provides its own #{spec.name}"
               cosmo_skipped_gem_dirs << Pathname(spec.gem_dir) if File.directory?(spec.gem_dir)
-              if (ext_dir = spec.extension_dir) && File.directory?(ext_dir)
-                cosmo_skipped_gem_dirs << Pathname(ext_dir)
-              end
+              ext_dir =
+                begin
+                  spec.extension_dir
+                rescue StandardError
+                  nil
+                end
+              cosmo_skipped_gem_dirs << Pathname(ext_dir) if ext_dir && File.directory?(ext_dir)
               next []
             end
-            raise "Gem #{spec.full_name} has native extensions and cannot run under the packed cosmopolitan Ruby (x86_64-cosmo, static): exclude the gem or package without --cosmo-ruby"
+            raise "Gem #{spec.full_name} is native (#{reason}) and cannot run under the packed cosmopolitan Ruby (x86_64-cosmo, static): exclude the gem or package without --cosmo-ruby"
           end
         end
 
@@ -472,11 +545,13 @@ module Ocran
 
         actual_files = spec.find_gem_files(include, features)
 
-        # Even a gem without declared extensions can carry prebuilt
-        # binaries in its file list; they cannot load under the
-        # cosmopolitan payload, so exclude them loudly.
+        # Safety net: gems reaching this point are pure Ruby as far as
+        # their gem and extension directories go (see the disposition
+        # check above), but a file list can still pull in a native binary
+        # from elsewhere. It cannot load under the cosmopolitan payload,
+        # so exclude it loudly.
         if @option.cosmo_ruby
-          native_files = actual_files.select { |f| f.extname?(".so") || f.extname?(".bundle") }
+          native_files = actual_files.select { |f| NATIVE_BINARY_EXTENSIONS.any? { |ext| f.extname?(ext) } }
           if native_files.any?
             warning "Gem #{spec.full_name} contains native binaries that cannot run under the packed cosmopolitan Ruby; excluding: #{native_files.map(&:basename).join(", ")}"
             actual_files -= native_files
