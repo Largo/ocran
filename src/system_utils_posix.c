@@ -413,6 +413,25 @@ char *GetImagePath(void) {
 
 char *GetTempDirectoryPath(void) {
     const char *tmpdir = getenv("TMPDIR");
+#ifdef __COSMOPOLITAN__
+    /* On Windows, Cosmopolitan Libc translates the magic "/tmp" prefix to
+       a real directory, but WHERE it points differs between cosmo
+       releases (%TMP% in some, C:\tmp in others). This stub and the
+       packed cosmopolitan Ruby may be built against different cosmo
+       versions, so a literal "/tmp/..." extraction path handed to the
+       child can resolve to a DIFFERENT directory than the one the stub
+       extracted into. TMP/TEMP, by contrast, are presented by cosmo in
+       its unambiguous drive-letter form (e.g. /C/Users/x/AppData/Local/
+       Temp) that every cosmo runtime resolves identically, so prefer
+       them. On POSIX hosts they are normally unset and the usual
+       TMPDIR -> /tmp behavior is preserved. */
+    if (!tmpdir || !*tmpdir) {
+        tmpdir = getenv("TMP");
+    }
+    if (!tmpdir || !*tmpdir) {
+        tmpdir = getenv("TEMP");
+    }
+#endif
     if (!tmpdir || !*tmpdir) {
         tmpdir = "/tmp";
     }

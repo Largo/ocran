@@ -8,6 +8,10 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#ifdef __COSMOPOLITAN__
+#include <cosmo.h>           /* IsWindows() */
+#include <libc/nt/runtime.h> /* ExitProcess() */
+#endif
 #include "error.h"
 #include "system_utils.h"
 #include "inst_dir.h"
@@ -140,5 +144,17 @@ cleanup:
 
     FreeInstDir();
     extract_dir = NULL;
+
+#ifdef __COSMOPOLITAN__
+    /* On Windows, Cosmopolitan Libc's exit path encodes the full wait
+       status into the process exit code (code << 8) so that cosmo
+       parents can reconstruct it. Native Windows parents (cmd,
+       PowerShell, CI runners) expect the plain code, so bypass the
+       libc exit path and report the code as-is. */
+    if (IsWindows()) {
+        fflush(NULL);
+        ExitProcess(status);
+    }
+#endif
     return status;
 }

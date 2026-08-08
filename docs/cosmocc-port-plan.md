@@ -228,9 +228,29 @@ against a cosmopolitan Ruby 4.0.0 build (`+PRISM +MIMALLOC`,
   pure-Ruby gem, each run isolated with `env -i` and asserting
   `x86_64-cosmo`. Cross-OS execution of the produced `.com` remains
   untested (next phase).
-* **Phase 2.5** — Exercise the packed APE stub on Windows and macOS
-  runners: payload discovery (risk 1), process launch of a real packed
-  Ruby (risk 2), temp-dir semantics (risk 5).
+* **Phase 2.5 (Windows verified; macOS untested)** — Exercise the
+  packed APE stub on Windows and macOS runners: payload discovery
+  (risk 1), process launch of a real packed Ruby (risk 2), temp-dir
+  semantics (risk 5). Verified manually on a Windows 11 x64 VM
+  (PowerShell 5.1): a `--cosmo --cosmo-ruby` hello-world prints the
+  `x86_64-cosmo` description, receives argv, propagates the script's
+  exit code verbatim to `$LASTEXITCODE`, and cleans up its extraction
+  directory; the stdlib (json/yaml) fixture also passes. Two Windows
+  bugs were found and fixed along the way (issue #26):
+  1. *Temp-dir ambiguity between cosmo runtimes.* Different
+     Cosmopolitan releases map the magic `/tmp` prefix to different
+     Windows directories (`%TMP%` vs `C:\tmp`), so a literal
+     `/tmp/ocranXXXXXX` extraction path created by the stub resolved to
+     a *different* directory inside the packed Ruby (built against
+     another cosmo version) — `LoadError` for the script. The stub now
+     prefers `TMPDIR`, then `TMP`/`TEMP` (which cosmo presents in the
+     unambiguous `/C/...` drive-letter form every runtime resolves
+     identically) before falling back to `/tmp`.
+  2. *Exit-code encoding.* Cosmo encodes the wait status
+     (`code << 8`) into the Windows process exit code, so native
+     parents saw 1792 instead of 7. The cosmo stub now calls
+     `ExitProcess()` directly on Windows with the plain code.
+  Not yet automated in CI (manual VM run), and macOS remains untested.
 * **Phase 3** — Decide the product story: keep cosmocc as a
   cross-platform *console* stub built from POSIX sources (mingw keeps
   `stubw` + signing), or go further and make the APE stub a first-class
