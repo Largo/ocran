@@ -175,6 +175,83 @@ against a cosmopolitan Ruby 4.0.0 build (`+PRISM +MIMALLOC`,
   verified on Linux only; Windows/macOS behavior of the appended
   payload is still the pre-existing open risk 1 below.
 
+### Field test: a real multi-gem CLI (2026-08-08)
+
+Beyond the fixtures, a small but realistic application (`logstat`, an
+access-log analyzer: 8 source files, `thor` + `terminal-table` +
+`unicode-display_width` + `unicode-emoji` + `rainbow`, and `csv`,
+`json`, `yaml`, `zlib`, `digest`, `stringio` from the stdlib) was packed
+with `--cosmo --cosmo-ruby` and the **same 10.9 MB `.com`** run on Linux
+and on a Windows 11 x64 VM. Both produced byte-identical reports and the
+same exit codes (0/1/2/3), including gzip-compressed input, a
+`Marshal`+`Zlib` data file inside a gem (`display_width.marshal.gz`),
+and UTF-8 table layout.
+
+Path behavior of the packed app, same binary, per OS:
+
+| Expression | Linux | Windows (cwd `C:\logstat`) |
+|---|---|---|
+| `ENV["OCRAN_EXECUTABLE"]` | `/tmp/run/logstat.com` | `/C/logstat/logstat.com` |
+| `$0` / `__dir__` | `/tmp/ocranXXXXXX/src/...` | `/C/Users/…/AppData/Local/Temp/ocranXXXXXX/src/...` |
+| `Dir.pwd` | `/tmp/run` | **`/logstat`** — no drive letter |
+| `File::ALT_SEPARATOR` | `nil` | `nil` |
+
+Takeaways for application authors and for the OCRAN docs:
+
+* `OCRAN_EXECUTABLE` is the only reliable anchor for files that ship
+  *next to* the executable; it is absolute and drive-qualified on both
+  OSes. `__dir__`/`$0` point into the extraction directory, as on the
+  native stub.
+* `Dir.pwd` under the cosmopolitan Ruby on Windows returns a
+  **drive-letter-less** path (`/logstat` for `C:\logstat`). Relative
+  paths still resolve (cosmo interprets them against the current drive),
+  but such a string is wrong as soon as it is stored, logged or passed
+  to another process. Expand user-supplied paths against
+  `OCRAN_EXECUTABLE`'s directory where "next to the exe" is meant, and
+  do not assume `Dir.pwd` round-trips.
+* Native Windows arguments (`C:\logstat\access.csv`) reach the app
+  verbatim; an app that wants to accept them needs to map `X:\...` to
+  `/X/...` itself. Cosmo does not do it for `File.open` in every path.
+* Startup is dominated by extraction of the ~21 MB payload on every run:
+  ~0.80 s on Linux, ~1.7 s on Windows (of which ~0.78 s / ~1.45 s is
+  pure startup — the analysis itself is ~25 ms). A persistent install
+  directory (`--chdir-first`) is the obvious mitigation for
+  latency-sensitive uses.
+
+Two rough edges found while doing this:
+
+* **Extraction directories leak when the process is killed.** On
+  Windows, `app.com … | Select-Object -First 2` makes PowerShell
+  terminate the native process when it closes the pipe; the stub never
+  reaches its cleanup and leaves a full ~21 MB `%TEMP%\ocranXXXXXX`
+  tree behind (reproducible 1:1). Normal exits, non-zero exits and
+  `> $null` all clean up correctly, and Linux does not leak on the
+  equivalent `| head -2`. A stale-directory sweep at startup, or
+  extraction into a directory keyed on the executable's hash, would
+  bound the damage.
+* **Dangling gemspecs with `--cosmo-ruby`.** A host gem whose spec lives
+  in the RubyGems tree but whose code ships in the host stdlib (Debian's
+  `/usr/share/rubygems-integration/all/specifications/csv-3.3.4.gemspec`
+  with the implementation in `/usr/lib/ruby/vendor_ruby`) is packed as
+  "0 files, 0 bytes": the spec is copied but every file it would
+  contribute is skipped as part of the host Ruby installation. The
+  packed spec then advertises a `full_gem_path` that does not exist.
+  RubyGems tolerates this — `require "csv"` still resolves to the
+  payload's own copy even when the phantom spec has the higher version
+  (verified) — but the spec is dead weight and makes
+  `Gem::Specification.find_all_by_name` report a gem that cannot be
+  activated. Skipping the spec when the gem contributes no files under
+  `--cosmo-ruby` would be the clean fix.
+
+The cosmopolitan Ruby payload itself is also worth pinning: **Ruby
+4.0.6 `x86_64-cosmo` segfaults at VM initialization on Windows 11**
+(`[BUG] Segmentation fault at 0x0000000000000000`, right after the
+prelude and `encdb.so`/`transdb.so` load; `--version` still works
+because it exits before booting the VM), while the 4.0.0 build of the
+same tree runs the identical application fine. Both work on Linux, so
+this is a payload regression, not an OCRAN one — but it means the
+Windows story depends on which `ruby.com` gets bundled.
+
 ## Risks / open questions
 
 1. **APE file format vs. appended payload.** An APE is itself a
