@@ -34,8 +34,16 @@ permanent directory.
 If you want **one** binary that runs on all three systems and starts
 without extracting anything, package a cosmopolitan Ruby with
 `--cosmo-ruby <ruby.com>` (experimental, see
-[Experimental options](#experimental-options)). It needs no compiler and
-no installer, and the same file runs on Linux, macOS and Windows.
+[Experimental options](#experimental-options)). Grab the interpreter from
+[CosmoRuby releases](https://github.com/Largo/cosmoruby/releases/latest)
+and point OCRAN at it:
+
+```
+ocran app.rb --cosmo-ruby ./ruby.com
+```
+
+It needs no compiler and no installer, and the same file runs on Linux,
+macOS and Windows, on x86-64 and ARM.
 
 You can easily generate binaries for the supported Operating Systems with GitHub
 Actions — see [Building for multiple platforms with GitHub Actions](#building-for-multiple-platforms-with-github-actions).
@@ -179,16 +187,31 @@ Fine-tuning flags:
 
 #### Experimental options:
 
-* `--cosmo-ruby <ruby.com>`: Package a cosmopolitan-built Ruby (an APE
-  such as `ruby.com`, built from
-  [cosmopolitan's third_party/ruby](https://github.com/jart/cosmopolitan))
+* `--cosmo-ruby <ruby.com>`: Package a cosmopolitan-built Ruby (an APE)
   as the bundled interpreter instead of the host Ruby. The produced
   `.com` contains no host-native code at all and runs on Linux, Windows
-  and macOS:
+  and macOS, on x86-64 and ARM:
 
   ```
   ocran app.rb --cosmo-ruby /path/to/ruby.com
   ```
+
+  **Where to get `ruby.com`.** Download a release from
+  [CosmoRuby](https://github.com/Largo/cosmoruby/releases/latest) — one
+  file, no installation:
+
+  ```
+  curl -L -o ruby.com https://github.com/Largo/cosmoruby/releases/latest/download/ruby.com
+  chmod +x ruby.com
+  ocran app.rb --cosmo-ruby ./ruby.com
+  ```
+
+  Any self-contained cosmopolitan Ruby works, but CosmoRuby is what this
+  option is developed and tested against. Releases from `v4.0.6-cosmo3`
+  onwards also support the ZIP packaging mode described below, which
+  needs no C compiler at all; earlier releases fall back to building a
+  launcher stub, which needs `cosmocc`. Building your own is documented
+  in [CosmoRuby's BUILDING.md](https://github.com/Largo/cosmoruby/blob/main/BUILDING.md).
 
   This one option is the whole command line. The payload APE must be
   fully self-contained, i.e. carry its standard library in its embedded
