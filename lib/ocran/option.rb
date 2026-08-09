@@ -204,8 +204,10 @@ EOF
         when "--rubyopt"
           @options[:rubyopt] = argv.shift
         when "--cosmo", "--cosmo-toolchain"
-          load_cosmo_toolchain
-          @options[:cosmo_cc] = CosmoToolchain.resolve_cc(argv.shift)
+          # Kept unresolved until validation: resolving here would report
+          # "cosmocc ... is not executable" on a Windows build host, ahead of
+          # the clearer "not supported when building on Windows" check.
+          @options[:cosmo_cc] = argv.shift
         when "--cosmo-ruby"
           load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)

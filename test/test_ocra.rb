@@ -178,6 +178,11 @@ class TestOcran < Minitest::Test
   # the toolchain root (containing bin/cosmocc), or the bin directory,
   # and raises clear errors otherwise. Runs without a real toolchain.
   def test_cosmo_toolchain_resolution
+    # Toolchain discovery is POSIX-only: it relies on the executable
+    # bit, which Windows does not have (File.executable? is driven by
+    # PATHEXT there). Cosmo builds are rejected on Windows build hosts
+    # anyway, so there is nothing to exercise.
+    omit "cosmo toolchain discovery is POSIX-only" if Gem.win_platform?
     # Kernel#load, guarded: Ocran::Option loads this file the same way (see
     # Option#load_cosmo_toolchain), and mixing load with require_relative
     # would run the file twice and warn about redefined constants.
@@ -280,6 +285,11 @@ class TestOcran < Minitest::Test
   # install locations (newest version first); a clear error when nothing
   # is found. Runs with fake toolchains, no real cosmocc needed.
   def test_cosmo_toolchain_discovery
+    # Toolchain discovery is POSIX-only: it relies on the executable
+    # bit, which Windows does not have (File.executable? is driven by
+    # PATHEXT there). Cosmo builds are rejected on Windows build hosts
+    # anyway, so there is nothing to exercise.
+    omit "cosmo toolchain discovery is POSIX-only" if Gem.win_platform?
     # Kernel#load, guarded: Ocran::Option loads this file the same way (see
     # Option#load_cosmo_toolchain), and mixing load with require_relative
     # would run the file twice and warn about redefined constants.
