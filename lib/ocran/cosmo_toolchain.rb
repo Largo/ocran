@@ -14,8 +14,9 @@ module Ocran
   # time, producing an Actually Portable Executable (APE) stub that is
   # used instead of the pre-built native stub shipped with the gem.
   #
-  # Activated with the --cosmo (alias: --cosmo-toolchain) command line
-  # option. See docs/cosmocc-port-plan.md for background and caveats.
+  # The toolchain is named explicitly by --cosmo (alias: --cosmo-toolchain)
+  # or, when only --cosmo-ruby is given, discovered on the build host (see
+  # find_cc). See docs/cosmocc-port-plan.md for background and caveats.
   module CosmoToolchain
     # Stub C sources shipped with the gem (also included in the binary
     # platform gems specifically so this feature works from an installed gem).
@@ -23,6 +24,28 @@ module Ocran
 
     # Every APE binary starts with this MZ/shell-script polyglot magic.
     APE_MAGIC = "MZqFpD"
+
+    # Environment variable naming a cosmocc toolchain (the cosmocc
+    # executable or its installation directory), checked before PATH.
+    COSMOCC_ENV = "COSMOCC"
+
+    # Where a cosmocc toolchain is conventionally unpacked, searched when
+    # neither COSMOCC nor PATH names one. Cosmopolitan's own quick
+    # start unzips cosmocc.zip into a directory named "cosmocc" and adds
+    # its bin/ to PATH; "~" is the user's home directory and "*" matches
+    # version directories of vendored toolchains (the layout the
+    # cosmo-adjacent projects use, e.g. .cosmocc/3.9.2/bin/cosmocc). The
+    # cosmopolitan monorepo checkout at /opt/cosmo is covered too.
+    CONVENTIONAL_CC_PATHS = [
+      "~/.cosmocc/*/bin/cosmocc",
+      "~/.cosmocc/bin/cosmocc",
+      "~/cosmocc/*/bin/cosmocc",
+      "~/cosmocc/bin/cosmocc",
+      "/opt/cosmocc/*/bin/cosmocc",
+      "/opt/cosmocc/bin/cosmocc",
+      "/opt/cosmo/bin/cosmocc",
+      "/usr/local/cosmocc/bin/cosmocc",
+    ].freeze
 
     module_function
 
@@ -106,6 +129,86 @@ module Ocran
         raise "cosmocc found at #{cc} but it is not executable"
       end
       cc
+    end
+
+    # The cosmocc toolchain to compile the APE launcher stub with. An
+    # explicitly given --cosmo path always wins; otherwise the build host
+    # is searched (see find_cc), which is what makes --cosmo-ruby alone
+    # sufficient to package a portable application. Raises an actionable
+    # error when no toolchain can be found.
+    def require_cc(explicit = nil, env = ENV)
+      return resolve_cc(explicit) unless explicit.nil? || explicit.to_s.empty?
+
+      find_cc(env) ||
+        raise("no cosmocc toolchain found, but one is needed to build the APE launcher stub: " \
+              "#{COSMOCC_ENV} is not set, cosmocc is not in PATH, and none of the conventional " \
+              "install locations (#{CONVENTIONAL_CC_PATHS.join(", ")}) has one. " \
+              "Install the toolchain from https://cosmo.zip/pub/cosmocc/cosmocc.zip (unzip it, " \
+              "then either add its bin directory to PATH or set #{COSMOCC_ENV} to it), " \
+              "or name it explicitly with --cosmo <path-to-cosmocc>")
+    end
+
+    # Searches the build host for a cosmocc toolchain, in order: the
+    # COSMOCC environment variable (the cosmocc executable or its
+    # installation directory), cosmocc in PATH, and finally the
+    # conventional install locations (CONVENTIONAL_CC_PATHS). Returns the
+    # absolute path to cosmocc, or nil when nothing is found.
+    #
+    # COSMOCC is authoritative: if it is set but does not point at a
+    # usable toolchain, that error is raised rather than silently using a
+    # different toolchain than the user configured.
+    def find_cc(env = ENV)
+      specified = env[COSMOCC_ENV]
+      unless specified.nil? || specified.empty?
+        begin
+          return resolve_cc(specified)
+        rescue RuntimeError => e
+          raise "#{COSMOCC_ENV}=#{specified} does not name a usable cosmocc toolchain: #{e.message}"
+        end
+      end
+
+      search_path(env["PATH"]) || conventional_cc(env)
+    end
+
+    # The first executable cosmocc in the given PATH string, or nil.
+    def search_path(path)
+      return nil if path.nil? || path.empty?
+
+      path.split(File::PATH_SEPARATOR).each do |dir|
+        next if dir.empty?
+
+        cc = File.expand_path(File.join(dir, "cosmocc"))
+        return cc if File.file?(cc) && File.executable?(cc)
+      end
+      nil
+    end
+
+    # cosmocc in one of the conventional install locations, or nil. Within
+    # a location holding several versioned toolchains (e.g.
+    # ~/.cosmocc/3.9.2, ~/.cosmocc/4.0.2) the newest version wins.
+    def conventional_cc(env = ENV)
+      home = env["HOME"]
+
+      CONVENTIONAL_CC_PATHS.each do |pattern|
+        if pattern.start_with?("~/")
+          next if home.nil? || home.empty?
+
+          pattern = File.join(home, pattern.delete_prefix("~/"))
+        end
+
+        candidates = Dir.glob(pattern).select { |cc| File.file?(cc) && File.executable?(cc) }
+        next if candidates.empty?
+
+        return File.expand_path(candidates.max_by { |cc| version_key(cc) })
+      end
+      nil
+    end
+
+    # Sort key that orders <root>/<version>/bin/cosmocc paths newest
+    # first; unversioned or unparsable directory names sort oldest.
+    def version_key(cc)
+      name = File.basename(File.dirname(File.dirname(cc)))
+      Gem::Version.correct?(name) ? [1, Gem::Version.new(name)] : [0, Gem::Version.new("0")]
     end
 
     # Compiles the stub sources with the given cosmocc and returns the

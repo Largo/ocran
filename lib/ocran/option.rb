@@ -112,19 +112,26 @@ Executable options:
 
 Experimental options:
 
---cosmo <path>     Build the launcher stub from source with the given
-                   Cosmopolitan toolchain (cosmocc) and package with the
-                   resulting Actually Portable Executable (APE) stub.
-                   <path> is the cosmocc executable or its install dir.
-                   Console-only; output defaults to <scriptname>.com.
-                   (Alias: --cosmo-toolchain)
 --cosmo-ruby <ruby.com>  Package the given cosmopolitan-built Ruby (an APE,
                    e.g. ruby.com) as the interpreter instead of the host
-                   Ruby, making the whole application portable. The APE
-                   must be fully self-contained (stdlib embedded in its
-                   ZIP store). Requires --cosmo. Dependency detection
-                   still runs under the host Ruby; native-extension gems
-                   are rejected (pure-Ruby gems are packed as usual).
+                   Ruby, and launch it with an Actually Portable
+                   Executable (APE) stub: the result is a single
+                   <scriptname>.com that runs on Linux, Windows and macOS.
+                   The cosmocc toolchain that builds the stub is located
+                   automatically (COSMOCC environment variable, cosmocc in
+                   PATH, then conventional install locations such as
+                   ~/.cosmocc/*/bin/cosmocc). The APE must be fully
+                   self-contained (stdlib embedded in its ZIP store).
+                   Dependency detection still runs under the host Ruby;
+                   native-extension gems are rejected (pure-Ruby gems are
+                   packed as usual).
+--cosmo <path>     Use the Cosmopolitan toolchain (cosmocc) at <path> to
+                   build the launcher stub, overriding the automatic
+                   toolchain lookup. <path> is the cosmocc executable or
+                   its install dir. Given without --cosmo-ruby, it packages
+                   the host Ruby behind an APE stub. Console-only; output
+                   defaults to <scriptname>.com.
+                   (Alias: --cosmo-toolchain)
 EOF
     end
 
@@ -261,7 +268,7 @@ EOF
           executable = executable.append_to_filename("-debug") if enable_debug_mode?
           # Build output files are created in the current directory.
           # APE binaries built with cosmocc conventionally use .com.
-          ext = if cosmo_cc
+          ext = if cosmo?
                   ".com"
                 elsif Gem.win_platform?
                   ".exe"
@@ -300,18 +307,24 @@ EOF
         raise "--output-dir and --output-zip cannot be used together"
       end
 
-      if cosmo_cc
+      if cosmo?
+        opt = cosmo_cc ? "--cosmo" : "--cosmo-ruby"
+
         if Gem.win_platform?
-          raise "--cosmo is not supported when building on Windows (build the APE stub on a Linux/macOS host)"
+          raise "#{opt} is not supported when building on Windows (build the APE package on a Linux/macOS host)"
         end
 
         if force_windows?
-          raise "--windows cannot be used with --cosmo: cosmocc has no GUI (stubw) equivalent; APE stubs are console-only"
+          raise "--windows cannot be used with #{opt}: cosmocc has no GUI (stubw) equivalent; APE stubs are console-only"
         end
-      end
 
-      if cosmo_ruby && !cosmo_cc
-        raise "--cosmo-ruby requires --cosmo <toolchain>: a packed cosmopolitan Ruby needs an APE launcher stub, and building that stub requires a cosmocc toolchain path that cannot be inferred from the Ruby executable"
+        # An APE package is launched by an APE stub, which is compiled with
+        # cosmocc. --cosmo names that toolchain explicitly; with only
+        # --cosmo-ruby it is discovered on the build host (COSMOCC, PATH,
+        # conventional install locations), so one option is enough. Resolved
+        # here, before the dependency run, so a missing toolchain fails fast.
+        load_cosmo_toolchain
+        @options[:cosmo_cc] = CosmoToolchain.require_cc(cosmo_cc)
       end
 
       if macosx_bundle && (output_dir || output_zip || inno_setup_script)
@@ -336,6 +349,12 @@ EOF
     def cosmo_cc = @options[__method__]
 
     def cosmo_ruby = @options[__method__]
+
+    # True when the build produces an APE (Actually Portable Executable),
+    # i.e. an APE launcher stub is used: an explicit toolchain (--cosmo), a
+    # cosmopolitan Ruby payload (--cosmo-ruby, whose toolchain is inferred),
+    # or both.
+    def cosmo? = !!(cosmo_cc || cosmo_ruby)
 
     def enable_compression? = @options[__method__]
 
