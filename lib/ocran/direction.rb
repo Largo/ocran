@@ -59,21 +59,45 @@ module Ocran
       }.uniq
     end
 
+    # The feature names a gem is required by, i.e. what has to answer
+    # inside the payload for the payload's own copy to serve in place of
+    # the host gem. RubyGems' convention maps a dash in a gem name to a
+    # directory separator in its primary feature (io-console provides
+    # "io/console"), and both spellings are seen in the wild, so both are
+    # offered as candidates.
+    def self.cosmo_gem_features(spec)
+      [spec.name, spec.name.tr("-", "/")].uniq
+    end
+
     # Decides how a gem detected on the build host has to be treated when
     # a cosmopolitan Ruby payload is packed (--cosmo-ruby). Returns a pair
     # of a disposition and the gem's native binaries:
     #
     #   [:pack, []]                  pure Ruby gem, pack it as usual
-    #   [:payload_provides, files]   native, but the payload ships the same
-    #                                gem itself: skip the host copy and let
-    #                                the payload's own version serve
+    #   [:payload_provides, files]   native, but the payload provides the
+    #                                same library itself: skip the host copy
+    #                                and let the payload's own version serve
     #   [:incompatible, files]       native and not provided by the payload:
     #                                the build must fail
-    def self.cosmo_gem_disposition(spec, payload_gem_names)
+    #
+    # A gem counts as provided by the payload when the payload has a
+    # gemspec of that name, OR when the payload can resolve the gem's
+    # primary feature (+provides_feature+, normally
+    # CosmoToolchain.resolvable_features against the payload). The second
+    # test matters because a gemspec is not what makes a library
+    # requirable: an extension statically linked into the APE, or a
+    # library in its embedded stdlib rather than in /zip/lib/ruby/gems,
+    # answers require with no gemspec at all. Keying only on gemspec names
+    # reports such a library as incompatible and refuses a build that would
+    # have worked - which is what happens to cgi and pathname, both
+    # compiled into the interpreter and both regular native gems on a
+    # recent host Ruby.
+    def self.cosmo_gem_disposition(spec, payload_gem_names, provides_feature = nil)
       native_files = gem_native_binaries(spec)
       return [:pack, native_files] if spec.extensions.empty? && native_files.empty?
 
-      if payload_gem_names.include?(spec.name)
+      if payload_gem_names.include?(spec.name) ||
+         (provides_feature && provides_feature.call(cosmo_gem_features(spec)))
         [:payload_provides, native_files]
       else
         [:incompatible, native_files]
@@ -226,6 +250,21 @@ module Ocran
           nil
         end
       end
+    end
+
+    # True when the packed cosmopolitan Ruby can resolve any of the given
+    # features itself, i.e. when a host gem providing them does not have
+    # to be packed. Answers are memoized per feature: probing costs one
+    # run of the payload interpreter, and only native gems the payload has
+    # no gemspec for ever get here.
+    def cosmo_payload_provides_feature?(features)
+      @cosmo_feature_cache ||= {}
+      unknown = features.reject { |feature| @cosmo_feature_cache.key?(feature) }
+      unless unknown.empty?
+        resolved = CosmoToolchain.resolvable_features(@option.cosmo_ruby, unknown)
+        unknown.each { |feature| @cosmo_feature_cache[feature] = resolved.include?(feature) }
+      end
+      features.any? { |feature| @cosmo_feature_cache[feature] }
     end
 
     def construct(builder)
@@ -479,11 +518,19 @@ module Ocran
           # files would shadow the payload's and could mismatch the
           # linked-in C extension. Otherwise fail clearly rather than
           # produce a broken executable.
-          disposition, native_files = self.class.cosmo_gem_disposition(spec, @cosmo_ruby_info[:gem_names])
+          disposition, native_files = self.class.cosmo_gem_disposition(
+            spec, @cosmo_ruby_info[:gem_names], method(:cosmo_payload_provides_feature?)
+          )
           if disposition != :pack
             reason = self.class.cosmo_native_reason(spec, native_files)
             if disposition == :payload_provides
-              say "Skipping native gem #{spec.full_name} (#{reason}): the cosmopolitan Ruby provides its own #{spec.name}"
+              provided =
+                if @cosmo_ruby_info[:gem_names].include?(spec.name)
+                  "its own #{spec.name}"
+                else
+                  "#{spec.name} without a gemspec (linked in, or part of its embedded stdlib)"
+                end
+              say "Skipping native gem #{spec.full_name} (#{reason}): the cosmopolitan Ruby provides #{provided}"
               cosmo_skipped_gem_dirs << Pathname(spec.gem_dir) if File.directory?(spec.gem_dir)
               ext_dir =
                 begin
