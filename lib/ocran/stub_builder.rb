@@ -110,10 +110,16 @@ module Ocran
     # are installed next to the stub (pre-1.4/OCRA behavior). The directory
     # is never deleted on exit.
     #
+    # stub_path:
+    # Path to a stub binary to package with instead of the pre-built
+    # stub shipped with the gem (e.g. an APE stub freshly compiled with
+    # cosmocc, see --cosmo). When set, it takes precedence over both
+    # STUB_PATH and STUBW_PATH.
+    #
     def initialize(path, chdir_before: nil, chdir_to_exe_dir: nil,
                    debug_extract: nil, debug_mode: nil,
                    enable_compression: nil, gui_mode: nil, icon_path: nil,
-                   run_in_exe_dir: nil)
+                   run_in_exe_dir: nil, stub_path: nil)
       @dirs = FilePathSet.new
       @files = FilePathSet.new
       @data_size = 0
@@ -125,7 +131,9 @@ module Ocran
       output_dir = File.dirname(path)
       FileUtils.mkdir_p(output_dir) unless Dir.exist?(output_dir)
       stub_tmp = File.join(output_dir, ".ocran_stub_#{$$}_#{Time.now.to_i}")
-      stub_src = if gui_mode && WINDOWS
+      stub_src = if stub_path
+                   stub_path
+                 elsif gui_mode && WINDOWS
                    STUBW_PATH
                  else
                    STUB_PATH

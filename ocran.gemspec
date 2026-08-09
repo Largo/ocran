@@ -30,6 +30,10 @@ Gem::Specification.new do |spec|
   spec.platform = Gem::Platform::CURRENT
 
   spec.files = Dir.glob("{exe,lib,share}/**/*") +
+               # Stub C sources so the launcher stub can be rebuilt at
+               # packaging time from an installed gem (--cosmo / cosmocc).
+               Dir.glob("src/**/*.{c,h,rc,manifest,ico}") +
+               ["src/Makefile"] +
                %w[README.md LICENSE.txt CHANGELOG.txt]
   spec.bindir = "exe"
   spec.executables = Dir.glob("exe/*").map { |f| File.basename(f) }

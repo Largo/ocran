@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 3" # At 05:00 on Wednesday # https://crontab.guru/#0_5_*_*_3
+
+jobs:
+  job_test_gem:
+    name: Test in source tree
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            ruby: "head"
+          - os: windows
+            ruby: "3.2"
+          - os: ubuntu
+            ruby: "head"
+          - os: ubuntu
+            ruby: "4.0"
+          - os: ubuntu
+            ruby: "3.0"
+          - os: macos
+            ruby: "head"
+
+    runs-on: ${{ matrix.os }}-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby-pkgs@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}      # passed to ruby/setup-ruby
+          apt-get: "xpra xserver-xorg-video-dummy libxrandr-dev libfox-1.6-dev swig" # Ubuntu
+          brew: "fox swig xquartz"     # macOS
+          mingw: "fox swig"   # Windows mingw / mswin /ucrt
+
+      - name: Print tool versions
+        run: |
+          ruby -v
+          gcc -v
+          swig -version
+          gem env
+
+      - name: MacOS Start XQuartz
+        if: matrix.os == 'macos'
+        run: |
+          open -a XQuartz
+
+      - name: Bundle install
+        run: bundle install
+
+      - name: Un-Install pkg-config
+        if: matrix.os == 'macos'
+        run: |
+          # pkg-config formula is deprecated but it's still installed
+          # in GitHub Actions runner now. We can remove this once
+          # pkg-config formula is removed from GitHub Actions runner.
+          brew uninstall pkg-config || :
+
+      - name: Compile extension
+        run: bundle exec rake compile
+
+      - name: Linux Start xpra to enable GLX
+        if: matrix.os == 'ubuntu'
+        run: |
+          xpra --xvfb="Xorg +extension GLX -config `pwd`/test/dummy.xorg.conf -logfile ${HOME}/.xpra/xorg.log"  start :9
+          echo "DISPLAY=:9"  >> $GITHUB_ENV
+
+      - name: Run tests
+        run: bundle exec rake test
+
+      - name: Linux Print logs if job failed
+        if: ${{ failure() && matrix.os == 'ubuntu' }}
+        run: cat ~/.xpra/*
+
+      - name: Print compile logs if failed
+        if: ${{ failure() && matrix.os != 'windows' }}
+        run: find . -name '*.log' -print0 | xargs -0 cat
+

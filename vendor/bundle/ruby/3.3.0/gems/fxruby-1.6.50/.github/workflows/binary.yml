@@ -1,0 +1,93 @@
+name: Binary gems
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 3" # At 05:00 on Wednesday # https://crontab.guru/#0_5_*_*_3
+
+jobs:
+  job_build_x64:
+    name: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "aarch64-mingw-ucrt"
+          - platform: "x64-mingw-ucrt"
+          - platform: "x64-mingw32"
+          - platform: "x86-mingw32"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+      - run: bundle install
+
+      - name: Build binary gem
+        run: bundle exec rake gem:${{ matrix.platform }}
+
+      - name: Upload binary gem
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-gem-${{ matrix.platform }}
+          path: pkg/*.gem
+
+  job_test_binary:
+    name: Test on Windows
+    needs: job_build_x64
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-11-arm
+            ruby: "4.0"
+            platform: "aarch64-mingw-ucrt"
+          - os: windows-latest
+            ruby: "4.0"
+            platform: "x64-mingw-ucrt"
+          - os: windows-latest
+            ruby: "3.1.7-1"
+            platform: "x86-mingw32"
+          - os: windows-latest
+            ruby: "3.0"
+            platform: "x64-mingw32"
+
+    runs-on: ${{ matrix.os }}
+    env:
+      PGVERSION: ${{ matrix.PGVERSION }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        if: matrix.platform != 'x86-mingw32'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+
+      - name: Set up 32 bit x86 Ruby
+        if: matrix.platform == 'x86-mingw32'
+        run: |
+          $(new-object net.webclient).DownloadFile("https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-${{ matrix.ruby }}/rubyinstaller-devkit-${{ matrix.ruby }}-x86.exe", "$pwd/ruby-setup.exe")
+          cmd /c ruby-setup.exe /currentuser /verysilent /dir=C:/Ruby-${{ matrix.ruby }}
+          echo "c:/ruby-${{ matrix.ruby }}/bin"  | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          c:/ruby-${{ matrix.ruby }}/bin/ridk install 3
+
+      - name: Download gem from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-gem-${{ matrix.platform }}
+
+      - run: echo $env:PATH
+      - run: bundle install
+      - run: gem install --local fxruby-*${{ matrix.platform }}.gem --verbose
+      - name: Run specs
+        run: ruby -w -W2 -rfox16 test/TS_All.rb -v
+
+      - name: Print logs if job failed
+        if: ${{ failure() && matrix.os == 'windows-latest' }}
+        run: |
+          ridk enable
+          find "$(ruby -e"puts RbConfig::CONFIG[%q[libdir]]")" -name mkmf.log -print0 | xargs -0 cat

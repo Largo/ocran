@@ -1,0 +1,10 @@
+--title "Ruby Facets"
+--readme README.rdoc
+--protected
+--private
+--tag uncommon:Uncommon
+--tag standard:Standard
+lib/core
+lib/standard
+-
+[A-Z]*.*
