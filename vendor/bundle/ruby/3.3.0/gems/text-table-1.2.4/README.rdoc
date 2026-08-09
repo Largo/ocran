@@ -1,0 +1,197 @@
+= text-table
+{<img src="https://badge.fury.io/rb/text-table.png" alt="Gem Version" />}[https://rubygems.org/gems/text-table]
+{<img src="https://secure.travis-ci.org/aptinio/text-table.png" alt="Build Status" />}[http://travis-ci.org/aptinio/text-table]
+{<img src="https://codeclimate.com/github/aptinio/text-table.png" alt="Code Climate" />}[https://codeclimate.com/github/aptinio/text-table]
+
+A feature-rich, easy-to-use plain text table formatter.
+
+
+== Introduction
+
+Allows you to easily create and format plain text tables,
+useful when working with the terminal
+or when you want to quickly print formatted tables to a dot-matrix printer.
+
+Text::Table is compatible with Ruby 1.8.6, 1.8.7 and 1.9.1 and includes a comprehensive test suite.
+
+
+== Install
+
+    gem install text-table
+
+
+== Examples
+
+    require 'text-table'
+
+    table = Text::Table.new
+    table.head = ['A', 'B']
+    table.rows = [['a1', 'b1']]
+    table.rows << ['a2', 'b2']
+
+    table.to_s
+
+    #    +----+----+
+    #    | A  | B  |
+    #    +----+----+
+    #    | a1 | b1 |
+    #    | a2 | b2 |
+    #    +----+----+
+
+You can also pass an options hash when instantiating a Text::Table:
+
+    table = Text::Table.new(:head => ['A', 'B'], :rows => [['a1', 'b1'], ['a2', 'b2']])
+
+
+== Calling the <tt>to_table</tt> Method
+
+Just call the <tt>to_table</tt> method (or <tt>to_text_table</tt> if the former is already defined) on Arrays (and other Enumerables).
+
+    array = [
+      ['Student', 'Mid-Terms', 'Finals'],
+      ['Sam', 94, 93],
+      ['Jane', 92, 99],
+      ['Average', 93, 96]
+    ]
+
+    puts array.to_table
+
+    #    +---------+-----------+--------+
+    #    | Student | Mid-Terms | Finals |
+    #    | Sam     | 94        | 93     |
+    #    | Jane    | 92        | 99     |
+    #    | Average | 93        | 96     |
+    #    +---------+-----------+--------+
+
+You could specify that the first row is the table heading.
+
+    puts array.to_table(:first_row_is_head => true)
+
+    #    +---------+-----------+--------+
+    #    | Student | Mid-Terms | Finals |
+    #    +---------+-----------+--------+
+    #    | Sam     | 94        | 93     |
+    #    | Jane    | 92        | 99     |
+    #    | Average | 93        | 96     |
+    #    +---------+-----------+--------+
+
+You could also specify that the last row is the table footer.
+
+    puts array.to_table(:first_row_is_head => true, :last_row_is_foot => true)
+
+    #    +---------+-----------+--------+
+    #    | Student | Mid-Terms | Finals |
+    #    +---------+-----------+--------+
+    #    | Sam     | 94        | 93     |
+    #    | Jane    | 92        | 99     |
+    #    +---------+-----------+--------+
+    #    | Average | 93        | 96     |
+    #    +---------+-----------+--------+
+
+
+== Aligning Cells and Spanning Columns
+
+Alignment and column span can be specified by passing a cell as a Hash object.
+
+The acceptable aligments are <tt>:left</tt>, <tt>:center</tt> and <tt>:right</tt>.
+
+Cells and footers are aligned to the left by default, while headers are centered by default.
+
+    table = Text::Table.new
+    table.head = ['Heading A', 'Heading B']
+    table.rows << ['a1', 'b1']
+    table.rows << ['a2', {:value => 'b2', :align => :right}]
+    table.rows << ['a3', 'b3']
+    table.rows << [{:value => 'a4', :colspan => 2, :align => :center}]
+
+    puts table
+
+    #    +-----------+-----------+
+    #    | Heading A | Heading B |
+    #    +-----------+-----------+
+    #    | a1        | b1        |
+    #    | a2        |        b2 |
+    #    | a3        | b3        |
+    #    |          a4           |
+    #    +-----------+-----------+
+
+There's also an easy way to align columns:
+
+    table = Text::Table.new :rows => [%w(a bb), %w(aa bbb), %w(aaa b)]
+    puts table
+
+    #    +-----+-----+
+    #    | a   | bb  |
+    #    | aa  | bbb |
+    #    | aaa | b   |
+    #    +-----+-----+
+
+    table.align_column 2, :right
+
+    #    +-----+-----+
+    #    | a   |  bb |
+    #    | aa  | bbb |
+    #    | aaa |   b |
+    #    +-----+-----+
+
+Note that headers, spanned cells and cells with explicit alignments are not affected by <tt>align_column</tt>.
+
+
+== Adding a Separator
+
+You can add a separator by inserting <tt>:separator</tt> symbols between the rows.
+
+    Text::Table.new :rows => [
+      ['a', 'b'],
+      ['c', 'd'],
+      :separator,
+      ['e', 'f'],
+      :separator,
+      ['g', 'h']
+    ]
+
+    #    +---+---+
+    #    | a | b |
+    #    | c | d |
+    #    +---+---+
+    #    | e | f |
+    #    +---+---+
+    #    | g | h |
+    #    +---+---+
+
+
+== Other Options
+
+Cell padding and table boundaries can be modified.
+
+    Text::Table.new :rows => [['a', 'b'], ['c', 'd']],
+                    :horizontal_padding    => 3,
+                    :vertical_boundary     => '=',
+                    :horizontal_boundary   => ':',
+                    :boundary_intersection => 'O'
+
+    #    O=======O=======O
+    #    :   a   :   b   :
+    #    :   c   :   d   :
+    #    O=======O=======O
+
+
+== Special Thanks
+
+This project was inspired by visionmedia's terminal-table, and to a lesser-extent, by prawn, ruport and hirb.
+I've decided to start a new project, primarily as an exercise, and to be able to model-out the classes differently.
+Thanks to the authors and contributors of these projects.
+
+
+== Contributors
+
+* Claudio Bustos (clbustos[http://github.com/clbustos])
+  * Fix Ruby 1.9 warnings on shadowed outer local variables
+
+* Kaoru Maeda (mad-p[https://github.com/mad-p])
+  * Fixed performance issue with large number of rows
+
+
+== Copyright
+
+Copyright (c) 2009 Aaron Tinio. See LICENSE for details.

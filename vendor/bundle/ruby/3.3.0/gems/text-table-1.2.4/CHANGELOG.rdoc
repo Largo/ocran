@@ -1,0 +1,25 @@
+=== 1.2.3 (2013-04-15)
+
+* Fixed performance issue with large number of rows (thanks Kaoru Maeda)
+
+=== 1.2.2 (2010-03-29)
+
+* Fixed Ruby 1.9 warnings on shadowed outer local variables (thanks Claudio Bustos)
+
+=== 1.2.1 (2010-01-05)
+
+* Initialize a Text::Table with an empty array for its rows as default.
+
+=== 1.2.0 (2010-01-05)
+
+* Added an easy way to align columns.
+* Fixed compatibility with Ruby 1.8.6
+
+=== 1.1.0 (2009-12-28)
+
+* Centered headers by default.
+* Revamped specs and made them more extensive.
+
+=== 1.0.1 (2009-12-21)
+
+* Initial stable release.

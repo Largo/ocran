@@ -1533,6 +1533,26 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Test that -I and -r entries in RUBYOPT that refer to absolute
+  # build-machine paths are translated into the package via a generated
+  # launcher script (GitHub issue #20). The require and the load path
+  # must work at runtime, and the translated entries must not survive
+  # in the baked RUBYOPT.
+  def test_rubyopt_path_translation
+    with_fixture 'rubyoptpath' do
+      libdir = File.expand_path('lib')
+      rubyopt = "-I#{libdir} -r#{File.join(libdir, 'preload')}"
+      with_env "RUBYOPT" => rubyopt do
+        assert system("ruby", ocran, "rubyoptpath.rb", "lib/mylib.rb", "lib/preload.rb", *DefaultArgs)
+        exe = exe_name("rubyoptpath")
+        pristine_env exe do
+          assert system(exe)
+          assert_equal "preloaded=true;mylib=hi", File.read("output.txt")
+        end
+      end
+    end
+  end
+
   def test_exit
     with_fixture 'exit' do
       assert_system("ruby", ocran, "exit.rb", *DefaultArgs)
