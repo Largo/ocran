@@ -628,12 +628,56 @@ class TestOcran < Minitest::Test
       assert_equal :incompatible,
                    Ocran::Direction.cosmo_gem_disposition(source, [])[0]
 
+      # A payload can provide a library without having a gemspec for it:
+      # extensions linked into the APE (and its embedded stdlib) answer
+      # require with nothing under specifications/. Such a gem must be
+      # skipped like any other the payload provides, not reported as
+      # incompatible - the latter refuses builds that would have worked.
+      seen = []
+      provides = ->(features) { seen.concat(features); features.include?("prebuilt") }
+      assert_equal :payload_provides,
+                   Ocran::Direction.cosmo_gem_disposition(prebuilt, [], provides)[0]
+      assert_equal ["prebuilt"], seen
+      assert_equal :incompatible,
+                   Ocran::Direction.cosmo_gem_disposition(source, [], provides)[0]
+
+      # A dash in a gem name is a directory separator in its feature name.
+      dashed = Gem::Specification.new { |s| s.name = "io-console"; s.version = "1.0" }
+      assert_equal ["io-console", "io/console"], Ocran::Direction.cosmo_gem_features(dashed)
+
       # Build messages name the reason a gem counts as native
       assert_match(/prebuilt_native\.so/,
                    Ocran::Direction.cosmo_native_reason(prebuilt, Ocran::Direction.gem_native_binaries(prebuilt)))
       assert_match(/extensions/,
                    Ocran::Direction.cosmo_native_reason(source, Ocran::Direction.gem_native_binaries(source)))
     end
+  end
+
+  # The payload probe behind that disposition: which features a
+  # cosmopolitan Ruby can resolve out of its own embedded stdlib and gems.
+  # It has to see libraries that have no gemspec - both a .rb in the
+  # embedded stdlib and an extension linked into the binary, which
+  # resolves to a bare "<name>.so" - and it must not run their code.
+  def test_cosmo_resolvable_features
+    skip "--cosmo-ruby requires a POSIX build host" if Gem.win_platform?
+    cosmo_ruby = find_cosmo_ruby
+    skip "cosmopolitan Ruby not found (set COSMO_RUBY to a ruby.com APE)" unless cosmo_ruby
+    unless defined? Ocran::CosmoToolchain
+      load File.expand_path("../lib/ocran/cosmo_toolchain.rb", __dir__)
+    end
+
+    gem_names = Ocran::CosmoToolchain.query_ruby(cosmo_ruby)[:gem_names]
+    # pathname and cgi are part of every Ruby, but a cosmopolitan build
+    # carries them without a gemspec - which is exactly the case the
+    # gemspec-name check gets wrong.
+    without_gemspec = %w[pathname cgi] - gem_names
+    skip "this payload has gemspecs for pathname and cgi" if without_gemspec.empty?
+
+    found = Ocran::CosmoToolchain.resolvable_features(
+      cosmo_ruby, [*without_gemspec, "no-such-library-4f2c1a"]
+    )
+    assert_equal without_gemspec, found
+    assert_empty Ocran::CosmoToolchain.resolvable_features(cosmo_ruby, [])
   end
 
   # End-to-end: a PRECOMPILED PLATFORM gem (sqlite3-x.y.z-x86_64-linux-gnu)

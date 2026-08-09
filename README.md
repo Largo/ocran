@@ -861,6 +861,178 @@ file:
       end
     end
 
+### Packaging a Rails application
+
+A Rails application with a SQLite database packages into a single
+executable that serves HTTP. `test/test_rails.rb` builds one from scratch
+on every run (`rails new`, `bin/rails generate scaffold`, plus controllers
+and views written on the fly), packages it and drives a full CRUD round
+trip through the resulting binary; read it as the worked example. It is
+opt-in — run it with `OCRAN_RAILS_TEST=1 ruby -Itest test/test_rails.rb`.
+
+Write a small entry script next to `config/` (Rails' own `config.ru` is
+for a Rack server, not for OCRAN) and point OCRAN at it together with the
+directories Rails reads at run time:
+
+    ocran server.rb app config db public --no-autoload --gem-all
+
+Four things are worth knowing before you try it.
+
+**`--no-autoload` is required.** OCRAN's autoload walker sweeps every
+`Module` in `ObjectSpace` and tries to `const_get` each autoloaded
+constant. Under Rails that means dragging in `I18n::Tests`,
+`Prism::Translation` and everything else the framework declares but never
+loads — minutes of output ending in an error. In production Rails eager
+loads the application itself, so the walker has nothing to contribute.
+
+**`--gem-all` is required.** Dependency detection is `$LOADED_FEATURES`
+based, and Rails reads a great deal it never `require`s. The first thing
+to break without it is `activesupport/lib/active_support/locale/en.rb`,
+which I18n reads as a data file during boot. For the same reason the
+application's own `app`, `config`, `db` and `public` directories have to
+be named on the command line: ERB templates, `database.yml`, locale files
+and migrations are not `require`d and so are invisible to the dependency
+run.
+
+**Gems Rails declares but never loads still have to be inside.** OCRAN
+packs the gemspec of every gem it detects, and RubyGems activates the
+complete declared dependency graph of a gemspec, not just the code you
+actually load. `activesupport` declares `minitest` and `drb`, `railties`
+declares `rake`; a running server loads none of them, so nothing puts them
+in the package, and the executable then dies at startup with
+`Gem::MissingSpecError`. Require them from the entry script:
+
+    begin
+      gem "minitest", "~> 5.0"  # 5.x has no dependencies of its own
+    rescue Gem::LoadError
+    end
+    require "minitest"  # activesupport
+    require "drb"       # activesupport
+    require "rake"      # railties
+
+To find the equivalent list for your own application, boot it and diff the
+declared dependencies against what is loaded:
+
+    Gem.loaded_specs.each_value do |spec|
+      spec.runtime_dependencies.each do |dep|
+        puts "#{dep.name} <- #{spec.name}" unless Gem.loaded_specs.key?(dep.name)
+      end
+    end
+
+**Bundler.** The dependency run happens inside the OCRAN process, so a
+`bundler/setup` in `config/boot.rb` confines it to your bundle; use
+`--gemfile` to point OCRAN at the same `Gemfile`. The test takes the other
+route and removes Bundler from the generated application entirely, letting
+RubyGems activate the gems, which is why it needs neither `bundle install`
+nor the network.
+
+#### Where the database goes
+
+**Not inside the package.** With the native stub the application directory
+is a temporary directory that is created at every start and deleted when
+the process exits: a database written there is thrown away. With
+`--cosmo-ruby` it is a read-only ZIP store inside the executable and the
+write simply fails.
+
+Put mutable state next to the executable instead, using
+`ENV["OCRAN_EXECUTABLE"]` (see [Environment variables](#environment-variables)),
+and tell Rails about it before `config/environment` is loaded:
+
+    base = ENV["OCRAN_EXECUTABLE"] ? File.dirname(File.expand_path(ENV["OCRAN_EXECUTABLE"])) : __dir__
+    data_dir = File.join(base, "myapp-data")
+    FileUtils.mkdir_p(data_dir)
+
+    ENV["DATABASE_URL"] ||= "sqlite3:#{File.join(data_dir, "app.sqlite3")}"
+
+`DATABASE_URL` is the cleanest lever, because `config/database.yml`
+resolves relative paths against `Rails.root`, which is inside the package.
+The same applies to everything else Rails writes:
+
+* **tmp** (cache, pids, sockets) — set `config.paths["tmp"]`, or avoid it
+  altogether with `config.cache_store = :memory_store`.
+* **log** — the generated production environment already logs to stdout;
+  if yours does not, set `config.logger` explicitly.
+* **Active Storage** — point `config.active_storage.service` at a root
+  under your data directory.
+
+Ship the schema in the package and apply it on first run, rather than
+shipping a prebuilt database file:
+
+    ActiveRecord::MigrationContext.new(Rails.root.join("db/migrate").to_s).migrate
+
+Calling this during the dependency run as well is what gets
+`db/migrate/*.rb` into `$LOADED_FEATURES`, and therefore into the package.
+
+#### Rails as a single portable executable (`--cosmo-ruby`)
+
+The same application packages into one Actually Portable Executable that
+runs on Linux, macOS, Windows and the BSDs without an installed Ruby:
+
+    ocran server.rb app config db public --no-autoload --gem-all \
+      --cosmo-ruby /path/to/ruby.com
+
+No compiler is involved: `--cosmo-ruby` on its own selects the ZIP mode,
+in which the application is injected into the interpreter's own ZIP store.
+Nothing is unpacked at run time — the application is read straight out of
+the executable. A Rails 8.1 application built this way measures **39.0 MB
+and answers its first request 1.8 s after launch**, against 50.4 MB and
+1.5 s for the same application in a native OCRAN executable.
+
+An APE cannot `dlopen`, so **every native extension has to be compiled
+into the interpreter you point at**. For Rails that is `sqlite3`,
+`nokogiri` (and with it libxml2 and libxslt), `puma`, `nio4r`,
+`bigdecimal` and `racc`. CosmoRuby has had all of them since 4.0.6;
+against an interpreter that has not, the build stops before producing
+anything, naming the gem:
+
+    ERROR: Gem nokogiri-1.19.4-x86_64-linux-gnu is native (ships prebuilt
+    binaries (nokogiri.so)) and cannot run under the packed cosmopolitan
+    Ruby (x86_64-cosmo, static)
+
+OCRAN drops the host copy of each gem the payload provides and lets the
+payload's own serve. It recognises those either by a gemspec in the
+payload or, failing that, by asking the payload whether it can resolve the
+gem's primary feature at all: an extension linked into the binary, or a
+library in its embedded stdlib (`cgi` and `pathname` are both), answers
+`require` with no gemspec anywhere.
+
+**One real limitation remains, and it is cryptographic.** CosmoRuby's
+`openssl` is a shim over MbedTLS: no `OpenSSL::Cipher`, no
+`OpenSSL::HMAC`, no PBKDF2, no `OpenSSL::Digest` class hierarchy. Rails
+does not merely use those, it *names* them at load time — `require "rails"`
+by itself dies on
+
+    active_support/message_encryptor.rb:116:in '<class:MessageEncryptor>':
+    uninitialized constant OpenSSL::Cipher (NameError)
+
+so an application packaged for such an interpreter has to do three things.
+`test/rails_app_generator.rb` does all three, and the file it writes,
+`openssl_gap.rb`, is a no-op on a Ruby with a complete `openssl`:
+
+* **Fill in the missing pieces before Rails loads.** HMAC, PBKDF2,
+  `OpenSSL.fixed_length_secure_compare` and an `OpenSSL::Digest` class
+  hierarchy are a few lines each on top of Ruby's own `Digest`, and they
+  are the real algorithms. `OpenSSL::Cipher` is not: it exists so that
+  Rails can name the constant, and raises if anything tries to encrypt
+  with it. A fake cipher would be worse than no cipher.
+* **Set `SECRET_KEY_BASE`, and ship no `config/credentials.yml.enc`.**
+  Reading credentials decrypts them with AES-256-GCM and fails with
+  `OpenSSL::Cipher::CipherError`. Dropping the file is the right move in
+  any case: packaging it means packaging `config/master.key` beside it,
+  i.e. handing the key to everyone who gets a copy of the executable.
+* **Keep the session off the cookie.** Rails' default `CookieStore`
+  encrypts the session cookie, so it cannot work either;
+  `config.session_store :cache_store` keeps the session server-side and
+  puts only its id in the cookie. Signed cookies, the CSRF token and
+  everything else that needs no more than an HMAC keep working, and a full
+  scaffold CRUD round trip with CSRF token and session cookie is what the
+  test drives through the packaged `.com`.
+
+Active Record encryption, encrypted cookies and anything else that
+actually encrypts stay out of reach until CosmoRuby's `openssl` grows a
+cipher surface — mbedtls has AES, GCM and PKCS5, so it is a bounded job;
+it is tracked in `PORTING-NOTES.md` in the CosmoRuby repository.
+
 ## See elsewhere
 
 - [State of Ruby Packagers](https://gist.github.com/YOU54F/3775e66e6090e0371c11601e6b75c305)

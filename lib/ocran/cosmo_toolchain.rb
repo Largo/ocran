@@ -163,6 +163,45 @@ module Ocran
         gem_names: gem_names.to_s.split(",") }
     end
 
+    # Which of the given feature names (the strings passed to
+    # Kernel#require) the payload can resolve out of its own embedded
+    # stdlib and gems. Returns the subset it can, in the given order.
+    #
+    # This is what makes the gemspec name in query_ruby's gem_names a
+    # sufficient but not a necessary condition for "the payload provides
+    # this gem": an extension that is statically linked into the APE, or
+    # a library that lives in its embedded stdlib rather than in
+    # /zip/lib/ruby/gems, answers require without owning a gemspec.
+    #
+    # Resolution goes through $LOAD_PATH.resolve_feature_path, which
+    # consults exactly the same search that require does - including
+    # built-in extensions, which resolve to a bare "foo.so" with no
+    # directory - but does not run any of the code it finds, so probing
+    # cannot have side effects. Ruby answers a missing feature with nil
+    # or with LoadError depending on the version; both mean "not
+    # provided".
+    def resolvable_features(ruby, features)
+      features = Array(features).map(&:to_s).reject(&:empty?).uniq
+      return [] if features.empty?
+
+      script = <<~'RUBY'
+        ARGV.each do |feature|
+          begin
+            puts feature if $LOAD_PATH.resolve_feature_path(feature)
+          rescue LoadError
+            # not provided
+          end
+        end
+      RUBY
+      out = IO.popen([{ "GEM_HOME" => nil, "GEM_PATH" => nil, "RUBYOPT" => nil, "RUBYLIB" => nil },
+                      "/bin/sh", ruby, "-e", script, *features],
+                     err: IO::NULL, &:read)
+      return [] unless $?.success?
+
+      found = out.to_s.split("\n")
+      features & found
+    end
+
     # Resolves the path given on the command line to the cosmocc compiler
     # driver. Accepts either the cosmocc executable itself, the toolchain
     # installation directory (containing bin/cosmocc), or its bin directory.
