@@ -1,0 +1,44 @@
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fiddle-1.1.8/ext/fiddle
+/usr/bin/ruby3.3 -I/usr/lib/ruby/vendor_ruby extconf.rb
+checking for --enable-debug-build option... no
+checking for pkg-config for libffi... [" ", "", "-lffi"]
+checking for pkg-config for libffi... "3.4.8"
+checking for ffi.h... yes
+checking for -lffi... yes
+libffi_version: 3.4.8
+checking for sys/mman.h... yes
+checking for link.h... yes
+checking for dlfcn.h... yes
+checking for -ldl... yes
+checking for dlopen()... yes
+checking for dlclose()... yes
+checking for dlsym()... yes
+checking for dlerror()... yes
+checking for dlinfo()... yes
+checking for RTLD_DI_LINKMAP in dlfcn.h... yes
+checking for FFI_STDCALL in ffi.h... no
+checking signedness of size_t... unsigned
+checking for rb_str_to_interned_str()... yes
+creating Makefile
+
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fiddle-1.1.8/ext/fiddle
+make DESTDIR\= sitearchdir\=./.gem.20260809-1258886-t1h5gg sitelibdir\=./.gem.20260809-1258886-t1h5gg clean
+
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fiddle-1.1.8/ext/fiddle
+make DESTDIR\= sitearchdir\=./.gem.20260809-1258886-t1h5gg sitelibdir\=./.gem.20260809-1258886-t1h5gg
+compiling closure.c
+compiling conversions.c
+compiling fiddle.c
+compiling function.c
+compiling handle.c
+compiling memory_view.c
+compiling pinned.c
+compiling pointer.c
+linking shared-object fiddle.so
+
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fiddle-1.1.8/ext/fiddle
+make DESTDIR\= sitearchdir\=./.gem.20260809-1258886-t1h5gg sitelibdir\=./.gem.20260809-1258886-t1h5gg install
+/usr/bin/install -c -m 0755 fiddle.so ./.gem.20260809-1258886-t1h5gg
+
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fiddle-1.1.8/ext/fiddle
+make DESTDIR\= sitearchdir\=./.gem.20260809-1258886-t1h5gg sitelibdir\=./.gem.20260809-1258886-t1h5gg clean

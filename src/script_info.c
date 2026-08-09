@@ -163,7 +163,8 @@ static char **shallow_merge_argv(char *argv1[], char *argv2[])
     return outv;
 }
 
-bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
+bool RunScript(char *argv[], bool is_chdir_to_script_dir,
+               const char *chdir_dir, int *exit_code)
 {
     if (!IsScriptInfoSet()) {
         APP_ERROR("Script info is not initialized");
@@ -202,6 +203,7 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
         goto cleanup;
     }
 
+    const char *target_dir = NULL;
     if (is_chdir_to_script_dir) {
         script_dir = GetParentPath(script_name);
         if (!script_dir) {
@@ -213,8 +215,19 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir, int *exit_code)
             "Changing working directory to script directory '%s'",
             script_dir
         );
+        target_dir = script_dir;
+    } else if (chdir_dir) {
+        DEBUG(
+            "Changing working directory to '%s'",
+            chdir_dir
+        );
+        target_dir = chdir_dir;
+    }
 
-        char *ruby_optv[5] = { script_info[0], "-C", script_dir, "--", NULL };
+    if (target_dir) {
+        char *ruby_optv[5] = {
+            script_info[0], "-C", (char *)target_dir, "--", NULL
+        };
         char **new_argv = shallow_merge_argv(ruby_optv, merged_argv + 1);
         if (!new_argv) {
             APP_ERROR("Failed to merge script arguments with extra arguments");

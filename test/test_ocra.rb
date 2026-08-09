@@ -1683,6 +1683,26 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Test that -I and -r entries in RUBYOPT that refer to absolute
+  # build-machine paths are translated into the package via a generated
+  # launcher script (GitHub issue #20). The require and the load path
+  # must work at runtime, and the translated entries must not survive
+  # in the baked RUBYOPT.
+  def test_rubyopt_path_translation
+    with_fixture 'rubyoptpath' do
+      libdir = File.expand_path('lib')
+      rubyopt = "-I#{libdir} -r#{File.join(libdir, 'preload')}"
+      with_env "RUBYOPT" => rubyopt do
+        assert system("ruby", ocran, "rubyoptpath.rb", "lib/mylib.rb", "lib/preload.rb", *DefaultArgs)
+        exe = exe_name("rubyoptpath")
+        pristine_env exe do
+          assert system(exe)
+          assert_equal "preloaded=true;mylib=hi", File.read("output.txt")
+        end
+      end
+    end
+  end
+
   def test_exit
     with_fixture 'exit' do
       assert_system("ruby", ocran, "exit.rb", *DefaultArgs)
@@ -1837,6 +1857,40 @@ class TestOcran < Minitest::Test
         # If the script ran in its inst directory, then our working dir still shouldn't have any output.txt
         refute File.exist?("output.txt")
       end
+    end
+  end
+
+  # Test that the --chdir-exe-dir option starts the script with its working
+  # directory set to the directory containing the executable, regardless of
+  # where the executable is invoked from (issue #32).
+  def test_chdir_exe_dir
+    with_fixture 'writefile' do
+      assert system("ruby", ocran, "writefile.rb", *(DefaultArgs + ["--chdir-exe-dir"]))
+      exe = exe_name("writefile")
+      assert File.exist?(exe)
+      pristine_env exe do
+        exe_dir = Dir.pwd
+        exe_path = File.expand_path(exe)
+        refute File.exist?("output.txt")
+        # Invoke the executable from a different working directory
+        mkdir "elsewhere"
+        cd "elsewhere" do
+          assert system(exe_path)
+          refute File.exist?("output.txt"),
+                 "output.txt must not be created in the invoker's working directory"
+        end
+        assert File.exist?(File.join(exe_dir, "output.txt")),
+               "output.txt must be created next to the executable"
+      end
+    end
+  end
+
+  # --chdir-first and --chdir-exe-dir are mutually exclusive.
+  def test_chdir_exe_dir_conflicts_with_chdir_first
+    with_fixture 'writefile' do
+      refute system("ruby", ocran, "writefile.rb",
+                    *(DefaultArgs + ["--chdir-first", "--chdir-exe-dir"]),
+                    err: File::NULL, out: File::NULL)
     end
   end
 

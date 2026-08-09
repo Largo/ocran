@@ -16,6 +16,7 @@ module Ocran
         :macosx_bundle => nil,
         :macosx_bundle? => false,
         :chdir_before? => false,
+        :chdir_exe_dir? => false,
         :cosmo_cc => nil,
         :cosmo_ruby => nil,
         :cosmo_zip? => false,
@@ -106,8 +107,12 @@ Executable options:
 --windows          Force Windows application (rubyw.exe)
 --console          Force console application (ruby.exe)
 --chdir-first      When exe starts, change working directory to app dir.
+--chdir-exe-dir    When exe starts, change working directory to the directory
+                   containing the executable itself.
 --icon <ico>       Replace icon with a custom one.
---rubyopt <str>    Set the RUBYOPT environment variable when running the executable
+--rubyopt <str>    Set the RUBYOPT environment variable when running the executable.
+                   -I/-r entries with absolute build-machine paths are
+                   translated to their packed locations at build time.
 --debug            Executable will be verbose.
 --debug-extract    Executable will unpack to local dir and not delete after.
 
@@ -197,6 +202,8 @@ EOF
           @options[:load_autoload?] = false
         when "--chdir-first"
           @options[:chdir_before?] = true
+        when "--chdir-exe-dir"
+          @options[:chdir_exe_dir?] = true
         when "--icon"
           path = argv.shift
           raise "Icon file #{path} not found" unless path && File.exist?(path)
@@ -292,6 +299,10 @@ EOF
         @options[:macosx_bundle] = Pathname(bundle_base).sub_ext(".app").expand_path
       end
 
+      if chdir_before? && chdir_exe_dir?
+        raise "--chdir-first and --chdir-exe-dir cannot be used together"
+      end
+
       @options[:use_inno_setup?] = !!inno_setup_script
 
       @options[:verbose?] &&= !quiet?
@@ -370,6 +381,7 @@ EOF
 
     def chdir_before? = @options[__method__]
 
+    def chdir_exe_dir? = @options[__method__]
     def cosmo_cc = @options[__method__]
 
     def cosmo_ruby = @options[__method__]
