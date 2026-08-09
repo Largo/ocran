@@ -44,7 +44,11 @@ module Ocran
       end
 
       exit unless @option.run_script?
-      apply_gemfile_to_bundler_env if @option.gemfile
+      if @option.gemfile
+        apply_gemfile_to_bundler_env
+      else
+        warn_about_foreign_bundle
+      end
       say "Loading script to check dependencies"
       $PROGRAM_NAME = @option.script.to_s
     end
@@ -81,7 +85,29 @@ module Ocran
       # Gemfile we were given.
       verbose "Rebinding Bundler from #{active} to #{gemfile}"
       Bundler.reset!
-      $LOADED_FEATURES.delete_if { |feature| feature.match?(%r{[\\/]bundler[\\/]setup\.rb\z}) }
+      $LOADED_FEATURES.delete_if { |feature| feature.match?(RuntimeEnvironment::BUNDLER_SETUP_FEATURE) }
+    end
+
+    # Without --gemfile the dependency run inherits whatever bundle the
+    # environment carries, and when that is some other project's bundle the
+    # script's own gems are simply absent. The failure that follows is a
+    # LoadError from deep inside the script, which says nothing about the
+    # bundle being the wrong one, so say it here while the reason is still
+    # visible.
+    def warn_about_foreign_bundle
+      # Only when a bundle really is set up. BUNDLE_GEMFILE alone is
+      # inherited by any child process and governs nothing on its own.
+      return unless @pre_env.bundler_setup_loaded?
+
+      active = active_bundler_gemfile
+      return if active.nil? || active.empty?
+
+      app_gemfile = @option.application_gemfile
+      return if app_gemfile && same_file?(active, app_gemfile)
+
+      warning "Running under Bundler with #{active}, which is not the Gemfile " \
+              "#{@option.script} runs under" +
+              (app_gemfile ? "; pass --gemfile #{app_gemfile} to package against that bundle" : "")
     end
 
     # The Gemfile this process was started against, if any.

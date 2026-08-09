@@ -107,7 +107,58 @@ class TestOcran < Minitest::Test
   def initialize(*args)
     super(*args)
     @ocran = File.expand_path(File.join(File.dirname(__FILE__), '..', 'exe', TESTED_OCRAN))
+    # Keep the OCRAN processes these tests spawn out of the suite's own
+    # bundle, so that what they package is decided by the fixture and not by
+    # OCRAN's development dependencies.
+    #
+    # Clearing RUBYOPT used to be enough: that was the only way `bundle exec`
+    # handed a bundle to a child. Current Bundler versions hand it over
+    # through BUNDLER_SETUP instead - RubyGems requires the file it names at
+    # interpreter startup - so with RUBYOPT alone every child was still set
+    # up inside OCRAN's bundle, and every executable built here carried all
+    # 37 gems of it. The `bundle exec` cases are tested deliberately instead,
+    # by building that environment back up (see bundle_exec_env).
     ENV['RUBYOPT'] = ""
+    ENV.delete('BUNDLER_SETUP')
+  end
+
+  # Environment variables that turn a child process into one running under
+  # `bundle exec`. Asked of Bundler itself rather than assumed: which of
+  # them carries the bundle has changed between versions, and a test that
+  # guesses wrong quietly stops testing anything.
+  BUNDLE_EXEC_VARS = %w[
+    RUBYOPT RUBYLIB BUNDLE_GEMFILE BUNDLE_LOCKFILE BUNDLER_SETUP
+    BUNDLER_VERSION BUNDLE_BIN_PATH
+  ].freeze
+
+  # The environment `bundle exec` sets for the given Gemfile, or nil when
+  # that bundle cannot be used here (Bundler missing, gems not installed),
+  # so callers can skip rather than fail.
+  def bundle_exec_env(gemfile)
+    dump = 'ENV.each { |name, value| puts "#{name}=#{value}" }'
+    output, status = capture_system({ "BUNDLE_GEMFILE" => gemfile.to_s },
+                                    "bundle", "exec", "ruby", "-e", dump)
+    return nil unless status&.success?
+
+    env = output.lines.filter_map { |line|
+      name, _, value = line.chomp.partition("=")
+      [name, value] if BUNDLE_EXEC_VARS.include?(name)
+    }.to_h
+
+    # A bundle that is not actually set up would make these tests pass for
+    # the wrong reason.
+    return nil unless env["BUNDLER_SETUP"] || env["RUBYOPT"].to_s.include?("bundler/setup")
+
+    env
+  end
+
+  # The environment of a real `bundle exec` against OCRAN's own Gemfile:
+  # the shape CI itself runs in, and the one a developer is in when they
+  # package one project from inside another project's bundle.
+  def foreign_bundle_env
+    env = bundle_exec_env(File.join(OcranRoot, "Gemfile"))
+    skip "OCRAN's own bundle is not installed; cannot build a bundle exec environment" unless env
+    env
   end
 
   # Sets up an directory with a copy of a fixture and yields to the
@@ -1017,6 +1068,83 @@ class TestOcran < Minitest::Test
       pristine_env exe do
         assert_system(exe)
       end
+    end
+  end
+
+  # `bundle exec ocran app.rb --gemfile Gemfile` from inside a different
+  # project's bundle. --gemfile has to decide the dependency run, or the
+  # application's own gems - a `path:` gem above all, which exists nowhere
+  # but its Gemfile - are simply absent (github issue #34).
+  #
+  # The ambient bundle here is OCRAN's own, which is what a developer is
+  # inside when they package something from a checkout, and what CI itself
+  # runs in.
+  def test_bundle_exec_foreign_bundle_honors_gemfile
+    env = foreign_bundle_env
+
+    with_fixture 'localgem' do
+      assert_system(env, "ruby", ocran, "localgem.rb",
+                    *(DefaultArgs + ["--gemfile", "Gemfile", "--no-autodll"]))
+      exe = exe_name("localgem")
+      pristine_env exe do
+        assert_system(exe)
+      end
+    end
+  end
+
+  # ... and the bundle OCRAN was started under must not be packed along
+  # with it. `bundle exec` activates every gem of its bundle before OCRAN
+  # runs a single line, so RubyGems describes the build machine as much as
+  # the application; packing that adds the whole development bundle to an
+  # application that runs under a different Gemfile and can never load any
+  # of it.
+  #
+  # --output-dir is used because the packed gem directory can be listed.
+  def test_bundle_exec_does_not_pack_the_foreign_bundle
+    env = foreign_bundle_env
+    foreign = %w[hoe minitest fxruby glimmer-dsl-libui]
+
+    with_fixture 'localgem' do
+      assert_system(env, "ruby", ocran, "localgem.rb",
+                    *(DefaultArgs + ["--gemfile", "Gemfile", "--no-autodll", "--output-dir", "out"]))
+      packed = Dir.children(File.join("out", "gems", "gems"))
+
+      assert packed.any? { |name| name.start_with?("mylocal-") },
+             "the application's own path: gem is missing, packed: #{packed.inspect}"
+      foreign.each do |name|
+        refute packed.any? { |packed_name| packed_name.start_with?("#{name}-") },
+               "#{name} comes from the build environment's bundle, not the application's, " \
+               "but was packed: #{packed.inspect}"
+      end
+    end
+  end
+
+  # Without --gemfile the dependency run inherits whatever bundle the
+  # environment carries. When that is not the application's, say so: the
+  # failure that follows is a LoadError from inside the script, which does
+  # not mention Bundler at all.
+  def test_bundle_exec_foreign_bundle_warns_without_gemfile
+    env = foreign_bundle_env
+
+    with_fixture 'helloworld' do
+      output, status = capture_system(env, "ruby", ocran, "helloworld.rb", *DefaultArgs)
+      assert status&.success?, "build failed: #{output}"
+      assert_match(/WARNING: Running under Bundler with .*Gemfile, which is not the Gemfile/, output)
+    end
+  end
+
+  # The application's own bundle is left alone: run from the directory the
+  # Gemfile belongs to, `bundle exec ocran app.rb` is the ordinary case and
+  # there is nothing foreign to warn about.
+  def test_bundle_exec_own_bundle_is_not_warned_about
+    with_fixture 'localgem' do
+      env = bundle_exec_env(File.expand_path("Gemfile"))
+      skip "the fixture's bundle cannot be set up here" unless env
+
+      output, status = capture_system(env, "ruby", ocran, "localgem.rb",
+                                      *(DefaultArgs + ["--no-autodll"]))
+      assert status&.success?, "build failed: #{output}"
+      refute_match(/which is not the Gemfile/, output)
     end
   end
 
