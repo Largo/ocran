@@ -274,16 +274,92 @@ class TestOcran < Minitest::Test
     end
   end
 
-  # --cosmo-ruby without --cosmo is rejected at option parsing: the APE
-  # payload needs an APE launcher stub, which needs a cosmocc toolchain.
-  def test_cosmo_ruby_requires_cosmo
+  # Toolchain discovery precedence, so that --cosmo-ruby alone is enough:
+  # an explicit --cosmo path beats everything, then the COSMOCC
+  # environment variable, then cosmocc in PATH, then the conventional
+  # install locations (newest version first); a clear error when nothing
+  # is found. Runs with fake toolchains, no real cosmocc needed.
+  def test_cosmo_toolchain_discovery
+    # Kernel#load, guarded: Ocran::Option loads this file the same way (see
+    # Option#load_cosmo_toolchain), and mixing load with require_relative
+    # would run the file twice and warn about redefined constants.
+    unless defined? Ocran::CosmoToolchain
+      load File.expand_path("../lib/ocran/cosmo_toolchain.rb", __dir__)
+    end
+    with_tmpdir do
+      # Four fake toolchains, one per discovery mechanism. The conventional
+      # location holds two versions to check that the newest one wins.
+      %w[explicit/bin env/bin pathdir home/.cosmocc/3.9.2/bin
+         home/.cosmocc/4.0.10/bin].each do |dir|
+        mkdir_p dir
+        cc = File.join(dir, "cosmocc")
+        File.write(cc, "#!/bin/sh\n")
+        File.chmod(0755, cc)
+      end
+      explicit = File.expand_path("explicit/bin/cosmocc")
+      from_env = File.expand_path("env/bin/cosmocc")
+      from_path = File.expand_path("pathdir/cosmocc")
+      newest = File.expand_path("home/.cosmocc/4.0.10/bin/cosmocc")
+      home = File.expand_path("home")
+      full = { "COSMOCC" => File.expand_path("env"), "PATH" => File.expand_path("pathdir"),
+               "HOME" => home }
+
+      # An explicit --cosmo overrides every discovered toolchain, so a
+      # development or CI toolchain can be used instead of the host's.
+      assert_equal explicit, Ocran::CosmoToolchain.require_cc(File.expand_path("explicit"), full)
+      # COSMOCC beats PATH beats the conventional locations.
+      assert_equal from_env, Ocran::CosmoToolchain.require_cc(nil, full)
+      assert_equal from_path, Ocran::CosmoToolchain.require_cc(nil, full.reject { |k, _| k == "COSMOCC" })
+      assert_equal newest, Ocran::CosmoToolchain.require_cc(nil, { "HOME" => home, "PATH" => "" })
+
+      # A COSMOCC that does not name a toolchain is an error, not a silent
+      # fallback to some other toolchain on the machine.
+      err = assert_raises(RuntimeError) do
+        Ocran::CosmoToolchain.require_cc(nil, full.merge("COSMOCC" => File.expand_path("nope")))
+      end
+      assert_match(/COSMOCC=.*does not name a usable cosmocc toolchain/, err.message)
+
+      # Nothing anywhere: the message has to name all the ways to fix it.
+      # Only checkable when this machine has no cosmocc in a system-wide
+      # conventional location (/opt/cosmocc, ...).
+      mkdir_p "emptyhome"
+      empty = { "HOME" => File.expand_path("emptyhome"), "PATH" => File.expand_path("emptyhome") }
+      unless Ocran::CosmoToolchain.conventional_cc(empty)
+        err = assert_raises(RuntimeError) { Ocran::CosmoToolchain.require_cc(nil, empty) }
+        assert_match(/no cosmocc toolchain found/, err.message)
+        assert_match(/COSMOCC/, err.message)
+        assert_match(/PATH/, err.message)
+        assert_match(/--cosmo/, err.message)
+        assert_match(/cosmo\.zip/, err.message)
+      end
+    end
+  end
+
+  # --cosmo-ruby alone is a complete command line: the cosmocc toolchain is
+  # inferred (here from COSMOCC), and the output defaults to the APE .com
+  # extension just as with an explicit --cosmo.
+  def test_cosmo_ruby_infers_toolchain
+    skip "--cosmo-ruby requires a POSIX build host" if Gem.win_platform?
     require_relative "../lib/ocran/option"
     with_fixture "helloworld" do
       File.binwrite("fake-ruby.com", "MZqFpD='\n")
-      err = assert_raises(RuntimeError) do
-        Ocran::Option.new.parse(["helloworld.rb", "--cosmo-ruby", "fake-ruby.com"])
+      mkdir_p "toolchain/bin"
+      cc = File.expand_path("toolchain/bin/cosmocc")
+      File.write(cc, "#!/bin/sh\n")
+      File.chmod(0755, cc)
+
+      saved = ENV["COSMOCC"]
+      begin
+        ENV["COSMOCC"] = File.expand_path("toolchain")
+        option = Ocran::Option.new
+        option.parse(["helloworld.rb", "--cosmo-ruby", "fake-ruby.com"])
+      ensure
+        saved.nil? ? ENV.delete("COSMOCC") : ENV["COSMOCC"] = saved
       end
-      assert_match(/--cosmo-ruby requires --cosmo/, err.message)
+
+      assert_equal cc, option.cosmo_cc
+      assert_equal File.expand_path("fake-ruby.com"), option.cosmo_ruby
+      assert_equal ".com", option.output_executable.extname
     end
   end
 
@@ -315,10 +391,32 @@ class TestOcran < Minitest::Test
     end
   end
 
-  # End-to-end --cosmo-ruby build: the produced .com bundles an APE stub
-  # AND an APE Ruby, so in an isolated environment (env -i, empty dir)
-  # the app must run under the EMBEDDED x86_64-cosmo interpreter — not
-  # the build host's Ruby.
+  # End-to-end single-option build: --cosmo-ruby on its own, with the
+  # cosmocc toolchain discovered from the environment instead of being
+  # named on the command line. This is the headline form of the feature,
+  # so it gets the full isolation check: the produced .com must run under
+  # the EMBEDDED x86_64-cosmo interpreter in an empty directory with an
+  # empty environment.
+  def test_cosmo_ruby_helloworld_single_option
+    cosmocc, cosmo_ruby = cosmo_ruby_prereqs
+    with_fixture "cosmoruby" do
+      assert system({ "COSMOCC" => cosmocc }, "ruby", ocran, "cosmoruby.rb",
+                    *DefaultArgs, "--cosmo-ruby", cosmo_ruby)
+      assert File.exist?("cosmoruby.com")
+      assert_equal "MZqFpD", File.binread("cosmoruby.com", 6)
+      pristine_env "cosmoruby.com" do
+        out = `env -i ./cosmoruby.com`
+        assert $?.success?, "cosmoruby.com failed, output: #{out}"
+        assert_match(/x86_64-cosmo/, out)
+        refute_match(/#{Regexp.escape(RUBY_PLATFORM)}/, out) unless RUBY_PLATFORM.include?("cosmo")
+      end
+    end
+  end
+
+  # End-to-end --cosmo-ruby build with an explicit --cosmo toolchain (the
+  # override path): the produced .com bundles an APE stub AND an APE Ruby,
+  # so in an isolated environment (env -i, empty dir) the app must run
+  # under the EMBEDDED x86_64-cosmo interpreter — not the build host's Ruby.
   def test_cosmo_ruby_helloworld
     cosmocc, cosmo_ruby = cosmo_ruby_prereqs
     with_fixture "cosmoruby" do
