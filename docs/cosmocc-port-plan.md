@@ -90,15 +90,34 @@ resolves the executable path on every OS the APE runs on.
 
 ## Build integration
 
-* **Build-at-packaging-time (implemented):** `ocran script.rb --cosmo
-  <path-to-toolchain>` compiles the stub sources with the given cosmocc
-  during the packaging run and packages the app with the fresh APE stub
-  (default output extension `.com`). Implementation:
-  `lib/ocran/cosmo_toolchain.rb` (path resolution, compile via `make -C
-  src stub CC=cosmocc` in a temp copy of `src/`, compiler output
-  surfaced on failure, results cached in `~/.cache/ocran` keyed on
-  toolchain + source hash). The binary platform gems now ship `src/` so
-  this works from an installed gem, not just a checkout.
+* **Build-at-packaging-time (implemented):** the stub sources are
+  compiled with cosmocc during the packaging run and the app is packaged
+  with the fresh APE stub (default output extension `.com`).
+  Implementation: `lib/ocran/cosmo_toolchain.rb` (path resolution,
+  compile via `make -C src stub CC=cosmocc` in a temp copy of `src/`,
+  compiler output surfaced on failure, results cached in `~/.cache/ocran`
+  keyed on toolchain + source hash). The binary platform gems now ship
+  `src/` so this works from an installed gem, not just a checkout.
+* **Toolchain discovery (implemented):** the toolchain does not have to
+  be named on the command line. `CosmoToolchain.find_cc` looks at the
+  `COSMOCC` environment variable (authoritative — a broken value is an
+  error, not a silent fallback), then `cosmocc` in `PATH`, then the
+  conventional install locations in `CONVENTIONAL_CC_PATHS`
+  (`~/.cosmocc/*/bin/cosmocc`, `~/cosmocc/*/bin/cosmocc`,
+  `/opt/cosmocc/*/bin/cosmocc`, `/opt/cosmo/bin/cosmocc`,
+  `/usr/local/cosmocc/bin/cosmocc`; versioned directories sort newest
+  first). `--cosmo <path>` remains an explicit override that always wins,
+  and is what a stub developer, CI job or newer-toolchain user reaches
+  for. The lookup runs during option parsing
+  (`Option#parse`, `CosmoToolchain.require_cc`), so a missing toolchain
+  fails before the dependency run, with a message naming the environment
+  variable, `PATH`, the conventional locations and the download URL.
+  Consequence: **`ocran app.rb --cosmo-ruby ruby.com` is a complete
+  command line** — one option, everything else inferred.
+* Shipping a *prebuilt* APE stub inside the gem was considered as an
+  alternative (one APE stub is valid for every target OS, so it would
+  remove the toolchain requirement entirely) and rejected: it adds
+  ~700 KB to every gem for a feature most users never touch.
 * Manual: `make -C src CC=cosmocc` with `cosmocc` on `PATH`
   (single ~440 MB zip from <https://cosmo.zip/pub/cosmocc/cosmocc.zip>).
 * CI sketch (phase 1): a Linux job that caches the pinned cosmocc zip,
@@ -108,10 +127,12 @@ resolves the executable path on every OS the APE runs on.
 
 ## Cosmopolitan Ruby as the payload (`--cosmo-ruby`)
 
-Phase 2 of the effort: `ocran app.rb --cosmo <toolchain> --cosmo-ruby
-<ruby.com>` packages a cosmopolitan-built Ruby APE as the bundled
-interpreter, so the produced `.com` contains **both** an APE stub and an
-APE Ruby — no host-native code at all. Verified end-to-end on Linux
+Phase 2 of the effort: `ocran app.rb --cosmo-ruby <ruby.com>` packages a
+cosmopolitan-built Ruby APE as the bundled interpreter, so the produced
+`.com` contains **both** an APE stub and an APE Ruby — no host-native
+code at all. The cosmocc toolchain for the stub is discovered on the
+build host (see "Build integration" above); `--cosmo <toolchain>` may be
+added to pin a specific one. Verified end-to-end on Linux
 against a cosmopolitan Ruby 4.0.0 build (`+PRISM +MIMALLOC`,
 `x86_64-cosmo`, statically linked extensions).
 
@@ -175,7 +196,9 @@ against a cosmopolitan Ruby 4.0.0 build (`+PRISM +MIMALLOC`,
 
 ### Limitations (v1)
 
-* Console-only, POSIX build hosts only (inherited from `--cosmo`).
+* Console-only, POSIX build hosts only, and a cosmocc toolchain must be
+  installed on the build host (it compiles the APE launcher stub);
+  no toolchain is needed on the machines that *run* the result.
 * Native-extension gems cannot be used at all unless the payload
   provides them.
 * Host-vs-payload version skew is only warned about, not resolved; a
@@ -194,7 +217,7 @@ Beyond the fixtures, a small but realistic application (`logstat`, an
 access-log analyzer: 8 source files, `thor` + `terminal-table` +
 `unicode-display_width` + `unicode-emoji` + `rainbow`, and `csv`,
 `json`, `yaml`, `zlib`, `digest`, `stringio` from the stdlib) was packed
-with `--cosmo --cosmo-ruby` and the **same 10.9 MB `.com`** run on Linux
+with `--cosmo-ruby` and the **same 10.9 MB `.com`** run on Linux
 and on a Windows 11 x64 VM. Both produced byte-identical reports and the
 same exit codes (0/1/2/3), including gzip-compressed input, a
 `Marshal`+`Zlib` data file inside a gem (`display_width.marshal.gz`),
@@ -397,11 +420,21 @@ Windows story depends on which `ruby.com` gets bundled.
   pure-Ruby gem, each run isolated with `env -i` and asserting
   `x86_64-cosmo`. Cross-OS execution of the produced `.com` remains
   untested (next phase).
+* **Phase 2.1 (done) — one option instead of two.** `--cosmo-ruby` no
+  longer needs a companion `--cosmo`: the toolchain is discovered from
+  `COSMOCC`, `PATH` or a conventional install location, so
+  `ocran app.rb --cosmo-ruby ruby.com` is the whole command line.
+  `--cosmo <path>` stays as an explicit override (and still works on its
+  own, packaging the host Ruby behind an APE stub). Covered by
+  `test_cosmo_toolchain_discovery` (precedence and error message),
+  `test_cosmo_ruby_infers_toolchain` (option-level inference) and the
+  single-option end-to-end test
+  `test_cosmo_ruby_helloworld_single_option`.
 * **Phase 2.5 (Windows verified; macOS untested)** — Exercise the
   packed APE stub on Windows and macOS runners: payload discovery
   (risk 1), process launch of a real packed Ruby (risk 2), temp-dir
   semantics (risk 5). Verified manually on a Windows 11 x64 VM
-  (PowerShell 5.1): a `--cosmo --cosmo-ruby` hello-world prints the
+  (PowerShell 5.1): a `--cosmo-ruby` hello-world prints the
   `x86_64-cosmo` description, receives argv, propagates the script's
   exit code verbatim to `$LASTEXITCODE`, and cleans up its extraction
   directory; the stdlib (json/yaml) fixture also passes. Two Windows
