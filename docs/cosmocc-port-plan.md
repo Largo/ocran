@@ -367,6 +367,174 @@ same tree runs the identical application fine. Both work on Linux, so
 this is a payload regression, not an OCRAN one — but it means the
 Windows story depends on which `ruby.com` gets bundled.
 
+## Compiler-free packaging: injecting into the interpreter's ZIP store
+
+Everything above launches the application through a **launcher stub**:
+an APE compiled with cosmocc that carries the interpreter and the
+application as an appended payload and unpacks them into a temporary
+directory at every start. That design costs a compiler at packaging time
+and ~21 MB of I/O at every launch.
+
+CosmoRuby now runs an embedded `/zip/main.rb`: if the member exists in
+the interpreter's own ZIP store, the binary executes it, with the
+command line in `ARGV`, `$0`/`__FILE__` = `/zip/main.rb`, `__dir__` =
+`/zip`, and `COSMORUBY_NO_ZIP_MAIN=1` as the opt-out. `$LOAD_PATH` is
+not touched, so `require_relative` works throughout the archive but
+plain `require` does not until something unshifts.
+
+That turns packaging into a file operation: **copy `ruby.com`, append
+the application to its ZIP archive**. No cosmocc, no stub, no
+extraction.
+
+### Option surface
+
+None added. `--cosmo-ruby <ruby.com>` picks this mode when the given
+interpreter supports the hook, and falls back to the launcher stub when
+it does not; `--cosmo <toolchain>` next to it means "use the stub", the
+reading it already had. Output formats that are not a single binary
+(`--output-dir`, `--output-zip`, `--innosetup`, `--macosx-bundle`) keep
+the stub too.
+
+Detection reads the binary and looks for the string
+`COSMORUBY_NO_ZIP_MAIN`, the name of the opt-out variable, which only a
+build implementing the hook contains (`Ocran::CosmoToolchain
+.zip_main_support?`). A behavioral probe would mean copying 21 MB,
+injecting a script and running it — an order of magnitude more work for
+the same answer, and a build that never looks at the variable cannot
+produce a false positive. Verified against both builds on hand: the
+zip-main build matches, the released fat build does not.
+
+### Layout inside the archive
+
+```
+/zip/main.rb              generated bootstrap (the interpreter's entry point)
+/zip/ocran/src/...        application sources and packed resources
+/zip/ocran/gems/...       pure-Ruby gems (GEM_HOME/GEM_PATH)
+/zip/ocran/lib/ruby/...   files packed relative to the Ruby prefix
+```
+
+`main.rb` must be at the archive root — that is the interpreter's
+contract. Everything else is under `ocran/` because `/zip/bin` and
+`/zip/lib/ruby` already belong to the interpreter's own standard
+library; a shared namespace would let a packed file shadow part of it
+(OCRAN packs gemspecs relative to the Ruby prefix, so the collision is
+not hypothetical). The prefix makes it structurally impossible, and
+below it the tree is exactly what the extraction mode would have written
+to a temp directory, so `Direction` needs no separate layout — only a
+different builder (`ZipPayloadBuilder` instead of `StubBuilder`). File
+selection, native-gem rejection and payload-provides-gem detection are
+untouched.
+
+`ZipPayloadBuilder` also generates `main.rb`, which does what the stub
+does after extracting, but from inside the running process: the
+environment variables the stub would export are applied by their runtime
+equivalents (`RUBYLIB` → `$LOAD_PATH.unshift`, `GEM_HOME`/`GEM_PATH` →
+set + `Gem.clear_paths`, `RUBYOPT`'s `-I`/`-r` → replayed), then the
+script is run with `Kernel#load` after setting `$PROGRAM_NAME`, so
+`__FILE__ == $0` guards fire.
+
+### Writing the archive
+
+`Ocran::ZipWriter`, ~200 lines on top of Zlib. Shelling out to `zip` was
+rejected: OCRAN packages on Windows build hosts, where it does not
+exist. Adding rubyzip was rejected: OCRAN has one runtime dependency
+(fiddle) and this needs the 1989 subset of the format.
+
+Appending means: read the end-of-central-directory record, cut the file
+at the start of the central directory, write the new local headers
+there, write the **original central directory bytes unchanged** (every
+offset in them is still valid, nothing before it moved), then the
+central directory records for the new members, then a fresh EOCD. The
+executable part of the APE, which lives before all of this, stays
+byte-identical. ZIP64 archives and archives with data after the EOCD are
+refused rather than corrupted, and a member that would shadow an
+existing name is an error.
+
+Two things had to be discovered empirically, by diffing against an
+archive the `zip` command produced:
+
+* **UNIX file-type bits are mandatory.** zipos reports the external
+  attributes as `st_mode`. With plain permission bits (`0644`) the
+  members are found and `File.read` works — but `Kernel#load` refuses
+  them, because Ruby checks `S_ISREG`, and `Dir.glob` returns nothing,
+  because the directories are not directories. Entries are written with
+  `0100644`/`040755`.
+* **Parent directory entries must exist.** zipos builds directory
+  listings from the members it can see, so `ZipWriter` synthesizes the
+  missing intermediate entries.
+
+Proof that Cosmopolitan reads what OCRAN writes is empirical: the
+packaged applications below run, and `unzip -t` validates the archive.
+
+### Measured (2026-08-09)
+
+The `logstat` field-test CLI from the section above (8 files, thor +
+terminal-table + rainbow + unicode-display_width, cosmopolitan Ruby
+4.0.6), average of 10 runs:
+
+| Build | Size | Startup Linux | Startup Windows 11 |
+|---|---|---|---|
+| ZIP packaging | 21.5 MB | 0.23 s | 0.49 s |
+| Launcher stub `--no-lzma` | 22.8 MB | 0.24 s | 1.09 s |
+| Launcher stub, LZMA (default) | 11.3 MB | 0.79 s | 1.52 s |
+
+`strace` shows the ZIP build issuing **no** `mkdir` at all; the stub
+build creates `/tmp/ocranXXXXXX` with the full tree on every run.
+Killing a running application (`kill -9`) leaves a 21 MB directory
+behind in stub mode and nothing in ZIP mode — the leak documented above
+cannot occur when nothing is written. On Linux with a warm page cache
+an uncompressed stub build is nearly as fast as ZIP packaging; the
+0.79 s figure that motivated this work is LZMA decompression, and it is
+the default. Windows pays both costs.
+
+### Behavior differences (all specific to this mode)
+
+| | Launcher stub | ZIP packaging |
+|---|---|---|
+| `$0`, `__FILE__`, `__dir__` | temp extraction dir | `/zip/ocran/src/...` |
+| `ENV["OCRAN_EXECUTABLE"]` | full path of the `.com` | same (`RbConfig.ruby`, which the interpreter resolves to its own image) |
+| Writable application dir | yes (temp) | no — the archive is read-only |
+| `--chdir-first` | into the application dir | into the executable's directory (`Dir.chdir("/zip")` returns `ENOTSUP`) |
+| Leading `-x` argument | reaches `ARGV` | parsed by the interpreter (use `--`) |
+| `RUBYOPT` | exported before launch | only `-I`/`-r` can be replayed |
+| Exit code on Windows | correct | multiplied by 256 |
+| `--icon`, `--debug-extract` | honored | no effect |
+
+The `__dir__` change is the one that matters for issue #32: an
+application that keeps a config file *next to the executable* is
+unaffected, because `OCRAN_EXECUTABLE` still means exactly that (the
+`logstat` fixture reads its `logstat.yml` this way and works unchanged
+on Linux and Windows). An application that (incorrectly) used `__dir__`
+for that purpose breaks loudly here instead of quietly picking up a file
+from a temp directory.
+
+Two of these are interpreter bugs rather than OCRAN limitations, worth
+fixing in CosmoRuby:
+
+1. **Argument parsing.** With an embedded main, the interpreter should
+   not parse its own options at all — every argument should go to
+   `ARGV`. Today `app.com --verbose` is consumed by Ruby ("invalid
+   option"), while `app.com run --verbose` and `app.com -- --verbose`
+   work, because option parsing stops at the first positional argument.
+2. **Exit codes on Windows.** `exit 3` produces `$LASTEXITCODE` 768.
+   This is *not* caused by the hook: plain `ruby.com script.rb` with
+   `exit 3` does the same, and `exit!` does not help, so no workaround
+   is possible from Ruby. The launcher stub avoids it only because it
+   calls `ExitProcess()` with the child's plain code (see Phase 2.5).
+
+### Not addressed
+
+* **Windows build hosts.** `--cosmo-ruby` still refuses to run on
+  Windows. ZIP packaging removes the cosmocc requirement, which was the
+  hard blocker, but the payload query still goes through `/bin/sh` and
+  the whole path is untested there. Lifting the restriction is a small,
+  separate change.
+* **Code signing.** Modifying the APE invalidates any signature it had;
+  the artifact would have to be signed after packaging.
+* **Compression.** The executable must stay runnable, so it cannot be
+  LZMA-compressed as a whole. Individual members are deflated. This is
+  the entire size difference against the default stub build.
+
 ## Risks / open questions
 
 1. **APE file format vs. appended payload.** An APE is itself a
@@ -453,7 +621,27 @@ Windows story depends on which `ruby.com` gets bundled.
      parents saw 1792 instead of 7. The cosmo stub now calls
      `ExitProcess()` directly on Windows with the plain code.
   Not yet automated in CI (manual VM run), and macOS remains untested.
+* **Phase 2.6 (done — compiler-free packaging)** — package by injecting
+  the application into the interpreter's own ZIP store instead of
+  building a launcher stub, when the given cosmopolitan Ruby runs an
+  embedded `/zip/main.rb` (see the dedicated section above). No cosmocc,
+  no `make`, no extraction: startup 0.79 s → 0.23 s on Linux and
+  1.52 s → 0.49 s on Windows, and no temporary directory exists to be
+  leaked. No new command-line option: `--cosmo-ruby <ruby.com>` alone
+  selects it, `--cosmo <toolchain>` forces the stub. Covered by
+  `test_cosmo_zip_main_detection`, `test_cosmo_zip_option_surface`,
+  `test_zip_writer_append` (all unconditional) and the gated
+  `test_cosmo_zip_end_to_end` / `test_cosmo_zip_gem`, which build the
+  application with `COSMOCC` deliberately unset and assert ARGV, exit
+  code, packed resources, `OCRAN_EXECUTABLE`, and that nothing is
+  written to `TMPDIR`. Verified by hand on Linux and a Windows 11 VM
+  with the `logstat` field-test CLI. Two interpreter-side bugs remain
+  (leading option-shaped arguments, Windows exit codes), and Windows
+  build hosts are still refused.
 * **Phase 3** — Decide the product story: keep cosmocc as a
   cross-platform *console* stub built from POSIX sources (mingw keeps
   `stubw` + signing), or go further and make the APE stub a first-class
-  packaging target (requires resolving risks 1–5).
+  packaging target (requires resolving risks 1–5). The compiler-free
+  ZIP packaging of Phase 2.6 is the strongest candidate for the
+  recommended cosmo workflow: it is the only one of the three that
+  needs no toolchain on the build host and writes nothing on the target.
