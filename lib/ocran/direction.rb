@@ -26,11 +26,81 @@ module Ocran
 
     include BuildConstants, CommandOutput, HostConfigHelper
 
+    # Packed name of the interpreter when a cosmopolitan Ruby payload is
+    # used (--cosmo-ruby); the source APE is packed under this name.
+    COSMO_RUBY_EXE = "ruby.com"
+
+    # File name extensions of loadable native binaries that a gem may
+    # ship or build. None of them can be loaded by the cosmopolitan Ruby
+    # payload, which is statically linked and has no dlopen.
+    NATIVE_BINARY_EXTENSIONS = %w[.so .bundle .dll].freeze
+
+    # Native binaries a gem ships or has had built for it, i.e. the files
+    # that make it unusable under the cosmopolitan Ruby payload.
+    #
+    # spec.extensions alone does NOT identify a native gem: a precompiled
+    # platform gem (e.g. sqlite3-2.9.5-x86_64-linux-gnu) has an empty
+    # extensions array because nothing is compiled at install time, yet it
+    # ships a prebuilt sqlite3_native.so inside its lib directory. Both the
+    # gem directory and the extension directory (where RubyGems puts the
+    # products of a source build) are scanned.
+    def self.gem_native_binaries(spec)
+      ext_dir =
+        begin
+          spec.extension_dir
+        rescue StandardError
+          nil
+        end
+      pattern = "**/*{#{NATIVE_BINARY_EXTENSIONS.join(",")}}"
+      [spec.gem_dir, ext_dir].compact.uniq.flat_map { |dir|
+        next [] unless File.directory?(dir)
+
+        Dir.glob(pattern, base: dir).map { |rel| Pathname(File.join(dir, rel)) }
+      }.uniq
+    end
+
+    # Decides how a gem detected on the build host has to be treated when
+    # a cosmopolitan Ruby payload is packed (--cosmo-ruby). Returns a pair
+    # of a disposition and the gem's native binaries:
+    #
+    #   [:pack, []]                  pure Ruby gem, pack it as usual
+    #   [:payload_provides, files]   native, but the payload ships the same
+    #                                gem itself: skip the host copy and let
+    #                                the payload's own version serve
+    #   [:incompatible, files]       native and not provided by the payload:
+    #                                the build must fail
+    def self.cosmo_gem_disposition(spec, payload_gem_names)
+      native_files = gem_native_binaries(spec)
+      return [:pack, native_files] if spec.extensions.empty? && native_files.empty?
+
+      if payload_gem_names.include?(spec.name)
+        [:payload_provides, native_files]
+      else
+        [:incompatible, native_files]
+      end
+    end
+
+    # Human readable reason why a gem counts as native, for build messages.
+    def self.cosmo_native_reason(spec, native_files)
+      reasons = []
+      reasons << "declares native extensions" if spec.extensions.any?
+      if native_files.any?
+        names = native_files.map { |file| File.basename(file) }.uniq
+        reasons << "ships prebuilt binaries (#{names.join(", ")})"
+      end
+      reasons.join(" and ")
+    end
+
     attr_reader :ruby_executable, :rubyopt
 
     def initialize(post_env, pre_env, option)
       @post_env, @pre_env, @option = post_env, pre_env, option
-      @ruby_executable = @option.windowed? ? rubyw_exe : ruby_exe
+      @ruby_executable =
+        if @option.cosmo_ruby
+          COSMO_RUBY_EXE
+        else
+          @option.windowed? ? rubyw_exe : ruby_exe
+        end
 
       # Initializes @rubyopt with the user-intended RUBYOPT environment variable.
       # This ensures that RUBYOPT matches the user's initial settings before any
@@ -151,13 +221,35 @@ module Ocran
       # Store the currently loaded files
       features = normalized_features
 
+      # With --cosmo-ruby, run the payload interpreter once on the build
+      # host: this validates that it works, provides its embedded gem
+      # directory (needed for GEM_PATH below) and its version for the
+      # host-vs-payload skew warning. Dependency detection has already
+      # run under the *host* Ruby, so stdlib/gem resolution may differ
+      # when the versions diverge.
+      if @option.cosmo_ruby
+        # Kernel#load, matching Option#load_cosmo_toolchain: the file may
+        # already have been loaded that way at option-parse time, and
+        # require_relative would then run it a second time.
+        load File.expand_path("cosmo_toolchain.rb", __dir__) unless defined? CosmoToolchain
+        @cosmo_ruby_info = CosmoToolchain.query_ruby(@option.cosmo_ruby)
+        say "Packaging cosmopolitan Ruby #{@cosmo_ruby_info[:version]} (#{@option.cosmo_ruby})"
+        if RUBY_VERSION.split(".").take(2) != @cosmo_ruby_info[:version].split(".").take(2)
+          warning "Dependency detection ran under the host Ruby #{RUBY_VERSION}, but the packed cosmopolitan Ruby is #{@cosmo_ruby_info[:version]}; stdlib and gem behavior may differ between these versions"
+        end
+      end
+
       # If net/http was loaded but openssl wasn't (it is only required lazily
       # at the point of an actual HTTPS connection), require it now inside the
       # OCRAN build process so that every transitive dependency — openssl.rb,
       # digest.so, and any other files pulled in by the extension — appears in
       # $LOADED_FEATURES and gets bundled alongside the application.
+      # Skipped with --cosmo-ruby: the payload interpreter carries its own
+      # (statically linked) openssl, and the host's files would be excluded
+      # from the package anyway.
       openssl_so = Pathname(RbConfig::CONFIG["archdir"]) / "openssl.so"
-      if openssl_so.exist? &&
+      if !@option.cosmo_ruby &&
+          openssl_so.exist? &&
           features.any? { |f| f.to_posix.end_with?("/net/http.rb") } &&
           features.none? { |f| f == openssl_so }
         say "Auto-loading openssl (net/http loaded but openssl not yet required)"
@@ -175,39 +267,56 @@ module Ocran
 
       # Add the ruby executable and DLL
       say "Adding ruby executable #{ruby_executable}"
-      ruby_source = bindir / ruby_executable
-      if !Gem.win_platform? && File.binread(ruby_source, 2) == "#!"
-        # On some distros (e.g. Fedora), bindir/ruby is a dispatcher shell
-        # script ("rubypick") rather than the interpreter itself, which
-        # cannot run on a system without Ruby. Pack the currently running
-        # interpreter binary under the expected name instead.
-        real_ruby = Pathname("/proc/self/exe")
-        raise "#{ruby_source} is a wrapper script and the real interpreter could not be determined" unless real_ruby.exist?
-
-        say "#{ruby_source} is a wrapper script; packing #{real_ruby.realpath} instead"
-        builder.copy_to_bin(real_ruby.realpath, ruby_executable)
+      if @option.cosmo_ruby
+        # The cosmopolitan Ruby APE is fully self-contained: a static
+        # binary with the standard library embedded in its ZIP store
+        # (/zip/lib/ruby/...). No libruby, no shared libraries and no
+        # LD_LIBRARY_PATH are needed — pack the single file and be done.
+        #
+        # Except in ZIP packaging mode, where the output IS that binary and
+        # the application is injected into it: packing a copy of the
+        # interpreter into itself would double the size of the executable
+        # for nothing.
+        if @option.cosmo_zip?
+          say "Injecting the application into the ZIP store of #{@option.cosmo_ruby}"
+        else
+          builder.copy_to_bin(Pathname(@option.cosmo_ruby), ruby_executable)
+        end
       else
-        builder.copy_to_bin(ruby_source, ruby_executable)
-      end
-      if libruby_so
-        # On POSIX systems, libruby.so is in libdir; on Windows, it's in bindir
-        libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
-        builder.copy_to_bin(libruby_src, libruby_so)
+        ruby_source = bindir / ruby_executable
+        if !Gem.win_platform? && File.binread(ruby_source, 2) == "#!"
+          # On some distros (e.g. Fedora), bindir/ruby is a dispatcher shell
+          # script ("rubypick") rather than the interpreter itself, which
+          # cannot run on a system without Ruby. Pack the currently running
+          # interpreter binary under the expected name instead.
+          real_ruby = Pathname("/proc/self/exe")
+          raise "#{ruby_source} is a wrapper script and the real interpreter could not be determined" unless real_ruby.exist?
 
-        # On POSIX systems, create symlinks (aliases) for libruby.so
-        unless Gem.win_platform?
-          libruby_aliases.each do |libruby_alias|
-            builder.symlink_in_bin(libruby_so, libruby_alias)
+          say "#{ruby_source} is a wrapper script; packing #{real_ruby.realpath} instead"
+          builder.copy_to_bin(real_ruby.realpath, ruby_executable)
+        else
+          builder.copy_to_bin(ruby_source, ruby_executable)
+        end
+        if libruby_so
+          # On POSIX systems, libruby.so is in libdir; on Windows, it's in bindir
+          libruby_src = Gem.win_platform? ? bindir / libruby_so : libdir / libruby_so
+          builder.copy_to_bin(libruby_src, libruby_so)
+
+          # On POSIX systems, create symlinks (aliases) for libruby.so
+          unless Gem.win_platform?
+            libruby_aliases.each do |libruby_alias|
+              builder.symlink_in_bin(libruby_so, libruby_alias)
+            end
           end
         end
-      end
 
-      # On POSIX systems, set LD_LIBRARY_PATH to find bundled shared libraries
-      unless Gem.win_platform?
-        extract_bin = File.join(EXTRACT_ROOT, BINDIR.to_s)
-        builder.export("LD_LIBRARY_PATH", extract_bin)
-        if RUBY_PLATFORM.include?("darwin")
-          builder.export("DYLD_LIBRARY_PATH", extract_bin)
+        # On POSIX systems, set LD_LIBRARY_PATH to find bundled shared libraries
+        unless Gem.win_platform?
+          extract_bin = File.join(EXTRACT_ROOT, BINDIR.to_s)
+          builder.export("LD_LIBRARY_PATH", extract_bin)
+          if RUBY_PLATFORM.include?("darwin")
+            builder.export("DYLD_LIBRARY_PATH", extract_bin)
+          end
         end
       end
 
@@ -247,8 +356,8 @@ module Ocran
       # points LD_LIBRARY_PATH at the packed bin directory). Core glibc
       # libraries and the loader are never bundled - they must come from the
       # target system. Ruby native extensions are packed as features, not
-      # here.
-      if RUBY_PLATFORM.include?("linux") && @option.auto_detect_dlls?
+      # here. Not needed with --cosmo-ruby: the APE payload is static.
+      if RUBY_PLATFORM.include?("linux") && @option.auto_detect_dlls? && !@option.cosmo_ruby
         feature_set = features.to_set
         feature_realpaths = features.filter_map { |f| f.realpath rescue nil }.to_set
         # Ruby native extensions live in these directories and are packed as
@@ -319,6 +428,11 @@ module Ocran
         end
       end
 
+      # Gem directories whose packing was skipped because the cosmopolitan
+      # Ruby payload provides the gem itself; loaded features from these
+      # directories must not be packed either.
+      cosmo_skipped_gem_dirs = []
+
       # Searches for features that are loaded from gems, then produces a
       # list of files included in those gems' manifests. Also returns a
       # list of original features that caused those gems to be included.
@@ -331,6 +445,46 @@ module Ocran
         unless spec_file.file?
           verbose "Gem #{spec.full_name} root folder was not found, skipping"
           next []
+        end
+
+        if @option.cosmo_ruby
+          # Default gems of the *host* Ruby are part of its stdlib; the
+          # cosmopolitan Ruby ships its own stdlib and default/bundled
+          # gems in its embedded ZIP store, so do not pack them (a host
+          # 3.x copy would shadow the payload's version).
+          if spec.respond_to?(:default_gem?) && spec.default_gem?
+            verbose "Skipping default gem #{spec.full_name} (provided by the cosmopolitan Ruby's embedded stdlib)"
+            next []
+          end
+          # Native gems compile (or were precompiled) against a host Ruby
+          # ABI and platform; they cannot load under the x86_64-cosmo
+          # payload, which is statically linked and cannot dlopen. This
+          # covers both source-installed gems (spec.extensions) and
+          # precompiled platform gems, which declare no extensions but
+          # ship their .so inside the gem directory.
+          # When the payload provides the same gem itself (e.g. json,
+          # psych are statically linked into the APE), skip the host copy
+          # so the payload's own version is used — packing the host .rb
+          # files would shadow the payload's and could mismatch the
+          # linked-in C extension. Otherwise fail clearly rather than
+          # produce a broken executable.
+          disposition, native_files = self.class.cosmo_gem_disposition(spec, @cosmo_ruby_info[:gem_names])
+          if disposition != :pack
+            reason = self.class.cosmo_native_reason(spec, native_files)
+            if disposition == :payload_provides
+              say "Skipping native gem #{spec.full_name} (#{reason}): the cosmopolitan Ruby provides its own #{spec.name}"
+              cosmo_skipped_gem_dirs << Pathname(spec.gem_dir) if File.directory?(spec.gem_dir)
+              ext_dir =
+                begin
+                  spec.extension_dir
+                rescue StandardError
+                  nil
+                end
+              cosmo_skipped_gem_dirs << Pathname(ext_dir) if ext_dir && File.directory?(ext_dir)
+              next []
+            end
+            raise "Gem #{spec.full_name} is native (#{reason}) and cannot run under the packed cosmopolitan Ruby (x86_64-cosmo, static): exclude the gem or package without --cosmo-ruby"
+          end
         end
 
         # Add gemspec files
@@ -399,6 +553,20 @@ module Ocran
         verbose "\t:files (resource_files) count: #{resource_count}"
 
         actual_files = spec.find_gem_files(include, features)
+
+        # Safety net: gems reaching this point are pure Ruby as far as
+        # their gem and extension directories go (see the disposition
+        # check above), but a file list can still pull in a native binary
+        # from elsewhere. It cannot load under the cosmopolitan payload,
+        # so exclude it loudly.
+        if @option.cosmo_ruby
+          native_files = actual_files.select { |f| NATIVE_BINARY_EXTENSIONS.any? { |ext| f.extname?(ext) } }
+          if native_files.any?
+            warning "Gem #{spec.full_name} contains native binaries that cannot run under the packed cosmopolitan Ruby; excluding: #{native_files.map(&:basename).join(", ")}"
+            actual_files -= native_files
+          end
+        end
+
         say "\t#{actual_files.size} files, #{actual_files.sum(0, &:size)} bytes"
 
         # Decide where to put gem files, either the system gem folder, or
@@ -481,7 +649,9 @@ module Ocran
       end
 
       # If requested, add all ruby standard libraries
-      if @option.add_all_core?
+      if @option.add_all_core? && @option.cosmo_ruby
+        say "Skipping host core libraries (--add-all-core): the cosmopolitan Ruby embeds its own standard library"
+      elsif @option.add_all_core?
         say "Will include all ruby core libraries"
         all_core_dir.each do |path|
           # Match the load path against standard library, site_ruby, and vendor_ruby paths
@@ -497,7 +667,10 @@ module Ocran
       end
 
       # Include encoding support files
-      if @option.add_all_encoding?
+      if @option.cosmo_ruby
+        # Encoding extensions are statically linked into the payload.
+        say "Encoding support is embedded in the cosmopolitan Ruby"
+      elsif @option.add_all_encoding?
         @post_env.load_path.each do |load_path|
           load_path = Pathname(@post_env.expand_path(load_path))
           next unless load_path.subpath?(exec_prefix)
@@ -535,6 +708,23 @@ module Ocran
       pre_working_directory = Pathname(@pre_env.pwd)
       working_directory = Pathname(@post_env.pwd)
       features.each do |feature|
+        # With --cosmo-ruby, files of the host Ruby installation must not
+        # be packed: the payload interpreter resolves the standard library
+        # from its embedded ZIP store, and a packed host-version copy (or
+        # a host-ABI native extension) would be wrong for it.
+        if @option.cosmo_ruby
+          if feature.subpath?(exec_prefix)
+            verbose "\tlibfile: #{feature} -> skipped (host Ruby installation; the cosmopolitan Ruby uses its embedded stdlib)"
+            next
+          elsif cosmo_skipped_gem_dirs.any? { |dir| feature.subpath?(dir) }
+            verbose "\tlibfile: #{feature} -> skipped (gem provided by the cosmopolitan Ruby)"
+            next
+          elsif feature.extname?(".so") || feature.extname?(".bundle")
+            warning "Excluding native extension file #{feature}: native extensions cannot run under the packed cosmopolitan Ruby"
+            next
+          end
+        end
+
         load_path = @post_env.find_load_path(feature)
         if load_path.nil?
           verbose "\tlibfile: #{feature} -> src (no load path)"
@@ -660,7 +850,9 @@ module Ocran
       # host, which doesn't exist on other systems (e.g., Docker with no Ruby).
       # By adding the extract-dir equivalents of rubylibdir, sitelibdir, etc. to
       # RUBYLIB, Ruby can find rubygems and the standard library in the packed tree.
-      unless Gem.win_platform?
+      # Not with --cosmo-ruby: the host stdlib is not packed at all, and the
+      # payload finds its own stdlib in its embedded ZIP store.
+      unless Gem.win_platform? || @option.cosmo_ruby
         # Use the build Ruby's actual default load path in addition to the
         # RbConfig directories: some distros compile in extra entries that
         # RbConfig does not expose (e.g. Fedora's /usr/share/rubygems, where
@@ -697,6 +889,13 @@ module Ocran
       # when the directory does not exist in the packed layout - so always
       # create the packed prefix gem dirs, even when no specs landed there.
       prefix_gem_dirs.each { |dir| builder.mkdir(dir) }
+      if @option.cosmo_ruby
+        # When GEM_PATH is set, RubyGems no longer scans its compiled-in
+        # default directory — which for the cosmopolitan Ruby is the /zip
+        # store inside the binary, where its bundled gems live. Keep it
+        # reachable by appending it explicitly.
+        gem_paths << @cosmo_ruby_info[:default_gem_dir]
+      end
       builder.set_env_path("GEM_PATH", *gem_paths)
 
       # Add the opcode to launch the script
@@ -762,6 +961,23 @@ module Ocran
       say "Finished building installer file"
     end
 
+    # Returns the path to the stub built from source with cosmocc when
+    # --cosmo was given, or nil to use the pre-built stub shipped with
+    # the gem. The build result is memoized (and CosmoToolchain caches
+    # compiled stubs across runs), so multiple stubs per build (e.g.
+    # wrapper executables) compile at most once.
+    def cosmo_stub_path
+      return nil unless @option.cosmo_cc
+
+      @cosmo_stub_path ||= begin
+        load File.expand_path("cosmo_toolchain.rb", __dir__) unless defined? CosmoToolchain
+        say "Building launcher stub from source with cosmocc (#{@option.cosmo_cc})"
+        path = CosmoToolchain.build_stub(@option.cosmo_cc)
+        say "Using APE stub #{path}"
+        path
+      end
+    end
+
     # Builds the small RUN_IN_EXE_DIR wrapper stub that starts the deployed
     # application directly from the directory the wrapper resides in.
     def build_wrapper_exe(wrapper_path)
@@ -772,7 +988,8 @@ module Ocran
                       debug_mode: @option.enable_debug_mode?,
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
-                      run_in_exe_dir: true) do |stub|
+                      run_in_exe_dir: true,
+                      stub_path: cosmo_stub_path) do |stub|
         yield(stub)
       end
     end
@@ -835,6 +1052,7 @@ module Ocran
                       enable_compression: @option.enable_compression?,
                       gui_mode: false,
                       icon_path: nil,
+                      stub_path: cosmo_stub_path,
                       &to_proc) => builder
 
       if @option.icon_filename
@@ -870,6 +1088,40 @@ module Ocran
       say "Finished building #{bundle_path} (#{builder.data_size} bytes decompressed)"
     end
 
+    # Builds the executable by copying the cosmopolitan Ruby and injecting
+    # the application into its ZIP store (--cosmo-ruby with an interpreter
+    # that runs an embedded /zip/main.rb). No compiler runs, no launcher
+    # stub is involved, and the resulting binary unpacks nothing when it
+    # starts.
+    def build_cosmo_zip_exe
+      require_relative "zip_payload_builder"
+
+      output = @option.output_executable
+      ZipPayloadBuilder.new(output,
+                            cosmo_ruby: @option.cosmo_ruby,
+                            chdir_before: @option.chdir_before?,
+                            debug_mode: @option.enable_debug_mode?,
+                            &to_proc) => builder
+
+      builder.ignored_symlinks.each do |link_path, target|
+        verbose "Skipping symlink #{link_path} -> #{target} (ZIP members cannot be symlinks)"
+      end
+
+      if @option.icon_filename
+        warning "--icon has no effect in this mode: the executable is a copy of the cosmopolitan Ruby, whose resources OCRAN does not rewrite"
+      end
+      if @option.enable_debug_extract?
+        warning "--debug-extract has no effect in this mode: nothing is extracted, the application is read from the executable's own ZIP store"
+      end
+
+      _, _, unsupported = ZipPayloadBuilder.parse_rubyopt(rubyopt)
+      unless unsupported.empty?
+        warning "RUBYOPT #{unsupported.join(" ")} cannot be applied when the application is packed into the interpreter's ZIP store (the interpreter is already running); only -I and -r are replayed"
+      end
+
+      say "Finished building #{output} (#{output.size} bytes, #{builder.data_size} bytes of application data)"
+    end
+
     def build_stab_exe
       require_relative "stub_builder"
 
@@ -884,6 +1136,7 @@ module Ocran
                       enable_compression: @option.enable_compression?,
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
+                      stub_path: cosmo_stub_path,
                       &to_proc) => builder
       say "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
       say "After decompression, the data will expand to #{builder.data_size} bytes."
