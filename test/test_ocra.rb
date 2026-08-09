@@ -586,6 +586,296 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Detection of the capability the compiler-free ZIP packaging mode needs:
+  # an interpreter that runs an embedded /zip/main.rb. It is recognized by
+  # the name of the opt-out environment variable, which only a build with
+  # the hook contains - anywhere in the binary, including across the
+  # boundary of the chunks the scan reads.
+  def test_cosmo_zip_main_detection
+    unless defined? Ocran::CosmoToolchain
+      load File.expand_path("../lib/ocran/cosmo_toolchain.rb", __dir__)
+    end
+    marker = Ocran::CosmoToolchain::ZIP_MAIN_MARKER
+    chunk = Ocran::CosmoToolchain::SCAN_CHUNK_SIZE
+
+    with_tmpdir do
+      File.binwrite("without.com", "MZqFpD='\n" + ("\0" * 4096))
+      refute Ocran::CosmoToolchain.zip_main_support?("without.com")
+
+      File.binwrite("with.com", "MZqFpD='\n" + ("\0" * 4096) + marker + ("\0" * 4096))
+      assert Ocran::CosmoToolchain.zip_main_support?("with.com")
+
+      # The marker must still be found when it straddles two reads.
+      split_at = chunk - (marker.bytesize / 2)
+      File.binwrite("split.com", ("\0" * split_at) + marker + ("\0" * 16))
+      assert Ocran::CosmoToolchain.zip_main_support?("split.com")
+    end
+  end
+
+  # Option surface: --cosmo-ruby alone selects ZIP packaging when the given
+  # interpreter supports it, and then needs NO cosmocc toolchain at all -
+  # that is the whole point of the mode. An explicit --cosmo asks for the
+  # launcher stub instead, and an interpreter without the hook falls back
+  # to it automatically.
+  def test_cosmo_zip_option_surface
+    skip "--cosmo-ruby requires a POSIX build host" if Gem.win_platform?
+    require_relative "../lib/ocran/option"
+    unless defined? Ocran::CosmoToolchain
+      load File.expand_path("../lib/ocran/cosmo_toolchain.rb", __dir__)
+    end
+    marker = Ocran::CosmoToolchain::ZIP_MAIN_MARKER
+
+    with_fixture "helloworld" do
+      File.binwrite("zipmain.com", "MZqFpD='\n#{marker}\n")
+      File.binwrite("plain.com", "MZqFpD='\n")
+      mkdir_p "toolchain/bin"
+      cc = File.expand_path("toolchain/bin/cosmocc")
+      File.write(cc, "#!/bin/sh\n")
+      File.chmod(0755, cc)
+
+      # No toolchain reachable anywhere: COSMOCC unset, empty PATH, a HOME
+      # with no conventional install. --cosmo-ruby still has to work.
+      with_env "COSMOCC" => nil, "PATH" => "", "HOME" => File.expand_path(".") do
+        ENV.delete("COSMOCC")
+        if Ocran::CosmoToolchain.find_cc(ENV)
+          skip "this host has a cosmocc in a conventional location"
+        end
+
+        option = Ocran::Option.new
+        option.parse(["helloworld.rb", "--cosmo-ruby", "zipmain.com"])
+        assert option.cosmo_zip?, "an interpreter with the hook must be packaged by ZIP injection"
+        assert_nil option.cosmo_cc, "ZIP packaging must not require a cosmocc toolchain"
+        assert_equal ".com", option.output_executable.extname
+
+        # Without the hook there is nothing to inject into, so the launcher
+        # stub - and a toolchain - are needed again.
+        err = assert_raises(RuntimeError) do
+          Ocran::Option.new.parse(["helloworld.rb", "--cosmo-ruby", "plain.com"])
+        end
+        assert_match(/no cosmocc toolchain found/, err.message)
+      end
+
+      # An explicit --cosmo forces the launcher stub even for an
+      # interpreter that could carry the application itself.
+      option = Ocran::Option.new
+      option.parse(["helloworld.rb", "--cosmo", "toolchain", "--cosmo-ruby", "zipmain.com"])
+      refute option.cosmo_zip?
+      assert_equal cc, option.cosmo_cc
+
+      # Output formats that are not a single binary keep the stub too.
+      option = Ocran::Option.new
+      option.parse(["helloworld.rb", "--cosmo", "toolchain", "--cosmo-ruby", "zipmain.com",
+                    "--output-dir", "out"])
+      refute option.cosmo_zip?
+    end
+  end
+
+  # The ZIP writer: OCRAN appends to an archive that is already inside an
+  # executable, so it must produce entries a reader can find through the
+  # central directory, with the UNIX file type bits set (without S_IFREG a
+  # member is not a regular file and Ruby's own load refuses to open it).
+  def test_zip_writer_append
+    require_relative "../lib/ocran/zip_writer"
+
+    with_tmpdir do
+      # The smallest possible ZIP archive: an empty central directory.
+      File.binwrite("archive.zip", ["PK\x05\x06", 0, 0, 0, 0, 0, 0, 0].pack("a4vvvvVVv"))
+      File.write("source.txt", "from a file")
+
+      entries = [
+        Ocran::ZipWriter::Entry.new(name: "main.rb", data: "puts :hi\n" * 100),
+        Ocran::ZipWriter::Entry.new(name: "app/deep/data.txt", source: "source.txt"),
+      ]
+      grew = Ocran::ZipWriter.append("archive.zip", entries)
+      assert_operator grew, :>, 0
+
+      members = read_zip_members("archive.zip")
+
+      # Parent directories are synthesized so directory listings work.
+      assert_equal ["main.rb", "app/", "app/deep/", "app/deep/data.txt"], members.keys
+      assert_equal "puts :hi\n" * 100, members["main.rb"][:content]
+      assert_equal "from a file", members["app/deep/data.txt"][:content]
+      # Compressible content is deflated, and round-trips.
+      assert_equal Ocran::ZipWriter::METHOD_DEFLATED, members["main.rb"][:method]
+
+      # File type bits: regular files and directories, not bare permissions.
+      assert_equal 0o100644, members["main.rb"][:mode]
+      assert_equal 0o100644, members["app/deep/data.txt"][:mode]
+      assert_equal 0o040755, members["app/"][:mode]
+
+      # A second append must not disturb the first one.
+      Ocran::ZipWriter.append("archive.zip", [Ocran::ZipWriter::Entry.new(name: "later.txt", data: "x")])
+      again = read_zip_members("archive.zip")
+      assert_equal "puts :hi\n" * 100, again["main.rb"][:content]
+      assert_equal "x", again["later.txt"][:content]
+
+      # Shadowing an existing member would silently override part of the
+      # interpreter's own standard library.
+      err = assert_raises(RuntimeError) do
+        Ocran::ZipWriter.append("archive.zip", [Ocran::ZipWriter::Entry.new(name: "main.rb", data: "y")])
+      end
+      assert_match(/already contains an entry/, err.message)
+    end
+  end
+
+  # Reads an archive back through its central directory - the way zipos
+  # and every other reader finds members - and returns
+  # name => { content:, method:, mode: }.
+  def read_zip_members(path)
+    require "zlib"
+
+    data = File.binread(path)
+    eocd = data.rindex("PK\x05\x06".b)
+    _, _, _, _, total, cd_size, cd_offset, _ = data.byteslice(eocd, 22).unpack("a4vvvvVVv")
+    central = data.byteslice(cd_offset, cd_size)
+
+    members = {}
+    pos = 0
+    total.times do
+      method, csize, size, name_length, extra_length, comment_length, external, offset =
+        central.byteslice(pos, 46).unpack("x10vx8VVvvvx4VV")
+      name = central.byteslice(pos + 46, name_length)
+      pos += 46 + name_length + extra_length + comment_length
+
+      local_name_length, local_extra_length = data.byteslice(offset, 30).unpack("x26vv")
+      raw = data.byteslice(offset + 30 + local_name_length + local_extra_length, csize)
+      content =
+        if method == Ocran::ZipWriter::METHOD_DEFLATED
+          Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(raw)
+        else
+          raw
+        end
+      assert_equal size, content.bytesize, "#{name} has a wrong uncompressed size"
+
+      members[name] = { content: content, method: method, mode: external >> 16 }
+    end
+    members
+  end
+
+  # A cosmopolitan Ruby that runs an embedded /zip/main.rb, for the
+  # compiler-free packaging tests. Returns nil when COSMO_RUBY is unset or
+  # names a build without the hook.
+  def find_cosmo_zip_ruby
+    ruby = find_cosmo_ruby
+    return nil unless ruby
+
+    unless defined? Ocran::CosmoToolchain
+      load File.expand_path("../lib/ocran/cosmo_toolchain.rb", __dir__)
+    end
+    Ocran::CosmoToolchain.zip_main_support?(ruby) ? ruby : nil
+  end
+
+  def cosmo_zip_prereqs
+    skip "--cosmo-ruby requires a POSIX build host" if Gem.win_platform?
+    ruby = find_cosmo_zip_ruby
+    unless ruby
+      skip "no cosmopolitan Ruby with /zip/main.rb support (set COSMO_RUBY to one)"
+    end
+    ruby
+  end
+
+  # End-to-end compiler-free build: --cosmo-ruby ALONE, no cosmocc
+  # anywhere. The resulting .com must run a multi-file application from
+  # inside its own ZIP store in an empty directory with an empty
+  # environment - passing ARGV through, propagating the exit code, finding
+  # a resource packed next to its sources AND a file next to the
+  # executable - without creating a single temporary file.
+  def test_cosmo_zip_end_to_end
+    cosmo_ruby = cosmo_zip_prereqs
+
+    with_fixture "cosmoruby_zip" do
+      # COSMOCC deliberately points nowhere: this mode must not need it.
+      assert system({ "COSMOCC" => nil }, "ruby", ocran, "zipapp.rb", "data/message.txt",
+                    *DefaultArgs, "--cosmo-ruby", cosmo_ruby)
+      assert File.exist?("zipapp.com")
+      assert_equal "MZqFpD", File.binread("zipapp.com", 6)
+
+      # The interpreter is the executable, not a payload inside it: the
+      # output is the interpreter plus the application, not twice the
+      # interpreter.
+      payload_size = File.size(cosmo_ruby)
+      assert_operator File.size("zipapp.com"), :>=, payload_size
+      assert_operator File.size("zipapp.com"), :<, payload_size * 3 / 2
+
+      File.write("beside.txt", "next-to-exe\n")
+      pristine_env "zipapp.com", "beside.txt" do
+        tmp = Dir.mktmpdir("ocran-zip-tmp-")
+        begin
+          out = IO.popen([{ "TMPDIR" => tmp, "TMP" => tmp, "TEMP" => tmp },
+                          "./zipapp.com", "alpha", "beta"], err: [:child, :out], &:read)
+          assert $?.success?, "zipapp.com failed, output: #{out}"
+
+          assert_match(/platform:x86_64-cosmo/, out)
+          assert_match(/argv:\["alpha", "beta"\]/, out)
+          # $0 is the packed script, so "if __FILE__ == $0" guards fire.
+          assert_match(/main:true/, out)
+          # The application runs from inside the archive, not from a
+          # temporary directory - this is the visible behavior difference.
+          assert_match(%r{dir:/zip/}, out)
+          # A resource packed next to the sources, addressed via __dir__.
+          assert_match(/packed:packed-resource/, out)
+          # OCRAN_EXECUTABLE is the running .com, so files shipped next to
+          # the executable are still reachable.
+          assert_match(/executable:.*zipapp\.com/, out)
+          assert_match(/beside:next-to-exe/, out)
+
+          # Nothing is unpacked, so there is no extraction directory - the
+          # thing the launcher stub creates on every start and leaks when
+          # the process is killed. The only file that may appear is
+          # Cosmopolitan's own ".ape-<version>" loader, a few kilobytes
+          # written once per host by any APE on a kernel without binfmt
+          # support.
+          leftovers = Dir.children(tmp).reject { |name| name.start_with?(".ape") }
+          assert_empty leftovers, "the ZIP packaging mode must not unpack anything at run time"
+          directories = Dir.children(tmp).select { |name| File.directory?(File.join(tmp, name)) }
+          assert_empty directories, "the ZIP packaging mode must not create an extraction directory"
+        ensure
+          FileUtils.rm_rf(tmp)
+        end
+
+        # Exit codes propagate.
+        system({ "TMPDIR" => Dir.tmpdir }, "./zipapp.com", "fail", out: File::NULL)
+        assert_equal 3, $?.exitstatus
+
+        # Known limitation of this mode, pinned here so it cannot regress
+        # silently: the interpreter still parses its OWN options before the
+        # first positional argument, so an application whose first argument
+        # is option-shaped is reached only after "--". The launcher stub
+        # has no such restriction, because it passes the arguments after a
+        # script path.
+        swallowed = IO.popen(["./zipapp.com", "--fail"], err: [:child, :out], &:read)
+        refute_match(/argv:/, swallowed,
+                     "a leading option-shaped argument is consumed by the interpreter")
+        passed = IO.popen(["./zipapp.com", "--", "--fail"], err: [:child, :out], &:read)
+        assert_match(/argv:\["--fail"\]/, passed, %q("--" makes option-shaped arguments reach the app))
+      end
+    end
+  end
+
+  # A pure-Ruby gem packed for the ZIP mode must be activated by RubyGems
+  # from inside the archive (GEM_HOME/GEM_PATH point at /zip, and the
+  # generated main.rb makes RubyGems re-read them).
+  def test_cosmo_zip_gem
+    cosmo_ruby = cosmo_zip_prereqs
+    begin
+      Gem::Specification.find_by_name("mime-types")
+    rescue Gem::LoadError
+      skip "pure-Ruby test gem 'mime-types' is not installed on the build host"
+    end
+
+    with_fixture "cosmoruby_gem" do
+      assert system({ "COSMOCC" => nil }, "ruby", ocran, "gemapp.rb", *DefaultArgs,
+                    "--cosmo-ruby", cosmo_ruby)
+      assert File.exist?("gemapp.com")
+      pristine_env "gemapp.com" do
+        out = `env -i ./gemapp.com`
+        assert $?.success?, "gemapp.com failed, output: #{out}"
+        assert_match(/gem:txt/, out)
+        assert_match(/platform:x86_64-cosmo/, out)
+      end
+    end
+  end
+
   # Should be able to build executables with LZMA compression
   def test_lzma
     with_fixture 'helloworld' do
