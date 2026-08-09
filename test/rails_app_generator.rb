@@ -55,6 +55,7 @@ module RailsAppGenerator
          chdir: app)
     add_dynamic_code(app)
     configure_for_packaging(app)
+    write_openssl_gap(app)
     write_entry_point(app)
 
     app
@@ -150,6 +151,16 @@ module RailsAppGenerator
   end
 
   def configure_for_packaging(app)
+    # `rails new` writes an encrypted credentials file and its master key.
+    # Neither belongs in a package: the master key would be handed to
+    # everyone who gets the executable, and reading the file needs
+    # AES-256-GCM, which the cosmopolitan Ruby's openssl does not have
+    # (see write_openssl_gap and the Rails section of README.md). The
+    # application takes its secret from SECRET_KEY_BASE instead, which
+    # server.rb sets.
+    FileUtils.rm_f([File.join(app, "config/credentials.yml.enc"),
+                    File.join(app, "config/master.key")])
+
     edit(app, "config/environments/production.rb") do |src|
       # The generated production config assumes an SSL-terminating proxy in
       # front of the app; the test talks plain HTTP to 127.0.0.1.
@@ -176,9 +187,227 @@ module RailsAppGenerator
             # Rails writes to tmp (cache, pids, sockets); redirect it to a
             # writable directory chosen by server.rb.
             config.paths["tmp"] = ENV["RAILS_DEMO_TMP"] if ENV["RAILS_DEMO_TMP"]
+            # Rails' default session store encrypts the session cookie with
+            # AES-256-GCM. Under a Ruby whose openssl has no symmetric
+            # ciphers - the cosmopolitan one - that is not available at any
+            # price, so keep the session server-side and put only its id in
+            # the cookie. Everything else (the CSRF token in the session,
+            # the signed parts of the cookie jar) then needs no more than
+            # the HMAC the gap shim supplies.
+            unless OpensslGap.ciphers?
+              config.session_store :cache_store, key: "_demo_session"
+            end
             config.load_defaults
       RUBY
     end
+  end
+
+  # A file the application loads before Rails, which fills in what is
+  # missing from the cosmopolitan Ruby's openssl.
+  #
+  # That openssl is a shim over MbedTLS with no Cipher, no HMAC, no
+  # PBKDF2 and no OpenSSL.fixed_length_secure_compare, and no
+  # OpenSSL::Digest class hierarchy - and Rails does not merely use those,
+  # it mentions them at load time: `require "rails"` alone dies on
+  # `OpenSSLCipherError = OpenSSL::Cipher::CipherError` in
+  # ActiveSupport::MessageEncryptor. Everything this file adds except
+  # Cipher is the real algorithm on top of Ruby's own Digest (checked
+  # against the host OpenSSL); Cipher deliberately is not - a fake cipher
+  # would be worse than none - it exists so that Rails can name the
+  # constant, and raises if anything ever tries to encrypt with it.
+  #
+  # On a Ruby with a complete openssl every branch here is skipped, so the
+  # same file is loaded by both the native and the cosmopolitan build.
+  def write_openssl_gap(app)
+    write(app, "openssl_gap.rb", <<~'RUBY')
+      # frozen_string_literal: true
+      #
+      # Fills the gaps in the cosmopolitan Ruby's MbedTLS-backed openssl
+      # shim. Written by OCRAN's test/rails_app_generator.rb; see the
+      # Rails section of OCRAN's README.md.
+      require "openssl"
+      require "digest"
+
+      module OpensslGap
+        # Whether this Ruby's openssl can actually encrypt.
+        def self.ciphers?
+          OpenSSL::Cipher.new("aes-256-gcm")
+          true
+        rescue StandardError, NotImplementedError
+          false
+        end
+      end
+
+      module OpenSSL
+        unless respond_to?(:fixed_length_secure_compare)
+          # Constant-time comparison of two equal-length strings.
+          def self.fixed_length_secure_compare(a, b)
+            a = a.to_s.b
+            b = b.to_s.b
+            raise ArgumentError, "inputs must be of equal length" unless a.bytesize == b.bytesize
+
+            result = 0
+            a.each_byte.zip(b.each_byte) { |x, y| result |= x ^ y }
+            result.zero?
+          end
+        end
+
+        # ActiveSupport::KeyGenerator refuses any digest that is not an
+        # OpenSSL::Digest subclass, so a module of aliases for ::Digest is
+        # not enough: this has to be a real class hierarchy. The digests
+        # themselves are Ruby's own, i.e. genuine SHA-2 and MD5.
+        unless const_defined?(:Digest, false) && const_get(:Digest, false).is_a?(Class)
+          send(:remove_const, :Digest) if const_defined?(:Digest, false)
+
+          class Digest < ::Digest::Class
+            class DigestError < OpenSSLError; end
+
+            ALGORITHMS = {
+              "MD5" => ["digest/md5", "MD5"],
+              "SHA1" => ["digest/sha1", "SHA1"],
+              "SHA256" => ["digest/sha2", "SHA256"],
+              "SHA384" => ["digest/sha2", "SHA384"],
+              "SHA512" => ["digest/sha2", "SHA512"],
+            }.freeze
+
+            # "sha-256", "SHA2-256" and "SHA256" all name one digest.
+            ALIASES = { "SHA2256" => "SHA256", "SHA2384" => "SHA384", "SHA2512" => "SHA512" }.freeze
+
+            def self.backend(name)
+              key = name.to_s.upcase.delete("-_")
+              key = ALIASES.fetch(key, key)
+              feature, const = ALGORITHMS[key]
+              raise DigestError, "unsupported digest algorithm: #{name}" unless feature
+
+              require feature
+              [::Digest.const_get(const), key]
+            end
+
+            def initialize(name, data = nil)
+              backend, @name = self.class.backend(name)
+              @md = backend.new
+              update(data) if data
+            end
+
+            def initialize_copy(other)
+              super
+              @md = other.instance_variable_get(:@md).clone
+            end
+
+            def update(data)
+              @md.update(data)
+              self
+            end
+            alias << update
+
+            def reset
+              @md.reset
+              self
+            end
+
+            def finish = @md.digest
+            def digest_length = @md.digest_length
+            def block_length = @md.block_length
+            attr_reader :name
+          end
+
+          Digest::ALGORITHMS.each_key do |algorithm|
+            Digest.const_set(algorithm, Class.new(Digest) do
+              define_method(:initialize) { |data = nil| super(algorithm, data) }
+            end)
+          end
+        end
+
+        # HMAC (RFC 2104) over those digests. ActiveSupport::MessageVerifier
+        # signs every signed cookie with this.
+        unless const_defined?(:HMAC, false)
+          class HMAC
+            def self.digest(digest, key, data) = new(key, digest).update(data).digest
+            def self.hexdigest(digest, key, data) = digest(digest, key, data).unpack1("H*")
+
+            def initialize(key, digest)
+              @digest = digest.is_a?(String) || digest.is_a?(Symbol) ? OpenSSL::Digest.new(digest) : digest
+              block = @digest.block_length
+              key = key.to_s.b
+              key = fresh.update(key).digest if key.bytesize > block
+              key = key.ljust(block, "\0")
+              @ipad = xor(key, 0x36)
+              @opad = xor(key, 0x5c)
+              reset
+            end
+
+            def update(data)
+              @inner.update(data)
+              self
+            end
+            alias << update
+
+            def reset
+              @inner = fresh.update(@ipad)
+              self
+            end
+
+            def digest = fresh.update(@opad).update(@inner.clone.digest).digest
+            def hexdigest = digest.unpack1("H*")
+
+            private
+
+            def fresh = @digest.clone.reset
+            def xor(key, byte) = key.each_byte.map { |b| b ^ byte }.pack("C*")
+          end
+        end
+
+        # PBKDF2 (RFC 8018), which ActiveSupport::KeyGenerator derives every
+        # key Rails signs with from secret_key_base.
+        unless const_defined?(:KDF, false)
+          module KDF
+            class KDFError < OpenSSLError; end
+
+            def self.pbkdf2_hmac(pass, salt:, iterations:, length:, hash:)
+              prf = hash.is_a?(String) || hash.is_a?(Symbol) ? OpenSSL::Digest.new(hash) : hash
+              raise KDFError, "invalid length" if length.negative?
+
+              out = +"".b
+              block = 1
+              while out.bytesize < length
+                u = OpenSSL::HMAC.digest(prf, pass, "#{salt}#{[block].pack("N")}")
+                t = u.dup
+                (iterations - 1).times do
+                  u = OpenSSL::HMAC.digest(prf, pass, u)
+                  t = t.each_byte.zip(u.each_byte).map { |a, b| a ^ b }.pack("C*")
+                end
+                out << t
+                block += 1
+              end
+              out[0, length]
+            end
+          end
+        end
+
+        unless const_defined?(:PKCS5, false)
+          module PKCS5
+            def self.pbkdf2_hmac(pass, salt, iter, keylen, digest)
+              KDF.pbkdf2_hmac(pass, salt: salt, iterations: iter, length: keylen, hash: digest)
+            end
+          end
+        end
+
+        # Not an implementation: a placeholder so that the constant Rails
+        # names at load time exists. Anything that actually tries to
+        # encrypt gets a clear error instead of fake ciphertext.
+        unless const_defined?(:Cipher, false)
+          class Cipher
+            class CipherError < OpenSSLError; end
+
+            def self.ciphers = []
+
+            def initialize(name)
+              raise CipherError, "this Ruby's openssl provides no symmetric ciphers (#{name})"
+            end
+          end
+        end
+      end
+    RUBY
   end
 
   # The script OCRAN is pointed at.
@@ -206,12 +435,23 @@ module RailsAppGenerator
       FileUtils.mkdir_p(data_dir)
 
       ENV["RAILS_ENV"]       ||= "production"
+      # Required, not optional: the packaged application ships no
+      # config/credentials.yml.enc (see rails_app_generator.rb), so this is
+      # where Rails' secret comes from. Reading credentials would need
+      # AES-256-GCM, which the cosmopolitan Ruby's openssl does not have.
+      # A real application would take this from its environment rather
+      # than hardcode it.
       ENV["SECRET_KEY_BASE"] ||= "0" * 64
       ENV["DATABASE_URL"]    ||= "sqlite3:\#{File.join(data_dir, "demo.sqlite3")}"
       ENV["RAILS_DEMO_TMP"]  ||= File.join(data_dir, "tmp")
       FileUtils.mkdir_p(ENV["RAILS_DEMO_TMP"])
 
       #{UNLOADED_RUNTIME_DEPS}
+      # Before Rails: `require "rails"` itself needs OpenSSL::Cipher to
+      # exist, which under the cosmopolitan Ruby it does not. A no-op on
+      # a Ruby with a complete openssl.
+      require_relative "openssl_gap"
+
       require_relative "config/environment"
 
       # Bring the schema up to date from the packed migrations. Running this
