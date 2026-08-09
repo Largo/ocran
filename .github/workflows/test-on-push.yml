@@ -2,7 +2,12 @@ name: Run Tests
 on:
   push:
     branches:
-      - '*'
+      # '**' and not '*': a single star stops at a slash, so every branch
+      # named the way this project names them - fix/..., feat/... - was
+      # never tested until it landed on master, which is where the last two
+      # merges turned red.
+      - '**'
+  workflow_dispatch:
 jobs:
   run-tests-linux:
     strategy:
