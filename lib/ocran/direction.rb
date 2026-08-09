@@ -129,15 +129,12 @@ module Ocran
       # Initializes @rubyopt with the user-intended RUBYOPT environment variable.
       # This ensures that RUBYOPT matches the user's initial settings before any
       # modifications that may occur during script execution.
+      #
+      # -I and -r entries that refer to build-machine paths (including the
+      # `-r<abs path>/bundler/setup` that Bundler adds under `bundle exec`
+      # since Ruby 3.2) are translated or removed at build time by
+      # RubyoptProcessor in #construct.
       @rubyopt = @option.rubyopt || pre_env.env["RUBYOPT"] || ""
-
-      # Remove any absolute path to bundler/setup from RUBYOPT.
-      # When building under `bundle exec`, RUBYOPT contains `-r/absolute/path/bundler/setup`.
-      # That path doesn't exist inside the packed executable's environment, causing Ruby to
-      # print "RubyGems were not loaded" / "did_you_mean was not loaded" warnings on startup.
-      # We strip the flag regardless of install prefix because the gem may live in a user gem
-      # directory that doesn't share a prefix with RbConfig::TOPDIR (e.g. on CI runners).
-      @rubyopt = @rubyopt.gsub(/-r\S*\/bundler\/setup/, "").strip
     end
 
     # Resolves the common root directory prefix from an array of absolute paths.
@@ -194,7 +191,8 @@ module Ocran
         end
       end
       if defined?(Gem)
-        specs += Gem.loaded_specs.values
+        foreign = foreign_bundle_gem_names
+        specs += Gem.loaded_specs.each_value.reject { |spec| foreign.include?(spec.name) }
         # Now, we also detect gems that are not included in Gem.loaded_specs.
         # Therefore, we look for any loaded file from a gem path.
         specs += GemSpecQueryable.detect_gems_from(features, verbose: @option.verbose?)
@@ -202,6 +200,83 @@ module Ocran
       # Prioritize the spec detected from Gemfile.
       specs.uniq!(&:name)
       specs
+    end
+
+    # The gems RubyGems had already activated for a bundle that is not the
+    # application's, by the time OCRAN started.
+    #
+    # `bundle exec` activates every gem of its bundle before the command it
+    # runs executes a single line, so Gem.loaded_specs describes the build
+    # environment as much as the application. When the two bundles are the
+    # same - `bundle exec ocran app.rb` from the application's own directory,
+    # the ordinary case - that is exactly right and nothing is dropped. When
+    # they differ, packing the build environment's bundle adds tens of
+    # megabytes of code the application can never load: the packaged app runs
+    # under its own Gemfile, so gems from a foreign bundle are dead weight
+    # even when they are packed.
+    #
+    # Only activation is discounted, not use: anything the dependency run
+    # actually loaded is still found through $LOADED_FEATURES by
+    # detect_gems_from, and everything the application's Gemfile names is
+    # added by the Gemfile scan. This is the same rule that already applies
+    # to a build outside Bundler, where --gemfile is what pulls in gems the
+    # dependency run does not load.
+    def foreign_bundle_gem_names
+      @foreign_bundle_gem_names ||=
+        if foreign_build_bundle?
+          verbose "Ignoring #{@pre_env.activated_gems.size} gems activated by the build environment's bundle " \
+                  "#{@pre_env.env["BUNDLE_GEMFILE"]}"
+          @pre_env.activated_gems.to_set
+        else
+          Set.new
+        end
+    end
+
+    # Whether OCRAN itself was started under a bundle other than the one the
+    # application runs under.
+    def foreign_build_bundle?
+      return false unless @pre_env.bundler_setup_loaded?
+
+      build_gemfile = @pre_env.env["BUNDLE_GEMFILE"]
+      return false if build_gemfile.nil? || build_gemfile.empty?
+
+      app_gemfile = @option.application_gemfile
+      return true if app_gemfile.nil?
+
+      !same_file?(build_gemfile, app_gemfile)
+    end
+
+    def same_file?(a, b)
+      File.identical?(a, b) || File.expand_path(a) == File.expand_path(b)
+    end
+
+    # Packed name of the file BUNDLER_SETUP is pointed at.
+    BUNDLER_SETUP_NOOP = Pathname("no_bundler_setup.rb")
+
+    # Keeps the environment of whoever launches the packaged application
+    # from dragging Bundler into it.
+    #
+    # A packaged application carries its own gems and its own Gemfile; the
+    # bundle of the machine it is started from means nothing to it, and
+    # anything of that bundle that survives into the process is fatal rather
+    # than merely wrong - Bundler aborts with GemNotFound as soon as it
+    # cannot materialize gems that were never packed. RUBYOPT is already
+    # overwritten wholesale, but that alone stopped being enough: RubyGems
+    # now requires the file named by BUNDLER_SETUP at interpreter startup,
+    # which is how current Bundler versions set a process up, and
+    # BUNDLE_GEMFILE would still send the application's own
+    # `require "bundler/setup"` at the wrong Gemfile.
+    #
+    # BUNDLER_SETUP names a file to require, so it cannot simply be blanked
+    # - an empty value is still truthy and RubyGems would raise trying to
+    # require it. It is pointed at an empty packed file instead. Bundler
+    # does treat empty BUNDLE_GEMFILE and BUNDLE_LOCKFILE as unset, which is
+    # what lets the application find the Gemfile packed beside it.
+    def neutralize_bundler_env(builder)
+      builder.touch(BUNDLER_SETUP_NOOP)
+      builder.set_env_path("BUNDLER_SETUP", BUNDLER_SETUP_NOOP)
+      builder.export("BUNDLE_GEMFILE", "")
+      builder.export("BUNDLE_LOCKFILE", "")
     end
 
     def normalized_features
@@ -920,8 +995,24 @@ module Ocran
         end
       end
 
+      # Translate -I and -r entries in RUBYOPT that refer to build-machine
+      # paths into the packed layout (GitHub issue #20). Ruby cannot parse
+      # quoted arguments inside RUBYOPT and the runtime extraction directory
+      # may contain spaces, so instead of rewriting the paths inside RUBYOPT
+      # the translated entries are applied by a generated launcher script
+      # (see generate_rubyopt_launcher) where they become plain Ruby string
+      # literals.
+      require_relative "rubyopt_processor"
+      rubyopt_result = RubyoptProcessor.new(rubyopt).translate do |path|
+        packed_rubyopt_path(Pathname(path).cleanpath, inst_src_prefix)
+      end
+      rubyopt_result.dropped.each do |entry|
+        say "Removing #{entry} from RUBYOPT (path is not part of the package)"
+      end
+
       # Set environment variable
-      builder.export("RUBYOPT", rubyopt)
+      builder.export("RUBYOPT", rubyopt_result.rubyopt)
+      neutralize_bundler_env(builder)
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
       load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
@@ -982,9 +1073,73 @@ module Ocran
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / ruby_executable
       target_script = builder.resolve_source_path(@option.script, inst_src_prefix)
+      if rubyopt_result.translated?
+        target_script = generate_rubyopt_launcher(builder, target_script, rubyopt_result)
+      end
       builder.exec(installed_ruby_exe, target_script, *@option.argv)
     end
 
+    # Maps an absolute build-machine path to its location (relative to the
+    # extraction root) inside the packed application, mirroring where
+    # #construct places files. Returns nil when the path is not packed.
+    def packed_rubyopt_path(path, src_prefix)
+      require_relative "gem_spec_queryable"
+
+      if path.subpath?(exec_prefix)
+        path.relative_path_from(exec_prefix)
+      elsif (gem_path = GemSpecQueryable.find_gem_path(path))
+        GEMDIR / path.relative_path_from(gem_path)
+      elsif path.subpath?(src_prefix)
+        SRCDIR / path.relative_path_from(src_prefix)
+      end
+    end
+    private :packed_rubyopt_path
+
+    RUBYOPT_LAUNCHER_NAME = "ocran-rubyopt-launcher.rb"
+
+    # Writes a launcher script next to the packed application script that
+    # applies the translated RUBYOPT -I/-r entries (as plain Ruby string
+    # literals resolved against the extraction directory at runtime) and
+    # then loads the original script. Returns the packed path of the
+    # launcher, which becomes the script the stub executes.
+    def generate_rubyopt_launcher(builder, target_script, result)
+      say "Generating launcher script for RUBYOPT entries with translated paths"
+      launcher_target = target_script.dirname / RUBYOPT_LAUNCHER_NAME
+
+      # Relative path from the launcher's directory up to the extraction root.
+      depth = target_script.dirname.each_filename.count { |name| name != "." }
+      root_rel = depth.zero? ? "." : ([".."] * depth).join("/")
+
+      lines = []
+      lines << "# frozen_string_literal: true"
+      lines << "# Generated by OCRAN. Applies -I/-r options that were given in RUBYOPT"
+      lines << "# with build-machine paths, translated to the extraction directory."
+      lines << "# They cannot remain in RUBYOPT because Ruby does not support quoting"
+      lines << "# there and the extraction path may contain spaces."
+      lines << "ocran_root = File.expand_path(#{root_rel.dump}, __dir__)"
+      lines << "$0 = File.expand_path(#{target_script.basename.to_s.dump}, __dir__)"
+      result.load_paths.reverse_each do |dir|
+        lines << "$LOAD_PATH.unshift(File.expand_path(#{dir.to_posix.dump}, ocran_root))"
+      end
+      result.requires.each do |feature|
+        lines << "require File.expand_path(#{feature.to_posix.dump}, ocran_root)"
+      end
+      lines << "load $0"
+
+      require "tempfile"
+      launcher_file = Tempfile.new(["ocran-rubyopt-launcher", ".rb"])
+      launcher_file.write(lines.join("\n") + "\n")
+      launcher_file.close
+      verbose File.read(launcher_file.path)
+      # Keep a reference so the temporary file survives until the build
+      # finishes; the Inno Setup builder reads source files only when the
+      # installer is compiled, after #construct has returned.
+      @rubyopt_launcher_file = launcher_file
+
+      builder.cp(launcher_file.path, launcher_target)
+      launcher_target
+    end
+    private :generate_rubyopt_launcher
     # Writes the in-memory gem specification to a temporary file and returns
     # the file's path, for packing gemspecs that cannot be copied verbatim
     # from disk (e.g. local development gems). The Tempfile object is
@@ -1080,6 +1235,7 @@ module Ocran
       say "Build wrapper executable #{wrapper_path.basename}"
       StubBuilder.new(wrapper_path,
                       chdir_before: @option.chdir_before?,
+                      chdir_to_exe_dir: @option.chdir_exe_dir?,
                       debug_mode: @option.enable_debug_mode?,
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
@@ -1142,6 +1298,7 @@ module Ocran
 
       StubBuilder.new(executable_path,
                       chdir_before: @option.chdir_before?,
+                      chdir_to_exe_dir: @option.chdir_exe_dir?,
                       debug_extract: @option.enable_debug_extract?,
                       debug_mode: @option.enable_debug_mode?,
                       enable_compression: @option.enable_compression?,
@@ -1226,6 +1383,7 @@ module Ocran
 
       StubBuilder.new(@option.output_executable,
                       chdir_before: @option.chdir_before?,
+                      chdir_to_exe_dir: @option.chdir_exe_dir?,
                       debug_extract: @option.enable_debug_extract?,
                       debug_mode: @option.enable_debug_mode?,
                       enable_compression: @option.enable_compression?,

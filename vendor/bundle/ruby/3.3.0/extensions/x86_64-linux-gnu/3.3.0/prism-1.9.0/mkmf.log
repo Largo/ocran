@@ -1,0 +1,74 @@
+find_header: checking for prism.h in /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/prism-1.9.0/include... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lruby-3.3  -lm -lpthread  -lc"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: int main(int argc, char **argv)
+4: {
+5:   return !!argv[argc];
+6: }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC   -c conftest.c"
+conftest.c:3:10: fatal error: prism.h: No such file or directory
+    3 | #include <prism.h>
+      |          ^~~~~~~~~
+compilation terminated.
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <prism.h>
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  -I/root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/prism-1.9.0/include -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <prism.h>
+/* end */
+
+--------------------
+
+find_header: checking for prism/extension.h in /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/prism-1.9.0/ext... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/prism-1.9.0/include -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC   -c conftest.c"
+conftest.c:3:10: fatal error: prism/extension.h: No such file or directory
+    3 | #include <prism/extension.h>
+      |          ^~~~~~~~~~~~~~~~~~~
+compilation terminated.
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <prism/extension.h>
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/prism-1.9.0/include -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  -I/root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/prism-1.9.0/ext -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <prism/extension.h>
+/* end */
+
+--------------------
+
+append_cflags: checking for whether -fvisibility=hidden is accepted as CFLAGS... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/prism-1.9.0/include -I/root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/prism-1.9.0/ext -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  -fvisibility=hidden -Werror -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: int main(int argc, char **argv)
+4: {
+5:   return !!argv[argc];
+6: }
+/* end */
+
+--------------------
+

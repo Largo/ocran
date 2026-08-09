@@ -1,0 +1,698 @@
+["-I/usr/include/fox-1.6 ", "", "-lFOX-1.6"]
+checking for fox per pkg-config... -------------------- yes
+
+checking for pkg-config for fox... pkg_config: checking for pkg-config for fox... -------------------- ["-I/usr/include/fox-1.6 ", "", "-lFOX-1.6"]
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --exists fox
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --libs fox |
+=> "-lFOX-1.6 \n"
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lruby-3.3  -lm -lpthread  -lc"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: int main(int argc, char **argv)
+4: {
+5:   return !!argv[argc];
+6: }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lruby-3.3 -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: int main(int argc, char **argv)
+4: {
+5:   return !!argv[argc];
+6: }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --cflags-only-I fox |
+=> "-I/usr/include/fox-1.6 \n"
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --cflags-only-other fox |
+=> "\n"
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --libs-only-l fox |
+=> "-lFOX-1.6 \n"
+package configuration for fox
+incflags: -I/usr/include/fox-1.6
+cflags: 
+ldflags: 
+libs: -lFOX-1.6
+
+--------------------
+
+--------------------
+
+not found
+checking for fxscintilla per pkg-config... -------------------- no
+
+checking for pkg-config for fxscintilla... pkg_config: checking for pkg-config for fxscintilla... -------------------- not found
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --exists fxscintilla
+package configuration for fxscintilla is not found
+--------------------
+
+--------------------
+
+no
+checking for fxscintilla on Ubuntu with missing libfxscintilla.so link... -------------------- no
+
+checking for -l:libfxscintilla.so.19... find_library: checking for -l:libfxscintilla.so.19... -------------------- no
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed      -lFOX-1.6 -lruby-3.3 -l:libfxscintilla.so.19  -lFOX-1.6 -lm -lpthread  -lc"
+/usr/bin/ld: cannot find -l:libfxscintilla.so.19: No such file or directory
+collect2: error: ld returned 1 exit status
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: 
+15: int t(void) { ; return 0; }
+/* end */
+
+--------------------
+
+--------------------
+
+checking for fxscintilla build... -------------------- no
+
+--------------------
+
+have_header: checking for sys/time.h... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <sys/time.h>
+/* end */
+
+--------------------
+
+have_header: checking for signal.h... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <signal.h>
+/* end */
+
+--------------------
+
+have_library: checking for deflate() in -lz... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lstdc++  -lFOX-1.6 -lruby-3.3 -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘deflate’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))deflate; return !p; }
+      |                                                         ^~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))deflate; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lstdc++  -lFOX-1.6 -lruby-3.3 -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void deflate();
+15: int t(void) { deflate(); return 0; }
+/* end */
+
+--------------------
+
+have_library: checking for png_create_read_struct() in -lpng... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘png_create_read_struct’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))png_create_read_struct; return !p; }
+      |                                                         ^~~~~~~~~~~~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))png_create_read_struct; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void png_create_read_struct();
+15: int t(void) { png_create_read_struct(); return 0; }
+/* end */
+
+--------------------
+
+have_library: checking for jpeg_mem_init() in -ljpeg... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘jpeg_mem_init’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))jpeg_mem_init; return !p; }
+      |                                                         ^~~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))jpeg_mem_init; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void jpeg_mem_init();
+15: int t(void) { jpeg_mem_init(); return 0; }
+/* end */
+
+--------------------
+
+have_library: checking for TIFFSetErrorHandler() in -ltiff... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘TIFFSetErrorHandler’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))TIFFSetErrorHandler; return !p; }
+      |                                                         ^~~~~~~~~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))TIFFSetErrorHandler; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void TIFFSetErrorHandler();
+15: int t(void) { TIFFSetErrorHandler(); return 0; }
+/* end */
+
+--------------------
+
+have_library: checking for XftInit() in -lXft... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘XftInit’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))XftInit; return !p; }
+      |                                                         ^~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))XftInit; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void XftInit();
+15: int t(void) { XftInit(); return 0; }
+/* end */
+
+--------------------
+
+find_library: checking for XShmQueryVersion() in -lXext... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘XShmQueryVersion’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))XShmQueryVersion; return !p; }
+      |                                                         ^~~~~~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))XShmQueryVersion; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void XShmQueryVersion();
+15: int t(void) { XShmQueryVersion(); return 0; }
+/* end */
+
+--------------------
+
+find_library: checking for XFindContext() in -lX11... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘XFindContext’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))XFindContext; return !p; }
+      |                                                         ^~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))XFindContext; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void XFindContext();
+15: int t(void) { XFindContext(); return 0; }
+/* end */
+
+--------------------
+
+find_library: checking for glXCreateContext() in -lGL... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘glXCreateContext’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))glXCreateContext; return !p; }
+      |                                                         ^~~~~~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))glXCreateContext; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void glXCreateContext();
+15: int t(void) { glXCreateContext(); return 0; }
+/* end */
+
+--------------------
+
+find_library: checking for gluNewQuadric() in -lGLU... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘gluNewQuadric’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))gluNewQuadric; return !p; }
+      |                                                         ^~~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))gluNewQuadric; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void gluNewQuadric();
+15: int t(void) { gluNewQuadric(); return 0; }
+/* end */
+
+--------------------
+
+do_rake_compiler_setup: checking for thread local variables... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I./include -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3:       __thread int x=1;
+4:       #if defined(__MINGW32__)
+5:         #include <windows.h>
+6:         #if !defined(__MINGW64_VERSION_MAJOR)
+7:           #error "Old mingw32 compiler doesn't implement thread local variables properly."
+8:         #endif
+9:       #endif
+/* end */
+
+--------------------
+
+have_func: checking for rb_thread_call_without_gvl()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I./include -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘rb_thread_call_without_gvl’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))rb_thread_call_without_gvl; return !p; }
+      |                                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))rb_thread_call_without_gvl; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I./include -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void rb_thread_call_without_gvl();
+15: int t(void) { rb_thread_call_without_gvl(); return 0; }
+/* end */
+
+--------------------
+
+have_func: checking for rb_thread_call_with_gvl()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I./include -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘rb_thread_call_with_gvl’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))rb_thread_call_with_gvl; return !p; }
+      |                                                         ^~~~~~~~~~~~~~~~~~~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))rb_thread_call_with_gvl; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I./include -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void rb_thread_call_with_gvl();
+15: int t(void) { rb_thread_call_with_gvl(); return 0; }
+/* end */
+
+--------------------
+
+have_func: checking for rb_during_gc()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -I/usr/include/fox-1.6 -I./include -I/usr/local/include/fxscintilla -I/usr/local/include/fox-1.6 -Wdate-time -D_FORTIFY_SOURCE=2   -DNDEBUG -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L/usr/local/lib -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lruby-3.3 -lFOX-1.6 -lXcursor -lXrandr -lGLU -lGL -lX11 -lXext -lXft -ltiff -ljpeg -lpng -lz -lstdc++  -lFOX-1.6 -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))rb_during_gc; return !p; }
+/* end */
+
+--------------------
+
+extconf.h is:
+/* begin */
+1: #ifndef EXTCONF_H
+2: #define EXTCONF_H
+3: #define HAVE_SYS_TIME_H 1
+4: #define HAVE_SIGNAL_H 1
+5: #define HAVE___THREAD 1
+6: #define HAVE_RB_THREAD_CALL_WITHOUT_GVL 1
+7: #define HAVE_RB_THREAD_CALL_WITH_GVL 1
+8: #define HAVE_RB_DURING_GC 1
+9: #endif
+/* end */
+

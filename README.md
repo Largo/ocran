@@ -180,6 +180,7 @@ Fine-tuning flags:
 * `--windows`: Force a Windows GUI application (uses `rubyw.exe`). (Windows only)
 * `--console`: Force a console application (uses `ruby.exe`). (Windows only)
 * `--chdir-first`: Change working directory to the app's extraction directory before the script starts.
+* `--chdir-exe-dir`: Change working directory to the directory containing the executable before the script starts. Use this when your app reads or writes files that live next to the `.exe` using relative paths. Cannot be combined with `--chdir-first`.
 * `--icon <ico>`: Replace the default icon with a custom `.ico` file.
 * `--rubyopt <str>`: Set `RUBYOPT` when the executable runs.
 * `--debug`: Enable verbose output when the generated executable runs.
@@ -351,8 +352,9 @@ Fine-tuning flags:
 
 ### Running your application:
 
-* The working directory is not changed by OCRAN unless you use `--chdir-first`. You must change to the installation or temporary
-  directory yourself. See also below.
+* The working directory is not changed by OCRAN unless you use `--chdir-first`
+  (extraction directory) or `--chdir-exe-dir` (directory containing the
+  executable). See "Working directory" below.
 * When a `.exe` is running, `OCRAN_EXECUTABLE` points to the `.exe` with its full path.
 * The temporary location of the script is available via `$0`.
 * OCRAN does not set up the include path. Add `$:.unshift File.dirname($0)` at the start of your script if you need to `require` additional files from the same directory as your main script.
@@ -614,6 +616,55 @@ Four modes:
 If files are missing from the output, try `--gem-all=gemname` first, then
 `--gem-full=gemname`. Use `--gem-full` to include everything for all gems.
 
+### Using OCRAN under `bundle exec`
+
+OCRAN loads your script inside its own process to find out what it depends
+on, so the bundle OCRAN itself runs under is the bundle that dependency run
+sees. That matters as soon as the two are not the same.
+
+**Running `bundle exec ocran app.rb` requires `ocran` in the application's
+Gemfile.** This is Bundler's rule, not OCRAN's: `bundle exec` refuses to run
+a command the bundle does not contain ("ocran is not currently included in
+the bundle"). Add `gem "ocran"` to the Gemfile, or install OCRAN with `gem
+install ocran` and call `ocran` without `bundle exec`. Be aware that every
+gem the Gemfile lists is packed into the application when you build with
+`--gemfile`, OCRAN included.
+
+**From the application's own directory it just works.** `bundle exec ocran
+app.rb`, with or without `--gemfile Gemfile`, packages the application
+against its own bundle - including gems declared with `path:` or `gemspec`,
+which exist nowhere but that Gemfile.
+
+**Packaging one project from inside another project's bundle needs
+`--gemfile`.** If the bundle you are in is not the application's, pass
+`--gemfile path/to/app/Gemfile`. It governs the dependency run as well as
+the gem list, so a `require "bundler/setup"` in your script sets up the
+application's bundle and not the one you happen to be standing in. Without
+it the script is loaded under the wrong bundle and usually dies with a
+`LoadError` for one of its own gems; OCRAN warns when it can see that this
+is what you are doing.
+
+Gems that the surrounding bundle merely activated are not packed. The
+contents are decided by the application's own Gemfile and by what the
+dependency run actually loads, so building a small application from inside a
+large development bundle does not drag that bundle along.
+
+**The packaged executable is independent of Bundler.** It carries its own
+gems and its own Gemfile, and it clears the variables through which Bundler
+hands a bundle to a child process (`BUNDLER_SETUP`, `BUNDLE_GEMFILE`,
+`BUNDLE_LOCKFILE`, `RUBYOPT`), so it runs correctly even when started from a
+`bundle exec` shell, from a Rakefile, or from another Ruby program.
+
+**Exception: executables built with `--cosmo-ruby` cannot do that.** There
+the cosmopolitan Ruby *is* the executable, so its RubyGems has already acted
+on `BUNDLER_SETUP` before any packed code can run, and the application
+aborts with `Bundler::GemNotFound` over gems of the bundle it was launched
+from. Start such an executable outside a bundle, or clear the variables
+first - `Bundler.with_original_env { system("./app.com") }` from Ruby, or
+`env -u BUNDLER_SETUP -u BUNDLE_GEMFILE ./app.com` from a shell. Building
+with `--cosmo-ruby` under `bundle exec` is fine; only launching the result
+from inside a bundle is not.
+
 ### Code-signing a macOS app bundle
 
 After building with `--macosx-bundle`, sign the bundle with your Developer ID:
@@ -687,25 +738,50 @@ output, `OCRAN_EXECUTABLE` is set to the full path of the running executable:
 
 ### Working directory
 
-The OCRAN executable does not change the working directory when it starts. It only changes the working directory when you use
-`--chdir-first`.
+By default the OCRAN executable does not change the working directory when it
+starts. Two opt-in build options change this:
 
-You should not assume that the current working directory when invoking
-an executable built with .exe is the location of the source script. It
-can be the directory where the executable is placed (when invoked
-through the Windows Explorer), the users' current working directory
-(when invoking from the Command Prompt), or even
-`C:\\WINDOWS\\SYSTEM32` when the executable is invoked through
-a file association.
+* `--chdir-first`: the working directory is always the common parent
+  directory of your source files inside the extraction directory. Do not use
+  this if your application takes filenames as command-line arguments.
+* `--chdir-exe-dir`: the working directory is the directory that contains the
+  executable itself. Use this when your application reads or writes files that
+  are placed next to the `.exe` (config files, spreadsheets, output folders,
+  ...) using relative paths. Note that relative filenames passed as
+  command-line arguments will then also resolve against the executable's
+  directory instead of the invoker's current directory.
 
-With `--chdir-first`, the working directory is always the common parent
-directory of your source files. Do not use this if your application takes
-filenames as command-line arguments.
+Without these options, you should not assume anything about the current
+working directory when your executable is invoked. It can be the directory
+where the executable is placed (when invoked through the Windows Explorer),
+the users' current working directory (when invoking from the Command Prompt),
+or even `C:\\WINDOWS\\SYSTEM32` when the executable is invoked through a file
+association.
 
 To `require` additional files from the source directory while keeping the
 user's working directory:
 
     $LOAD_PATH.unshift File.dirname($0)
+
+### Finding files next to the executable
+
+Be aware that `__FILE__`, `__dir__` and `$0` inside a packaged application
+point to the extracted copy of your script in the temporary extraction
+directory — not to the directory containing the `.exe`. Anchoring paths on
+`__dir__` (e.g. `APP_ROOT = File.expand_path(__dir__)`) therefore makes the
+application look for its data files inside the temporary directory, which is
+usually not what you want.
+
+To locate files relative to the executable, either build with
+`--chdir-exe-dir` and use plain relative paths, or anchor your paths on the
+`OCRAN_EXECUTABLE` environment variable, which is always set to the full path
+of the running executable:
+
+    APP_ROOT = if ENV["OCRAN_EXECUTABLE"]
+                 File.dirname(ENV["OCRAN_EXECUTABLE"])
+               else
+                 __dir__   # plain `ruby myapp.rb` during development
+               end
 
 ### Detecting OCRAN at build time
 

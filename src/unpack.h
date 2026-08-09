@@ -74,6 +74,15 @@ typedef enum {
      * the stub executable. Restores the pre-1.4 (OCRA) wrapper behavior.
      */
     RUN_IN_EXE_DIR      = 0x20,
+
+    /**
+     * Change the current directory to the directory containing the
+     * executable before running the script. This makes relative file
+     * access resolve next to the .exe, regardless of how it was invoked
+     * (Explorer, command prompt, file association). Opt-in via the
+     * --chdir-exe-dir build option.
+     */
+    CHDIR_TO_EXE_DIR    = 0x40,
 } OperationModes;
 
 bool IsDebugMode(OperationModes modes);
@@ -82,6 +91,7 @@ bool IsAutoCleanInstDir(OperationModes modes);
 bool IsChdirBeforeScript(OperationModes modes);
 bool IsDataCompressed(OperationModes modes);
 bool IsRunInExeDir(OperationModes modes);
+bool IsChdirToExeDir(OperationModes modes);
 
 typedef struct UnpackContext UnpackContext;
 

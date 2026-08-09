@@ -10,13 +10,31 @@ module Ocran
       alias save new
     end
 
-    attr_reader :env, :load_path, :loaded_features, :pwd
+    # Matches the bundler/setup feature by which `bundle exec` sets a
+    # process up, whatever prefix the bundler gem happens to be installed
+    # under.
+    BUNDLER_SETUP_FEATURE = %r{[\\/]bundler[\\/]setup\.rb\z}
+
+    attr_reader :env, :load_path, :loaded_features, :pwd, :activated_gems
 
     def initialize
       @env = ENV.to_hash.freeze
       @load_path = $LOAD_PATH.dup.freeze
       @loaded_features = $LOADED_FEATURES.dup.freeze
       @pwd = Dir.pwd.freeze
+      # The gems RubyGems had activated at this point. Under `bundle exec`
+      # that is the entire bundle, activated before OCRAN's first line runs,
+      # so a snapshot taken before the dependency run is what tells the build
+      # environment's gems apart from the application's.
+      @activated_gems = (defined?(Gem) ? Gem.loaded_specs.keys : []).freeze
+    end
+
+    # Whether Bundler had already set this process up when the snapshot was
+    # taken. `bundle exec` arranges that through RUBYOPT (and, with newer
+    # RubyGems, through the BUNDLER_SETUP variable), so bundler/setup is in
+    # $LOADED_FEATURES before the command it runs gets to say anything.
+    def bundler_setup_loaded?
+      @loaded_features.any? { |feature| feature.to_s.match?(BUNDLER_SETUP_FEATURE) }
     end
 
     # Expands the given path using the working directory stored in this
