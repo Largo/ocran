@@ -495,9 +495,9 @@ the default. Windows pays both costs.
 | `ENV["OCRAN_EXECUTABLE"]` | full path of the `.com` | same (`RbConfig.ruby`, which the interpreter resolves to its own image) |
 | Writable application dir | yes (temp) | no — the archive is read-only |
 | `--chdir-first` | into the application dir | into the executable's directory (`Dir.chdir("/zip")` returns `ENOTSUP`) |
-| Leading `-x` argument | reaches `ARGV` | parsed by the interpreter (use `--`) |
+| Leading `-x` argument | reaches `ARGV` | reaches `ARGV` |
 | `RUBYOPT` | exported before launch | only `-I`/`-r` can be replayed |
-| Exit code on Windows | correct | multiplied by 256 |
+| Exit code on Windows | correct | correct |
 | `--icon`, `--debug-extract` | honored | no effect |
 
 The `__dir__` change is the one that matters for issue #32: an
@@ -508,19 +508,39 @@ on Linux and Windows). An application that (incorrectly) used `__dir__`
 for that purpose breaks loudly here instead of quietly picking up a file
 from a temp directory.
 
-Two of these are interpreter bugs rather than OCRAN limitations, worth
-fixing in CosmoRuby:
+Two rows of that table used to be interpreter bugs rather than OCRAN
+limitations. Both are **fixed** in CosmoRuby (branch `zip-main-fixes`,
+2026-08-09), which is why they now read the same in both columns:
 
-1. **Argument parsing.** With an embedded main, the interpreter should
-   not parse its own options at all — every argument should go to
-   `ARGV`. Today `app.com --verbose` is consumed by Ruby ("invalid
-   option"), while `app.com run --verbose` and `app.com -- --verbose`
-   work, because option parsing stops at the first positional argument.
-2. **Exit codes on Windows.** `exit 3` produces `$LASTEXITCODE` 768.
-   This is *not* caused by the hook: plain `ruby.com script.rb` with
-   `exit 3` does the same, and `exit!` does not help, so no workaround
-   is possible from Ruby. The launcher stub avoids it only because it
-   calls `ExitProcess()` with the child's plain code (see Phase 2.5).
+1. **Argument parsing.** A binary carrying `/zip/main.rb` no longer
+   parses any of its command line: `argv[0]` is dropped and everything
+   else reaches `ARGV` verbatim, option-shaped or not, `--` included.
+   `app.com --version` is the application's `--version`, not Ruby's.
+   Previously Ruby's own flag parser ran first, so `app.com --verbose`
+   died with `invalid option --verbose` and only `app.com -- --verbose`
+   worked. Interpreter options are still reachable through `RUBYOPT`
+   (`-I`, `-r`, `-w`, `-W`, `-d`, `-E`, `--yjit`, `--enable/--disable`)
+   and `RUBY_YJIT_ENABLE`; `COSMORUBY_NO_ZIP_MAIN=1` still turns the
+   binary back into a plain interpreter.
+2. **Exit codes on Windows.** `exit 3` now produces `$LASTEXITCODE` 3.
+   Cosmopolitan Libc encodes a POSIX wait status into the Windows
+   process exit code (`status << 8`) so that a cosmopolitan parent can
+   decode it with `WEXITSTATUS()`; the interpreter now bypasses that for
+   the process the user actually started, exactly as the launcher stub
+   does for itself (Phase 2.5). `exit`, `exit!`, uncaught exceptions (1)
+   and statuses above 255 (narrowed to eight bits, as on Linux) all
+   agree with the other platforms.
+
+   That fix has one consequence for the **launcher-stub** mode, and it
+   is handled: the stub *is* a cosmopolitan parent — it `fork`s,
+   `execv`s `bin/ruby.com` and reads the result with `WEXITSTATUS()`
+   (`src/system_utils_posix.c`) — so an honest child status came back
+   as death by a signal. Measured on Windows 11 with a stub built before
+   the change: `exit 3` → `%ERRORLEVEL%` **131** (128 + 3), `exit 7`
+   → **135**. `src/stub.c` therefore sets
+   `COSMORUBY_WAIT_STATUS_EXIT=1` for the payload, which asks CosmoRuby
+   for the old encoding; with it, 3 is 3 and 7 is 7 again. ZIP packaging
+   has no stub and needs nothing.
 
 ### Not addressed
 
@@ -635,9 +655,10 @@ fixing in CosmoRuby:
   application with `COSMOCC` deliberately unset and assert ARGV, exit
   code, packed resources, `OCRAN_EXECUTABLE`, and that nothing is
   written to `TMPDIR`. Verified by hand on Linux and a Windows 11 VM
-  with the `logstat` field-test CLI. Two interpreter-side bugs remain
-  (leading option-shaped arguments, Windows exit codes), and Windows
-  build hosts are still refused.
+  with the `logstat` field-test CLI. The two interpreter-side bugs this
+  phase documented (leading option-shaped arguments, Windows exit codes)
+  are **fixed** in CosmoRuby `zip-main-fixes`; see the behavior-differences
+  table above. Windows build hosts are still refused.
 * **Phase 3** — Decide the product story: keep cosmocc as a
   cross-platform *console* stub built from POSIX sources (mingw keeps
   `stubw` + signing), or go further and make the APE stub a first-class

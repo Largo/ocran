@@ -231,12 +231,13 @@ Fine-tuning flags:
     mode, but here it is obviously wrong instead of subtly wrong.
   * `--chdir-first` changes into the directory containing the
     executable, since the application directory does not exist on disk.
-  * Command-line arguments reach `ARGV` unchanged **except** for
-    option-shaped arguments before the first positional one: the
-    interpreter still parses those as its own options, so
-    `app.com --verbose` is consumed by Ruby while `app.com run
-    --verbose` and `app.com -- --verbose` reach your application. The
-    launcher stub has no such restriction.
+  * The whole command line reaches `ARGV`, unchanged. The interpreter
+    claims none of it, so `app.com --version`, `app.com -v` and
+    `app.com -- x` behave exactly as they would for a natively compiled
+    program (`--` is an ordinary argument, not a separator). This needs
+    a cosmopolitan Ruby with the fix from 2026-08; older builds parsed
+    leading option-shaped arguments themselves and failed with
+    `invalid option --verbose`.
   * `RUBYOPT` is applied as far as it can be from inside the process:
     `-I` and `-r` are replayed, other flags are reported at build time
     and dropped (the interpreter has already started).
@@ -244,10 +245,11 @@ Fine-tuning flags:
   * The executable is not compressed (it has to stay runnable), so
     `--no-lzma` makes no difference to its size; individual packed files
     are deflated.
-  * On Windows, exit codes of the packaged application are currently
-    multiplied by 256 (a bug in the cosmopolitan Ruby itself — plain
-    `ruby.com script.rb` has it too). The launcher stub is not affected
-    because it re-exits with the child's status.
+  * Exit codes are your application's, exactly, on every platform
+    including Windows. (Cosmopolitan encodes a POSIX wait status into
+    the Windows process exit code, so `exit 3` used to arrive as 768;
+    both the interpreter and the launcher stub now report the plain
+    status.)
 
   Notes that apply to both:
   * The payload is run once on the build host (via `/bin/sh`, using the

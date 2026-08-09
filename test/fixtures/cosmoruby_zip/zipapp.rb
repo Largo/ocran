@@ -15,8 +15,9 @@ unless defined?(Ocran)
   puts "packed:#{ZipApp::Greeter.message}"
   puts "executable:#{ENV["OCRAN_EXECUTABLE"]}"
   puts "beside:#{File.exist?(beside) ? File.read(beside).strip : "(none)"}"
+  puts "verbose:#{$VERBOSE.inspect}"
 
-  # A positional token, not an option: an interpreter that runs an
-  # embedded main still parses LEADING option-shaped arguments itself.
-  exit 3 if ARGV.include?("fail")
+  # Option-shaped or not, every argument reaches the application: a packed
+  # binary claims none of its command line.
+  exit 3 if ARGV.include?("fail") || ARGV.include?("--fail")
 end

@@ -833,21 +833,33 @@ class TestOcran < Minitest::Test
           FileUtils.rm_rf(tmp)
         end
 
-        # Exit codes propagate.
+        # Exit codes propagate, exactly - including on Windows, where the
+        # interpreter used to hand the shell a POSIX wait status (code << 8).
         system({ "TMPDIR" => Dir.tmpdir }, "./zipapp.com", "fail", out: File::NULL)
         assert_equal 3, $?.exitstatus
 
-        # Known limitation of this mode, pinned here so it cannot regress
-        # silently: the interpreter still parses its OWN options before the
-        # first positional argument, so an application whose first argument
-        # is option-shaped is reached only after "--". The launcher stub
-        # has no such restriction, because it passes the arguments after a
-        # script path.
-        swallowed = IO.popen(["./zipapp.com", "--fail"], err: [:child, :out], &:read)
-        refute_match(/argv:/, swallowed,
-                     "a leading option-shaped argument is consumed by the interpreter")
-        passed = IO.popen(["./zipapp.com", "--", "--fail"], err: [:child, :out], &:read)
-        assert_match(/argv:\["--fail"\]/, passed, %q("--" makes option-shaped arguments reach the app))
+        # The packed binary claims NONE of its command line, so an
+        # application whose first argument is option-shaped - --version,
+        # --help, -v, which is most of them - works like a native binary's.
+        # No "--" dance, and no interpreter error message in place of the
+        # app's own.
+        leading = IO.popen(["./zipapp.com", "--fail", "-v", "--version"],
+                           err: [:child, :out], &:read)
+        assert_match(/argv:\["--fail", "-v", "--version"\]/, leading,
+                     "option-shaped arguments must reach the application")
+        refute_match(/invalid option/, leading,
+                     "the interpreter must not parse the application's arguments")
+        assert_equal 3, $?.exitstatus
+
+        # "--" is no longer a separator either: it is just another argument.
+        dashes = IO.popen(["./zipapp.com", "--", "--fail"], err: [:child, :out], &:read)
+        assert_match(/argv:\["--", "--fail"\]/, dashes)
+
+        # Interpreter options are still reachable, through the channel Ruby
+        # already has for them.
+        verbose = IO.popen([{ "RUBYOPT" => "-w" }, "./zipapp.com"],
+                           err: [:child, :out], &:read)
+        assert_match(/verbose:true/, verbose, "RUBYOPT must still reach the interpreter")
       end
     end
   end
