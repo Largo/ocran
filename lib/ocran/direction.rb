@@ -142,7 +142,16 @@ module Ocran
 
     def detect_dlls
       if Gem.win_platform?
-        require_relative "library_detector"
+        begin
+          require_relative "library_detector"
+        rescue LoadError => e
+          # LibraryDetector needs fiddle, a bundled gem since Ruby 3.5. In a
+          # Bundler context (e.g. building with --gemfile) requiring it is
+          # refused unless the Gemfile lists fiddle, so degrade to no DLL
+          # auto-detection instead of aborting the build.
+          warning "DLL auto-detection disabled (#{e.message}). Add fiddle to the Gemfile, or use --dll to include DLLs manually."
+          return []
+        end
       else
         require_relative "library_detector_posix"
       end
@@ -184,10 +193,12 @@ module Ocran
       # because rubygems.rb uses require_relative to load it.
       kernel_require_rel = "rubygems/core_ext/kernel_require.rb"
       unless features.any? { |f| f.to_posix.end_with?(kernel_require_rel) }
-        # Prefer the location alongside the actually-loaded rubygems.rb, fall back to rubylibdir
-        rubygems_feature = features.find { |f| f.to_posix.end_with?("/rubygems.rb") }
-        candidate_dirs = []
-        candidate_dirs << rubygems_feature.dirname if rubygems_feature
+        # Prefer the location alongside the actually-loaded rubygems.rb, fall back to
+        # rubylibdir. Consider every feature ending in "/rubygems.rb", because a plain
+        # suffix match can also hit unrelated files such as bundler's
+        # lib/bundler/source/rubygems.rb (loaded before rubygems.rb under bundle exec);
+        # the existence check below skips candidates without the core_ext file.
+        candidate_dirs = features.select { |f| f.to_posix.end_with?("/rubygems.rb") }.map(&:dirname)
         candidate_dirs << Pathname(RbConfig::CONFIG["rubylibdir"])
         candidate_dirs.each do |base_dir|
           kernel_require_path = base_dir / kernel_require_rel
@@ -488,12 +499,31 @@ module Ocran
         end
 
         # Add gemspec files
+        local_gem_dir = nil
         if spec_file.subpath?(exec_prefix)
           builder.duplicate_to_exec_prefix(spec_file)
         elsif (gem_path = GemSpecQueryable.find_gem_path(spec_file))
           builder.duplicate_to_gem_home(spec_file, gem_path)
         else
-          raise "Gem spec #{spec_file} does not exist in the Ruby installation. Don't know where to put it."
+          # Local development gems (Bundler `gemspec` or `path:` directives)
+          # keep their gemspec inside the project tree, outside both the Ruby
+          # installation and every gem path, so there is no installed gem
+          # layout to mirror. Pack them into GEMDIR as if they were installed
+          # there: generate the spec from the in-memory specification (the
+          # on-disk gemspec often uses dynamic constructs such as
+          # `git ls-files` that would fail in the packed app) and pack the
+          # gem's files under gems/<full_name>/ below.
+          say "Including local development gem #{spec.full_name} from #{spec_file.dirname}"
+          local_gem_dir = Pathname(spec.gem_dir)
+          builder.copy_to_gem(generate_gemspec_file(spec), Pathname("specifications") / "#{spec.full_name}.gemspec")
+          # RubyGems refuses to activate a gem with extensions unless its
+          # gem.build_complete marker exists. The extension files themselves
+          # are packed via the loaded features or the extension-dir mirroring
+          # below.
+          if spec.extensions.any?
+            api_version = Gem.respond_to?(:extension_api_version) ? Gem.extension_api_version : Gem.ruby_api_version
+            builder.touch(GEMDIR / "extensions" / Gem::Platform.local.to_s / api_version / spec.full_name / "gem.build_complete")
+          end
         end
 
         spec_dir = spec_file.dirname
@@ -576,6 +606,10 @@ module Ocran
             builder.duplicate_to_exec_prefix(gemfile)
           elsif (gem_path = GemSpecQueryable.find_gem_path(gemfile))
             builder.duplicate_to_gem_home(gemfile, gem_path)
+          elsif local_gem_dir && gemfile.subpath?(local_gem_dir)
+            # Mirror local development gem files into the packed GEM_HOME
+            # under the gem directory matching the generated specification.
+            builder.copy_to_gem(gemfile, Pathname("gems") / spec.full_name / gemfile.relative_path_from(local_gem_dir))
           else
             raise "Don't know where to put gemfile #{gemfile}"
           end
@@ -902,6 +936,20 @@ module Ocran
       installed_ruby_exe = BINDIR / ruby_executable
       target_script = builder.resolve_source_path(@option.script, inst_src_prefix)
       builder.exec(installed_ruby_exe, target_script, *@option.argv)
+    end
+
+    # Writes the in-memory gem specification to a temporary file and returns
+    # the file's path, for packing gemspecs that cannot be copied verbatim
+    # from disk (e.g. local development gems). The Tempfile object is
+    # retained because some builders (e.g. InnoSetupScriptBuilder) read
+    # their source files only after construction has completed.
+    def generate_gemspec_file(spec)
+      require "tempfile"
+      file = Tempfile.new(["#{spec.full_name}-", ".gemspec"])
+      file.write(spec.to_ruby)
+      file.close
+      (@generated_gemspec_files ||= []) << file
+      file.path
     end
 
     def to_proc
