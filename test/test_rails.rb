@@ -15,7 +15,12 @@
 #   * the packaged binary really serves HTTP - a scaffold CRUD round-trip
 #     goes through ActiveRecord into a real SQLite file;
 #   * that SQLite file lands next to the executable and survives a restart,
-#     which is the runtime-writable-path question from github issue #32.
+#     which is the runtime-writable-path question from github issue #32;
+#   * and, given a cosmopolitan Ruby that has the native extensions Rails
+#     needs compiled in, all of the above again from a single portable
+#     .com (an APE) built without any compiler, where the application is
+#     never unpacked at all - it is served straight out of the ZIP store
+#     inside the executable.
 
 require "minitest/autorun"
 
@@ -102,55 +107,29 @@ class TestRails < Minitest::Test
       # Run from a directory that is not the build directory, in an
       # environment that carries nothing over from this process, so what is
       # exercised is the package and not the source tree it came from.
-      run_dir = File.join(work, "run")
-      FileUtils.mkdir_p(run_dir)
-      exe_copy = File.join(run_dir, File.basename(exe))
-      FileUtils.cp(exe, exe_copy)
-      FileUtils.chmod(0755, exe_copy)
+      run_dir, exe_copy = deploy(exe, File.join(work, "run"))
+      db = assert_serves(exe_copy, run_dir)
 
-      db = File.join(run_dir, "railsdemo-data", "demo.sqlite3")
-
-      with_server(exe_copy, run_dir) do |http|
-        status = assert_status_endpoint(http, packaged: true, expected_db: db)
-        assert_equal "SQLite", status["adapter"]
-        refute_empty status["sqlite_version"].to_s
-
-        assert_scaffold_crud_round_trip(http)
-        assert_dynamic_controllers(http)
-
-        # Leave one record behind for the restart check.
-        create_widget(http, "Persisted", 42)
-      end
-
-      assert File.file?(db), "expected the SQLite database next to the executable at #{db}"
       refute File.exist?(File.join(run_dir, "storage")),
              "the app must not fall back to Rails.root/storage for its database"
 
       # Second run of the same executable: the stub unpacks into a brand new
       # temporary directory, so anything that survived did so because it was
       # written next to the binary rather than inside the package.
-      with_server(exe_copy, run_dir) do |http|
-        status = assert_status_endpoint(http, packaged: true, expected_db: db)
-        assert_equal 1, status["widget_count"],
-                     "the record created by the previous run should still be in the database"
-
-        body = get_body(http, "/report")
-        assert_match(/TOTAL=42/, body)
-        assert_match(/class="row">Persisted=42/, body)
-      end
+      assert_survives_restart(exe_copy, run_dir, db)
     end
   end
 
-  # "Would be cool if it works": the same application behind a cosmopolitan
-  # Ruby APE. Rails drags in native-extension gems, and an APE cannot
-  # dlopen anything, so whether this can work at all depends entirely on
-  # what the given interpreter has compiled in.
+  # The same application behind a cosmopolitan Ruby APE, in the
+  # compiler-free ZIP mode: the application is injected into the
+  # interpreter's own ZIP store, and the interpreter runs it from there
+  # without extracting anything.
   #
-  # The test therefore asserts the outcome that is actually true of the
-  # interpreter it is handed: either the build is refused with a diagnostic
-  # that names the offending native gem (today's case - see the Rails
-  # section of README.md), or it succeeds and then has to serve HTTP just
-  # like the native build.
+  # Whether this can work at all depends on the interpreter: an APE is
+  # statically linked and cannot dlopen, so every native extension Rails
+  # needs - sqlite3, nokogiri, puma, nio4r, bigdecimal, racc - has to be
+  # compiled into it. When one is not, OCRAN refuses the build and names
+  # it, and this test says so rather than pretending it passed.
   def test_rails_sqlite_server_cosmo_ruby
     require_prereqs
     skip "--cosmo-ruby requires a POSIX build host" if Gem.win_platform?
@@ -162,12 +141,12 @@ class TestRails < Minitest::Test
       out = File.join(work, "dist", "rails_demo.com")
       FileUtils.mkdir_p(File.dirname(out))
 
+      # Only --cosmo-ruby: no --cosmo, i.e. no cosmocc toolchain and no
+      # compiler of any kind is involved. That is the point of ZIP mode.
+      t0 = Time.now
       log, status = run_ocran(app, work, out, extra: ["--cosmo-ruby", cosmo_ruby])
 
       unless status.success?
-        # Blocked, which is the expected result for every cosmopolitan Ruby
-        # published so far. Insist that the failure is the documented one:
-        # a native gem the payload does not provide, named explicitly.
         assert_match(/is native .* and cannot run under the packed cosmopolitan Ruby/, log,
                      "expected OCRAN to refuse the build with a native-gem diagnostic, got:\n#{tail(log)}")
         offender = log[/Gem (\S+) is native/, 1]
@@ -177,21 +156,72 @@ class TestRails < Minitest::Test
              "(see the Rails section of README.md)"
       end
 
-      # The interpreter has everything Rails needs compiled in. Then it has
-      # to actually work.
-      assert File.exist?(out), "ocran reported success but produced no #{out}"
-      run_dir = File.join(work, "run")
-      FileUtils.mkdir_p(run_dir)
-      exe_copy = File.join(run_dir, "rails_demo.com")
-      FileUtils.cp(out, exe_copy)
-      FileUtils.chmod(0755, exe_copy)
+      assert File.exist?(out), "ocran reported success but produced no #{out}:\n#{tail(log)}"
+      note "packaged %.1f MB in %.1fs (payload %.1f MB)" %
+           [File.size(out) / 1024.0 / 1024.0, Time.now - t0, File.size(cosmo_ruby) / 1024.0 / 1024.0]
 
-      db = File.join(run_dir, "railsdemo-data", "demo.sqlite3")
-      with_server(exe_copy, run_dir) do |http|
-        assert_status_endpoint(http, packaged: true, expected_db: db)
-        assert_scaffold_crud_round_trip(http)
-        assert_dynamic_controllers(http)
-      end
+      # The whole application rides inside the interpreter: the .com is the
+      # interpreter plus the packed application, not a stub with a separate
+      # payload to unpack.
+      assert_operator File.size(out), :>=, File.size(cosmo_ruby),
+                      "the packaged .com should contain the whole interpreter"
+
+      run_dir, exe_copy = deploy(out, File.join(work, "run"))
+      db = assert_serves(exe_copy, run_dir)
+
+      # ZIP mode extracts nothing: what appears beside the executable is
+      # only what the application itself wrote.
+      expected = [File.basename(exe_copy), "railsdemo-data"]
+      unexpected = Dir.children(run_dir) - expected - Dir.glob("server-*.log", base: run_dir)
+      assert_empty unexpected,
+                   "nothing should be unpacked next to the executable in ZIP mode"
+
+      assert_survives_restart(exe_copy, run_dir, db)
+    end
+  end
+
+  # Copies +exe+ into a fresh directory and returns [directory, copy].
+  def deploy(exe, run_dir)
+    FileUtils.mkdir_p(run_dir)
+    copy = File.join(run_dir, File.basename(exe))
+    FileUtils.cp(exe, copy)
+    FileUtils.chmod(0755, copy)
+    [run_dir, copy]
+  end
+
+  # Runs the packaged executable and drives the full set of HTTP
+  # assertions against it, leaving one record behind for the restart
+  # check. Returns the path the SQLite database is expected at.
+  def assert_serves(exe, run_dir)
+    db = File.join(run_dir, "railsdemo-data", "demo.sqlite3")
+
+    with_server(exe, run_dir) do |http|
+      status = assert_status_endpoint(http, packaged: true, expected_db: db)
+      assert_equal "SQLite", status["adapter"]
+      refute_empty status["sqlite_version"].to_s
+
+      assert_scaffold_crud_round_trip(http)
+      assert_dynamic_controllers(http)
+
+      create_widget(http, "Persisted", 42)
+    end
+
+    assert File.file?(db), "expected the SQLite database next to the executable at #{db}"
+    db
+  end
+
+  # Starts the same executable a second time: the application directory is
+  # gone (a temporary directory with the native stub, a read-only ZIP store
+  # with --cosmo-ruby), so whatever survived was written beside the binary.
+  def assert_survives_restart(exe, run_dir, db)
+    with_server(exe, run_dir) do |http|
+      status = assert_status_endpoint(http, packaged: true, expected_db: db)
+      assert_equal 1, status["widget_count"],
+                   "the record created by the previous run should still be in the database"
+
+      body = get_body(http, "/report")
+      assert_match(/TOTAL=42/, body)
+      assert_match(/class="row">Persisted=42/, body)
     end
   end
 
@@ -248,7 +278,8 @@ class TestRails < Minitest::Test
                         **spawn_isolation)
     log.close
 
-    wait_until_ready(pid, port, log_path)
+    note "%s answered on port %d after %.1fs" %
+         [File.basename(exe), port, wait_until_ready(pid, port, log_path)]
     yield HttpClient.new(port)
   ensure
     stop(pid) if pid
@@ -288,8 +319,10 @@ class TestRails < Minitest::Test
     port
   end
 
+  # Waits for the packaged server to answer, and returns how long that took.
   def wait_until_ready(pid, port, log_path)
-    deadline = Time.now + BOOT_TIMEOUT
+    started = Time.now
+    deadline = started + BOOT_TIMEOUT
     loop do
       if Process.waitpid(pid, Process::WNOHANG)
         flunk "the packaged server exited before it started serving:\n#{tail(File.read(log_path))}"
@@ -297,7 +330,7 @@ class TestRails < Minitest::Test
 
       begin
         Net::HTTP.start("127.0.0.1", port, open_timeout: 2, read_timeout: 5) do |http|
-          return if http.request(Net::HTTP::Get.new("/status")).code == "200"
+          return Time.now - started if http.request(Net::HTTP::Get.new("/status")).code == "200"
         end
       rescue SystemCallError, Net::OpenTimeout, Net::ReadTimeout, EOFError, IOError
         # not up yet
