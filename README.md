@@ -180,6 +180,7 @@ Fine-tuning flags:
 * `--windows`: Force a Windows GUI application (uses `rubyw.exe`). (Windows only)
 * `--console`: Force a console application (uses `ruby.exe`). (Windows only)
 * `--chdir-first`: Change working directory to the app's extraction directory before the script starts.
+* `--chdir-exe-dir`: Change working directory to the directory containing the executable before the script starts. Use this when your app reads or writes files that live next to the `.exe` using relative paths. Cannot be combined with `--chdir-first`.
 * `--icon <ico>`: Replace the default icon with a custom `.ico` file.
 * `--rubyopt <str>`: Set `RUBYOPT` when the executable runs.
 * `--debug`: Enable verbose output when the generated executable runs.
@@ -351,8 +352,9 @@ Fine-tuning flags:
 
 ### Running your application:
 
-* The working directory is not changed by OCRAN unless you use `--chdir-first`. You must change to the installation or temporary
-  directory yourself. See also below.
+* The working directory is not changed by OCRAN unless you use `--chdir-first`
+  (extraction directory) or `--chdir-exe-dir` (directory containing the
+  executable). See "Working directory" below.
 * When a `.exe` is running, `OCRAN_EXECUTABLE` points to the `.exe` with its full path.
 * The temporary location of the script is available via `$0`.
 * OCRAN does not set up the include path. Add `$:.unshift File.dirname($0)` at the start of your script if you need to `require` additional files from the same directory as your main script.
@@ -687,25 +689,50 @@ output, `OCRAN_EXECUTABLE` is set to the full path of the running executable:
 
 ### Working directory
 
-The OCRAN executable does not change the working directory when it starts. It only changes the working directory when you use
-`--chdir-first`.
+By default the OCRAN executable does not change the working directory when it
+starts. Two opt-in build options change this:
 
-You should not assume that the current working directory when invoking
-an executable built with .exe is the location of the source script. It
-can be the directory where the executable is placed (when invoked
-through the Windows Explorer), the users' current working directory
-(when invoking from the Command Prompt), or even
-`C:\\WINDOWS\\SYSTEM32` when the executable is invoked through
-a file association.
+* `--chdir-first`: the working directory is always the common parent
+  directory of your source files inside the extraction directory. Do not use
+  this if your application takes filenames as command-line arguments.
+* `--chdir-exe-dir`: the working directory is the directory that contains the
+  executable itself. Use this when your application reads or writes files that
+  are placed next to the `.exe` (config files, spreadsheets, output folders,
+  ...) using relative paths. Note that relative filenames passed as
+  command-line arguments will then also resolve against the executable's
+  directory instead of the invoker's current directory.
 
-With `--chdir-first`, the working directory is always the common parent
-directory of your source files. Do not use this if your application takes
-filenames as command-line arguments.
+Without these options, you should not assume anything about the current
+working directory when your executable is invoked. It can be the directory
+where the executable is placed (when invoked through the Windows Explorer),
+the users' current working directory (when invoking from the Command Prompt),
+or even `C:\\WINDOWS\\SYSTEM32` when the executable is invoked through a file
+association.
 
 To `require` additional files from the source directory while keeping the
 user's working directory:
 
     $LOAD_PATH.unshift File.dirname($0)
+
+### Finding files next to the executable
+
+Be aware that `__FILE__`, `__dir__` and `$0` inside a packaged application
+point to the extracted copy of your script in the temporary extraction
+directory — not to the directory containing the `.exe`. Anchoring paths on
+`__dir__` (e.g. `APP_ROOT = File.expand_path(__dir__)`) therefore makes the
+application look for its data files inside the temporary directory, which is
+usually not what you want.
+
+To locate files relative to the executable, either build with
+`--chdir-exe-dir` and use plain relative paths, or anchor your paths on the
+`OCRAN_EXECUTABLE` environment variable, which is always set to the full path
+of the running executable:
+
+    APP_ROOT = if ENV["OCRAN_EXECUTABLE"]
+                 File.dirname(ENV["OCRAN_EXECUTABLE"])
+               else
+                 __dir__   # plain `ruby myapp.rb` during development
+               end
 
 ### Detecting OCRAN at build time
 

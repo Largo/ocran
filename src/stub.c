@@ -25,6 +25,7 @@ int main(int argc, char *argv[])
     OperationModes op_modes = 0;
     const char *extract_dir = NULL;
     char *image_path = NULL;
+    char *exe_dir = NULL;
 
     /*
        Initialize signal and control handling so the parent process remains
@@ -100,6 +101,16 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
+    /* Resolve the executable's directory when the script should start
+       with its working directory next to the .exe (--chdir-exe-dir). */
+    if (IsChdirToExeDir(op_modes)) {
+        exe_dir = GetParentPath(image_path);
+        if (!exe_dir) {
+            FATAL("Failed to resolve the executable directory");
+            goto cleanup;
+        }
+        DEBUG("Will start script in executable directory: %s", exe_dir);
+    }
 #ifdef __COSMOPOLITAN__
     /*
        This stub is itself an APE.  It fork/execs the payload interpreter and
@@ -124,7 +135,7 @@ int main(int argc, char *argv[])
        and then overwrites it with the external script’s return code.
     */
     DEBUG("Run application script");
-    if (!RunScript(argv, IsChdirBeforeScript(op_modes), &status)) {
+    if (!RunScript(argv, IsChdirBeforeScript(op_modes), exe_dir, &status)) {
         FATAL("Failed to run script");
         goto cleanup;
     }
@@ -140,6 +151,10 @@ cleanup:
 
     if (image_path) {
         free(image_path);
+    }
+
+    if (exe_dir) {
+        free(exe_dir);
     }
 
     if (unpack_ctx) {

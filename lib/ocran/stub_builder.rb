@@ -21,6 +21,7 @@ module Ocran
     CHDIR_BEFORE_SCRIPT = 0x08
     DATA_COMPRESSED     = 0x10
     RUN_IN_EXE_DIR      = 0x20
+    CHDIR_TO_EXE_DIR    = 0x40
 
     WINDOWS = Gem.win_platform?
 
@@ -77,6 +78,12 @@ module Ocran
     # When set to true, the working directory is changed to the application's
     # deployment location at runtime.
     #
+    # chdir_to_exe_dir:
+    # When set to true, the working directory is changed to the directory
+    # containing the (stub) executable before the script starts. This makes
+    # relative file access resolve next to the executable regardless of how
+    # it was invoked. Mutually exclusive with chdir_before.
+    #
     # debug_mode:
     # When the debug_mode option is set to true, the stub will output debug information
     # when the exe file is executed. Debug mode can also be enabled within the directive
@@ -109,7 +116,8 @@ module Ocran
     # cosmocc, see --cosmo). When set, it takes precedence over both
     # STUB_PATH and STUBW_PATH.
     #
-    def initialize(path, chdir_before: nil, debug_extract: nil, debug_mode: nil,
+    def initialize(path, chdir_before: nil, chdir_to_exe_dir: nil,
+                   debug_extract: nil, debug_mode: nil,
                    enable_compression: nil, gui_mode: nil, icon_path: nil,
                    run_in_exe_dir: nil, stub_path: nil)
       @dirs = FilePathSet.new
@@ -146,7 +154,7 @@ module Ocran
         @of = of
         @opcode_offset = @of.size
 
-        write_header(debug_mode, debug_extract, chdir_before, enable_compression, run_in_exe_dir)
+        write_header(debug_mode, debug_extract, chdir_before, enable_compression, run_in_exe_dir, chdir_to_exe_dir)
 
         b = proc {
           yield(self)
@@ -230,7 +238,7 @@ module Ocran
     end
     private :compress
 
-    def write_header(debug_mode, debug_extract, chdir_before, compressed, run_in_exe_dir = nil)
+    def write_header(debug_mode, debug_extract, chdir_before, compressed, run_in_exe_dir = nil, chdir_to_exe_dir = nil)
       next_to_exe, delete_after = debug_extract, !debug_extract
       if run_in_exe_dir
         # Wrapper mode: run in place next to the executable — never extract,
@@ -243,7 +251,8 @@ module Ocran
                 (delete_after ? AUTO_CLEAN_INST_DIR : 0) |
                 (chdir_before ? CHDIR_BEFORE_SCRIPT : 0) |
                 (compressed ? DATA_COMPRESSED : 0) |
-                (run_in_exe_dir ? RUN_IN_EXE_DIR : 0)
+                (run_in_exe_dir ? RUN_IN_EXE_DIR : 0) |
+                (chdir_to_exe_dir ? CHDIR_TO_EXE_DIR : 0)
       ].pack("C")
     end
     private :write_header

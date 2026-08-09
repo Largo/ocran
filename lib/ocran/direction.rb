@@ -1109,6 +1109,7 @@ module Ocran
       say "Build wrapper executable #{wrapper_path.basename}"
       StubBuilder.new(wrapper_path,
                       chdir_before: @option.chdir_before?,
+                      chdir_to_exe_dir: @option.chdir_exe_dir?,
                       debug_mode: @option.enable_debug_mode?,
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
@@ -1171,6 +1172,7 @@ module Ocran
 
       StubBuilder.new(executable_path,
                       chdir_before: @option.chdir_before?,
+                      chdir_to_exe_dir: @option.chdir_exe_dir?,
                       debug_extract: @option.enable_debug_extract?,
                       debug_mode: @option.enable_debug_mode?,
                       enable_compression: @option.enable_compression?,
@@ -1255,6 +1257,7 @@ module Ocran
 
       StubBuilder.new(@option.output_executable,
                       chdir_before: @option.chdir_before?,
+                      chdir_to_exe_dir: @option.chdir_exe_dir?,
                       debug_extract: @option.enable_debug_extract?,
                       debug_mode: @option.enable_debug_mode?,
                       enable_compression: @option.enable_compression?,
