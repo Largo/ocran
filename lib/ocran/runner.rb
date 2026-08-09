@@ -44,8 +44,60 @@ module Ocran
       end
 
       exit unless @option.run_script?
+      apply_gemfile_to_bundler_env if @option.gemfile
       say "Loading script to check dependencies"
       $PROGRAM_NAME = @option.script.to_s
+    end
+
+    # --gemfile names the Gemfile the application runs under, so it has to
+    # govern the dependency run as well, not just the later Gemfile scan.
+    # The script is loaded in this very process, and a BUNDLE_GEMFILE
+    # inherited from the environment would otherwise win: invoke OCRAN from
+    # inside another project's `bundle exec` and the script's
+    # `require "bundler/setup"` sets up that project's bundle instead of the
+    # application's. Gems only the application's Gemfile provides are then
+    # missing, and local development gems declared with `path:` or `gemspec`
+    # always are, since they exist nowhere else. The dependency run dies with
+    # a LoadError before anything can be packed (github issue #34).
+    def apply_gemfile_to_bundler_env
+      gemfile = @option.gemfile.to_s
+      active = active_bundler_gemfile
+
+      ENV["BUNDLE_GEMFILE"] = gemfile
+      return if active.nil? || same_file?(active, gemfile)
+
+      # Past this point the ambient bundle is a different one, so anything
+      # else describing it has to go: BUNDLE_LOCKFILE names the lockfile of
+      # the bundle being displaced, and Bundler would sooner believe it than
+      # the Gemfile we just pointed it at.
+      ENV.delete("BUNDLE_LOCKFILE")
+      return unless defined?(Bundler) && Bundler.respond_to?(:reset!)
+
+      # `bundle exec` puts -rbundler/setup in RUBYOPT as well, so the wrong
+      # bundle may already be set up by the time this runs. The variable
+      # alone is then too late: bundler/setup sits in $LOADED_FEATURES, and
+      # the script's own `require "bundler/setup"` would be a no-op. Drop
+      # Bundler's memoized state and let it be set up afresh, against the
+      # Gemfile we were given.
+      verbose "Rebinding Bundler from #{active} to #{gemfile}"
+      Bundler.reset!
+      $LOADED_FEATURES.delete_if { |feature| feature.match?(%r{[\\/]bundler[\\/]setup\.rb\z}) }
+    end
+
+    # The Gemfile this process was started against, if any.
+    def active_bundler_gemfile
+      return ENV["BUNDLE_GEMFILE"] unless ENV["BUNDLE_GEMFILE"].to_s.empty?
+      return nil unless defined?(Bundler) && Bundler.respond_to?(:default_gemfile)
+
+      Bundler.default_gemfile.to_s
+    rescue StandardError
+      # Bundler raises when there is no Gemfile anywhere above the working
+      # directory, which just means there is no ambient bundle to displace.
+      nil
+    end
+
+    def same_file?(a, b)
+      File.identical?(a, b) || File.expand_path(a) == File.expand_path(b)
     end
 
     # Force loading autoloaded constants. Searches through all modules
