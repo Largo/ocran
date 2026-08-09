@@ -25,6 +25,19 @@ module Ocran
     # Every APE binary starts with this MZ/shell-script polyglot magic.
     APE_MAGIC = "MZqFpD"
 
+    # Environment overrides that keep a child Ruby out of whatever bundle
+    # OCRAN itself was started under. RUBYOPT is how `bundle exec` set a
+    # process up historically; BUNDLER_SETUP is how it does it now, and
+    # RubyGems requires that file before any of the child's own code runs.
+    # BUNDLE_GEMFILE and BUNDLE_LOCKFILE would still misdirect a child that
+    # sets Bundler up by itself.
+    BUNDLER_FREE_ENV = {
+      "RUBYOPT" => nil,
+      "BUNDLER_SETUP" => nil,
+      "BUNDLE_GEMFILE" => nil,
+      "BUNDLE_LOCKFILE" => nil
+    }.freeze
+
     # Name of the environment variable a CosmoRuby build honors to switch
     # OFF running an embedded /zip/main.rb, i.e. to behave as an ordinary
     # interpreter (useful for inspecting a packaged application). Its
@@ -128,11 +141,16 @@ module Ocran
     # while on kernels that do support it, sh's ENOEXEC fallback is
     # simply never needed. This also validates that the payload actually
     # runs on the build host. GEM_HOME/GEM_PATH are cleared so the query
-    # sees only the payload's embedded gems, not the build host's.
+    # sees only the payload's embedded gems, not the build host's, and
+    # Bundler is kept out of it entirely: run OCRAN under `bundle exec` and
+    # the payload would otherwise be asked to set up the build host's bundle
+    # and die materializing gems it has never heard of. RUBYOPT carries that
+    # instruction in older Bundler versions, BUNDLER_SETUP - which RubyGems
+    # requires at interpreter startup - in current ones.
     def query_ruby(ruby)
       script = 'print RUBY_VERSION; print "\t"; print Gem.default_dir; ' \
                'print "\t"; print Gem::Specification.map(&:name).uniq.sort.join(",")'
-      out = IO.popen([{ "GEM_HOME" => nil, "GEM_PATH" => nil, "RUBYOPT" => nil, "RUBYLIB" => nil },
+      out = IO.popen([BUNDLER_FREE_ENV.merge("GEM_HOME" => nil, "GEM_PATH" => nil, "RUBYLIB" => nil),
                       "/bin/sh", ruby, "-e", script],
                      err: IO::NULL, &:read)
       ok = $?.success?

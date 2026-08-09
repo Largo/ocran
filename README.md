@@ -616,6 +616,55 @@ Four modes:
 If files are missing from the output, try `--gem-all=gemname` first, then
 `--gem-full=gemname`. Use `--gem-full` to include everything for all gems.
 
+### Using OCRAN under `bundle exec`
+
+OCRAN loads your script inside its own process to find out what it depends
+on, so the bundle OCRAN itself runs under is the bundle that dependency run
+sees. That matters as soon as the two are not the same.
+
+**Running `bundle exec ocran app.rb` requires `ocran` in the application's
+Gemfile.** This is Bundler's rule, not OCRAN's: `bundle exec` refuses to run
+a command the bundle does not contain ("ocran is not currently included in
+the bundle"). Add `gem "ocran"` to the Gemfile, or install OCRAN with `gem
+install ocran` and call `ocran` without `bundle exec`. Be aware that every
+gem the Gemfile lists is packed into the application when you build with
+`--gemfile`, OCRAN included.
+
+**From the application's own directory it just works.** `bundle exec ocran
+app.rb`, with or without `--gemfile Gemfile`, packages the application
+against its own bundle - including gems declared with `path:` or `gemspec`,
+which exist nowhere but that Gemfile.
+
+**Packaging one project from inside another project's bundle needs
+`--gemfile`.** If the bundle you are in is not the application's, pass
+`--gemfile path/to/app/Gemfile`. It governs the dependency run as well as
+the gem list, so a `require "bundler/setup"` in your script sets up the
+application's bundle and not the one you happen to be standing in. Without
+it the script is loaded under the wrong bundle and usually dies with a
+`LoadError` for one of its own gems; OCRAN warns when it can see that this
+is what you are doing.
+
+Gems that the surrounding bundle merely activated are not packed. The
+contents are decided by the application's own Gemfile and by what the
+dependency run actually loads, so building a small application from inside a
+large development bundle does not drag that bundle along.
+
+**The packaged executable is independent of Bundler.** It carries its own
+gems and its own Gemfile, and it clears the variables through which Bundler
+hands a bundle to a child process (`BUNDLER_SETUP`, `BUNDLE_GEMFILE`,
+`BUNDLE_LOCKFILE`, `RUBYOPT`), so it runs correctly even when started from a
+`bundle exec` shell, from a Rakefile, or from another Ruby program.
+
+**Exception: executables built with `--cosmo-ruby` cannot do that.** There
+the cosmopolitan Ruby *is* the executable, so its RubyGems has already acted
+on `BUNDLER_SETUP` before any packed code can run, and the application
+aborts with `Bundler::GemNotFound` over gems of the bundle it was launched
+from. Start such an executable outside a bundle, or clear the variables
+first - `Bundler.with_original_env { system("./app.com") }` from Ruby, or
+`env -u BUNDLER_SETUP -u BUNDLE_GEMFILE ./app.com` from a shell. Building
+with `--cosmo-ruby` under `bundle exec` is fine; only launching the result
+from inside a bundle is not.
+
 ### Code-signing a macOS app bundle
 
 After building with `--macosx-bundle`, sign the bundle with your Developer ID:

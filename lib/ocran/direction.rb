@@ -167,7 +167,8 @@ module Ocran
         end
       end
       if defined?(Gem)
-        specs += Gem.loaded_specs.values
+        foreign = foreign_bundle_gem_names
+        specs += Gem.loaded_specs.each_value.reject { |spec| foreign.include?(spec.name) }
         # Now, we also detect gems that are not included in Gem.loaded_specs.
         # Therefore, we look for any loaded file from a gem path.
         specs += GemSpecQueryable.detect_gems_from(features, verbose: @option.verbose?)
@@ -175,6 +176,83 @@ module Ocran
       # Prioritize the spec detected from Gemfile.
       specs.uniq!(&:name)
       specs
+    end
+
+    # The gems RubyGems had already activated for a bundle that is not the
+    # application's, by the time OCRAN started.
+    #
+    # `bundle exec` activates every gem of its bundle before the command it
+    # runs executes a single line, so Gem.loaded_specs describes the build
+    # environment as much as the application. When the two bundles are the
+    # same - `bundle exec ocran app.rb` from the application's own directory,
+    # the ordinary case - that is exactly right and nothing is dropped. When
+    # they differ, packing the build environment's bundle adds tens of
+    # megabytes of code the application can never load: the packaged app runs
+    # under its own Gemfile, so gems from a foreign bundle are dead weight
+    # even when they are packed.
+    #
+    # Only activation is discounted, not use: anything the dependency run
+    # actually loaded is still found through $LOADED_FEATURES by
+    # detect_gems_from, and everything the application's Gemfile names is
+    # added by the Gemfile scan. This is the same rule that already applies
+    # to a build outside Bundler, where --gemfile is what pulls in gems the
+    # dependency run does not load.
+    def foreign_bundle_gem_names
+      @foreign_bundle_gem_names ||=
+        if foreign_build_bundle?
+          verbose "Ignoring #{@pre_env.activated_gems.size} gems activated by the build environment's bundle " \
+                  "#{@pre_env.env["BUNDLE_GEMFILE"]}"
+          @pre_env.activated_gems.to_set
+        else
+          Set.new
+        end
+    end
+
+    # Whether OCRAN itself was started under a bundle other than the one the
+    # application runs under.
+    def foreign_build_bundle?
+      return false unless @pre_env.bundler_setup_loaded?
+
+      build_gemfile = @pre_env.env["BUNDLE_GEMFILE"]
+      return false if build_gemfile.nil? || build_gemfile.empty?
+
+      app_gemfile = @option.application_gemfile
+      return true if app_gemfile.nil?
+
+      !same_file?(build_gemfile, app_gemfile)
+    end
+
+    def same_file?(a, b)
+      File.identical?(a, b) || File.expand_path(a) == File.expand_path(b)
+    end
+
+    # Packed name of the file BUNDLER_SETUP is pointed at.
+    BUNDLER_SETUP_NOOP = Pathname("no_bundler_setup.rb")
+
+    # Keeps the environment of whoever launches the packaged application
+    # from dragging Bundler into it.
+    #
+    # A packaged application carries its own gems and its own Gemfile; the
+    # bundle of the machine it is started from means nothing to it, and
+    # anything of that bundle that survives into the process is fatal rather
+    # than merely wrong - Bundler aborts with GemNotFound as soon as it
+    # cannot materialize gems that were never packed. RUBYOPT is already
+    # overwritten wholesale, but that alone stopped being enough: RubyGems
+    # now requires the file named by BUNDLER_SETUP at interpreter startup,
+    # which is how current Bundler versions set a process up, and
+    # BUNDLE_GEMFILE would still send the application's own
+    # `require "bundler/setup"` at the wrong Gemfile.
+    #
+    # BUNDLER_SETUP names a file to require, so it cannot simply be blanked
+    # - an empty value is still truthy and RubyGems would raise trying to
+    # require it. It is pointed at an empty packed file instead. Bundler
+    # does treat empty BUNDLE_GEMFILE and BUNDLE_LOCKFILE as unset, which is
+    # what lets the application find the Gemfile packed beside it.
+    def neutralize_bundler_env(builder)
+      builder.touch(BUNDLER_SETUP_NOOP)
+      builder.set_env_path("BUNDLER_SETUP", BUNDLER_SETUP_NOOP)
+      builder.export("BUNDLE_GEMFILE", "")
+      builder.export("BUNDLE_LOCKFILE", "")
     end
 
     def normalized_features
@@ -887,6 +965,7 @@ module Ocran
 
       # Set environment variable
       builder.export("RUBYOPT", rubyopt_result.rubyopt)
+      neutralize_bundler_env(builder)
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
       load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq

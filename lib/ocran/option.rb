@@ -446,6 +446,36 @@ EOF
 
     def script = @options[__method__]
 
+    # The names Bundler accepts for a Gemfile, most common first.
+    GEMFILE_NAMES = %w[Gemfile gems.rb].freeze
+    private_constant :GEMFILE_NAMES
+
+    # The Gemfile the application runs under: the one named by --gemfile,
+    # or else the nearest Gemfile at or above the script's directory, which
+    # is where Bundler itself would look. Returns nil when the application
+    # has no Gemfile at all.
+    #
+    # This is how the application's own bundle is told apart from whatever
+    # bundle OCRAN happens to have been started under. Running
+    # `bundle exec ocran app.rb` from the application's own directory is the
+    # ordinary case, and there the two are the same file; packaging some
+    # other project from inside this one's bundle is not.
+    def application_gemfile
+      return gemfile if gemfile
+
+      dir = script.expand_path.dirname
+      loop do
+        GEMFILE_NAMES.each do |name|
+          candidate = dir + name
+          return candidate if candidate.file?
+        end
+        parent = dir.parent
+        return nil if parent == dir
+
+        dir = parent
+      end
+    end
+
     def source_files = @options[__method__]
 
     def use_inno_setup? = @options[__method__]
