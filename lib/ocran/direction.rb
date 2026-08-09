@@ -272,7 +272,16 @@ module Ocran
         # binary with the standard library embedded in its ZIP store
         # (/zip/lib/ruby/...). No libruby, no shared libraries and no
         # LD_LIBRARY_PATH are needed — pack the single file and be done.
-        builder.copy_to_bin(Pathname(@option.cosmo_ruby), ruby_executable)
+        #
+        # Except in ZIP packaging mode, where the output IS that binary and
+        # the application is injected into it: packing a copy of the
+        # interpreter into itself would double the size of the executable
+        # for nothing.
+        if @option.cosmo_zip?
+          say "Injecting the application into the ZIP store of #{@option.cosmo_ruby}"
+        else
+          builder.copy_to_bin(Pathname(@option.cosmo_ruby), ruby_executable)
+        end
       else
         ruby_source = bindir / ruby_executable
         if !Gem.win_platform? && File.binread(ruby_source, 2) == "#!"
@@ -1077,6 +1086,40 @@ module Ocran
       PLIST
 
       say "Finished building #{bundle_path} (#{builder.data_size} bytes decompressed)"
+    end
+
+    # Builds the executable by copying the cosmopolitan Ruby and injecting
+    # the application into its ZIP store (--cosmo-ruby with an interpreter
+    # that runs an embedded /zip/main.rb). No compiler runs, no launcher
+    # stub is involved, and the resulting binary unpacks nothing when it
+    # starts.
+    def build_cosmo_zip_exe
+      require_relative "zip_payload_builder"
+
+      output = @option.output_executable
+      ZipPayloadBuilder.new(output,
+                            cosmo_ruby: @option.cosmo_ruby,
+                            chdir_before: @option.chdir_before?,
+                            debug_mode: @option.enable_debug_mode?,
+                            &to_proc) => builder
+
+      builder.ignored_symlinks.each do |link_path, target|
+        verbose "Skipping symlink #{link_path} -> #{target} (ZIP members cannot be symlinks)"
+      end
+
+      if @option.icon_filename
+        warning "--icon has no effect in this mode: the executable is a copy of the cosmopolitan Ruby, whose resources OCRAN does not rewrite"
+      end
+      if @option.enable_debug_extract?
+        warning "--debug-extract has no effect in this mode: nothing is extracted, the application is read from the executable's own ZIP store"
+      end
+
+      _, _, unsupported = ZipPayloadBuilder.parse_rubyopt(rubyopt)
+      unless unsupported.empty?
+        warning "RUBYOPT #{unsupported.join(" ")} cannot be applied when the application is packed into the interpreter's ZIP store (the interpreter is already running); only -I and -r are replayed"
+      end
+
+      say "Finished building #{output} (#{output.size} bytes, #{builder.data_size} bytes of application data)"
     end
 
     def build_stab_exe

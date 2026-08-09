@@ -25,6 +25,22 @@ module Ocran
     # Every APE binary starts with this MZ/shell-script polyglot magic.
     APE_MAGIC = "MZqFpD"
 
+    # Name of the environment variable a CosmoRuby build honors to switch
+    # OFF running an embedded /zip/main.rb, i.e. to behave as an ordinary
+    # interpreter (useful for inspecting a packaged application). Its
+    # presence in the binary is what marks the build as one that runs an
+    # embedded main script at all, which is the capability the
+    # compiler-free ZIP packaging mode is built on - a build without it
+    # would ignore the injected main.rb and try to run the first argument
+    # as a script instead.
+    ZIP_MAIN_MARKER = "COSMORUBY_NO_ZIP_MAIN"
+
+    # How much of the binary is read at a time when scanning for the
+    # marker. The marker sits in the interpreter's code, not in its ZIP
+    # store, so the whole file may have to be read; it is a ~20 MB
+    # sequential scan, a few tens of milliseconds.
+    SCAN_CHUNK_SIZE = 1 << 20
+
     # Environment variable naming a cosmocc toolchain (the cosmocc
     # executable or its installation directory), checked before PATH.
     COSMOCC_ENV = "COSMOCC"
@@ -68,6 +84,33 @@ module Ocran
       end
 
       path
+    end
+
+    # True when the given cosmopolitan Ruby runs an embedded /zip/main.rb
+    # on startup. Such a build can be packaged without any compiler: the
+    # application is injected into the binary's own ZIP store and the
+    # binary runs it (see ZipPayloadBuilder). Builds without the hook need
+    # the APE launcher stub, and therefore cosmocc.
+    #
+    # Detected by scanning for the name of the opt-out environment
+    # variable, which only a build implementing the hook contains. The
+    # alternative - copying the 20 MB binary, injecting a probe script and
+    # running it - is an order of magnitude more expensive for the same
+    # answer, and the scan cannot produce a false positive on a build that
+    # never looks at the variable.
+    def zip_main_support?(ruby)
+      marker = ZIP_MAIN_MARKER.b
+      overlap = marker.bytesize - 1
+      previous = "".b
+
+      File.open(ruby, "rb") do |io|
+        while (chunk = io.read(SCAN_CHUNK_SIZE))
+          return true if (previous + chunk).include?(marker)
+
+          previous = chunk.byteslice(-overlap, overlap) || chunk
+        end
+      end
+      false
     end
 
     # Runs the given cosmopolitan Ruby once on the build host and returns

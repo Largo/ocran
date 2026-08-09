@@ -18,6 +18,7 @@ module Ocran
         :chdir_before? => false,
         :cosmo_cc => nil,
         :cosmo_ruby => nil,
+        :cosmo_zip? => false,
         :enable_compression? => true,
         :enable_debug_extract? => false,
         :enable_debug_mode? => false,
@@ -114,23 +115,29 @@ Experimental options:
 
 --cosmo-ruby <ruby.com>  Package the given cosmopolitan-built Ruby (an APE,
                    e.g. ruby.com) as the interpreter instead of the host
-                   Ruby, and launch it with an Actually Portable
-                   Executable (APE) stub: the result is a single
-                   <scriptname>.com that runs on Linux, Windows and macOS.
-                   The cosmocc toolchain that builds the stub is located
-                   automatically (COSMOCC environment variable, cosmocc in
-                   PATH, then conventional install locations such as
-                   ~/.cosmocc/*/bin/cosmocc). The APE must be fully
+                   Ruby: the result is a single <scriptname>.com that runs
+                   on Linux, Windows and macOS. The APE must be fully
                    self-contained (stdlib embedded in its ZIP store).
                    Dependency detection still runs under the host Ruby;
                    native-extension gems are rejected (pure-Ruby gems are
                    packed as usual).
+                   When the given interpreter runs an embedded /zip/main.rb
+                   (CosmoRuby builds do), the application is injected into
+                   its ZIP store: no compiler is needed and the executable
+                   starts without unpacking anything. Otherwise OCRAN falls
+                   back to an APE launcher stub that extracts the
+                   application at every start, and locates the cosmocc
+                   toolchain to build that stub automatically (COSMOCC
+                   environment variable, cosmocc in PATH, then conventional
+                   install locations such as ~/.cosmocc/*/bin/cosmocc).
 --cosmo <path>     Use the Cosmopolitan toolchain (cosmocc) at <path> to
                    build the launcher stub, overriding the automatic
                    toolchain lookup. <path> is the cosmocc executable or
-                   its install dir. Given without --cosmo-ruby, it packages
-                   the host Ruby behind an APE stub. Console-only; output
-                   defaults to <scriptname>.com.
+                   its install dir. Given together with --cosmo-ruby it
+                   forces the launcher-stub build even when the interpreter
+                   supports ZIP packaging. Given without --cosmo-ruby, it
+                   packages the host Ruby behind an APE stub. Console-only;
+                   output defaults to <scriptname>.com.
                    (Alias: --cosmo-toolchain)
 EOF
     end
@@ -318,13 +325,28 @@ EOF
           raise "--windows cannot be used with #{opt}: cosmocc has no GUI (stubw) equivalent; APE stubs are console-only"
         end
 
-        # An APE package is launched by an APE stub, which is compiled with
-        # cosmocc. --cosmo names that toolchain explicitly; with only
-        # --cosmo-ruby it is discovered on the build host (COSMOCC, PATH,
-        # conventional install locations), so one option is enough. Resolved
-        # here, before the dependency run, so a missing toolchain fails fast.
         load_cosmo_toolchain
-        @options[:cosmo_cc] = CosmoToolchain.require_cc(cosmo_cc)
+
+        # A cosmopolitan Ruby that runs an embedded /zip/main.rb can carry
+        # the application inside its own ZIP store, which needs no compiler
+        # and no launcher stub at all - so that is what --cosmo-ruby does
+        # on its own. Naming a toolchain with --cosmo is the way to ask for
+        # the launcher stub explicitly; the other output formats
+        # (--output-dir, --output-zip, --innosetup, --macosx-bundle) are
+        # directory layouts rather than a single binary, so they keep using
+        # it too.
+        @options[:cosmo_zip?] =
+          !!cosmo_ruby && !cosmo_cc && !single_binary_output_conflict &&
+          CosmoToolchain.zip_main_support?(cosmo_ruby)
+
+        unless cosmo_zip?
+          # The APE stub is compiled with cosmocc. --cosmo names that
+          # toolchain explicitly; otherwise it is discovered on the build
+          # host (COSMOCC, PATH, conventional install locations), so one
+          # option is still enough. Resolved here, before the dependency
+          # run, so a missing toolchain fails fast.
+          @options[:cosmo_cc] = CosmoToolchain.require_cc(cosmo_cc)
+        end
       end
 
       if macosx_bundle && (output_dir || output_zip || inno_setup_script)
@@ -349,6 +371,18 @@ EOF
     def cosmo_cc = @options[__method__]
 
     def cosmo_ruby = @options[__method__]
+
+    # True when the application is packaged by injecting it into the ZIP
+    # store of the cosmopolitan Ruby itself: no cosmocc, no launcher stub,
+    # and no extraction to a temporary directory at run time.
+    def cosmo_zip? = @options[__method__]
+
+    # Output formats that are not a single self-contained binary, and
+    # therefore cannot be produced by injecting into the interpreter.
+    def single_binary_output_conflict
+      output_dir || output_zip || inno_setup_script || @options[:macosx_bundle?]
+    end
+    private :single_binary_output_conflict
 
     # True when the build produces an APE (Actually Portable Executable),
     # i.e. an APE launcher stub is used: an explicit toolchain (--cosmo), a
