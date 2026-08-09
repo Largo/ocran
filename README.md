@@ -31,6 +31,20 @@ If using Windows you can use  the Inno Setup
 option (`--innosetup`) to produce a proper installer that extracts once to a
 permanent directory.
 
+If you want **one** binary that runs on all three systems and starts
+without extracting anything, package a cosmopolitan Ruby with
+`--cosmo-ruby <ruby.com>` (experimental, see
+[Experimental options](#experimental-options)). Grab the interpreter from
+[CosmoRuby releases](https://github.com/Largo/cosmoruby/releases/latest)
+and point OCRAN at it:
+
+```
+ocran app.rb --cosmo-ruby ./ruby.com
+```
+
+It needs no compiler and no installer, and the same file runs on Linux,
+macOS and Windows, on x86-64 and ARM.
+
 You can easily generate binaries for the supported Operating Systems with GitHub
 Actions — see [Building for multiple platforms with GitHub Actions](#building-for-multiple-platforms-with-github-actions).
 
@@ -170,6 +184,163 @@ Fine-tuning flags:
 * `--rubyopt <str>`: Set `RUBYOPT` when the executable runs.
 * `--debug`: Enable verbose output when the generated executable runs.
 * `--debug-extract`: Unpack to a local directory and do not delete after execution (useful for troubleshooting).
+
+#### Experimental options:
+
+* `--cosmo-ruby <ruby.com>`: Package a cosmopolitan-built Ruby (an APE)
+  as the bundled interpreter instead of the host Ruby. The produced
+  `.com` contains no host-native code at all and runs on Linux, Windows
+  and macOS, on x86-64 and ARM:
+
+  ```
+  ocran app.rb --cosmo-ruby /path/to/ruby.com
+  ```
+
+  **Where to get `ruby.com`.** Download a release from
+  [CosmoRuby](https://github.com/Largo/cosmoruby/releases/latest) — one
+  file, no installation:
+
+  ```
+  curl -L -o ruby.com https://github.com/Largo/cosmoruby/releases/latest/download/ruby.com
+  chmod +x ruby.com
+  ocran app.rb --cosmo-ruby ./ruby.com
+  ```
+
+  Any self-contained cosmopolitan Ruby works, but CosmoRuby is what this
+  option is developed and tested against. Releases from `v4.0.6-cosmo3`
+  onwards also support the ZIP packaging mode described below, which
+  needs no C compiler at all; earlier releases fall back to building a
+  launcher stub, which needs `cosmocc`. Building your own is documented
+  in [CosmoRuby's BUILDING.md](https://github.com/Largo/cosmoruby/blob/main/BUILDING.md).
+
+  This one option is the whole command line. The payload APE must be
+  fully self-contained, i.e. carry its standard library in its embedded
+  ZIP store (`/zip/lib/ruby/...`) — upstream cosmopolitan Ruby builds
+  do.
+
+  **Two ways of producing the executable.** OCRAN picks the better one
+  automatically, from the interpreter you give it:
+
+  | | ZIP packaging (default when supported) | APE launcher stub (fallback) |
+  |---|---|---|
+  | How | the executable **is** the interpreter, with your application injected into its ZIP store | an APE stub carries the interpreter and your application as a payload |
+  | Compiler | none | `cosmocc` (located automatically) |
+  | At every start | nothing is unpacked | ~21 MB unpacked into a temp directory |
+  | Startup (see below) | 0.23 s Linux / 0.49 s Windows | 0.79 s Linux / 1.5 s Windows |
+  | Temp directory | never created | created per run, leaked if the process is killed |
+  | Size | interpreter + application | LZMA-compressed, roughly half |
+  | `__dir__` of your script | `/zip/ocran/src` (inside the executable) | the temp directory |
+
+  ZIP packaging is used when the given interpreter runs an embedded
+  `/zip/main.rb` on startup (CosmoRuby builds do; OCRAN detects it by
+  inspecting the binary). Otherwise OCRAN falls back to the launcher
+  stub and locates a `cosmocc` toolchain for it (see `--cosmo` below).
+  Passing `--cosmo <toolchain>` explicitly always selects the launcher
+  stub, as do `--output-dir`, `--output-zip`, `--innosetup` and
+  `--macosx-bundle`, which are not single binaries.
+
+  **What changes for your application under ZIP packaging** (nothing
+  below applies to the launcher stub):
+  * Your files are not on disk at run time. `$0`, `__FILE__` and
+    `__dir__` point into the executable's archive
+    (`/zip/ocran/src/...`), on every platform and with `/` separators.
+    Reading, `require`, `require_relative` and `Dir.glob` all work
+    there; **writing does not**, and the archive cannot be a working
+    directory (`Dir.chdir("/zip")` fails).
+  * Files that ship **next to the executable** are unaffected: resolve
+    them through `ENV["OCRAN_EXECUTABLE"]`, which is the full path of
+    the running `.com` exactly as before (issue #32). Do not use
+    `__dir__` for that — it never meant "next to the exe" in either
+    mode, but here it is obviously wrong instead of subtly wrong.
+  * `--chdir-first` changes into the directory containing the
+    executable, since the application directory does not exist on disk.
+  * The whole command line reaches `ARGV`, unchanged. The interpreter
+    claims none of it, so `app.com --version`, `app.com -v` and
+    `app.com -- x` behave exactly as they would for a natively compiled
+    program (`--` is an ordinary argument, not a separator). This needs
+    a cosmopolitan Ruby with the fix from 2026-08; older builds parsed
+    leading option-shaped arguments themselves and failed with
+    `invalid option --verbose`.
+  * `RUBYOPT` is applied as far as it can be from inside the process:
+    `-I` and `-r` are replayed, other flags are reported at build time
+    and dropped (the interpreter has already started).
+  * `--icon` and `--debug-extract` have no effect and are reported.
+  * The executable is not compressed (it has to stay runnable), so
+    `--no-lzma` makes no difference to its size; individual packed files
+    are deflated.
+  * Exit codes are your application's, exactly, on every platform
+    including Windows. (Cosmopolitan encodes a POSIX wait status into
+    the Windows process exit code, so `exit 3` used to arrive as 768;
+    both the interpreter and the launcher stub now report the plain
+    status.)
+
+  Notes that apply to both:
+  * The payload is run once on the build host (via `/bin/sh`, using the
+    APE's shell-script self-bootstrap) to validate it and to query its
+    version and embedded gem directory.
+  * Dependency detection still runs under the **host** Ruby. Standard
+    library requires resolve at runtime from the payload's embedded
+    stdlib (the host stdlib is not packed); a warning is printed when
+    host and payload Ruby versions differ.
+  * Pure-Ruby application files and pure-Ruby gems are packed as usual
+    and activated via `GEM_PATH`. Native gems cannot work (the payload
+    is a statically linked `x86_64-cosmo` binary that cannot `dlopen`):
+    gems that the payload provides itself (e.g. `json`, `psych`,
+    `sqlite3`) are simply not packed, so the payload's own copy serves;
+    any other native gem aborts the build. This covers gems built from
+    source (`spec.extensions`) as well as **precompiled platform gems**
+    (e.g. `sqlite3-2.9.5-x86_64-linux-gnu`), which declare no
+    extensions but ship a prebuilt `.so` in their `lib` directory.
+  * `--add-all-core` and encoding-support packing are no-ops (the
+    payload embeds its complete stdlib and encodings).
+  * Linux/macOS build hosts only, console applications only
+    (`--windows` is rejected — cosmocc has no GUI `stubw` equivalent).
+    The launcher-stub fallback additionally needs `make`. The default
+    output name uses the `.com` extension (APE convention), e.g.
+    `app.rb` → `app.com`; an explicit `--output` is used verbatim.
+
+  **Measured** with a 8-file CLI using four pure-Ruby gems (thor,
+  terminal-table, rainbow, unicode-display_width) and cosmopolitan Ruby
+  4.0.6, average of 10 runs:
+
+  | Build | Size | Startup (Linux) | Startup (Windows 11) |
+  |---|---|---|---|
+  | ZIP packaging | 21.5 MB | 0.23 s | 0.49 s |
+  | Launcher stub, `--no-lzma` | 22.8 MB | 0.24 s | 1.09 s |
+  | Launcher stub, LZMA (default) | 11.3 MB | 0.79 s | 1.52 s |
+
+  The stub's cost is unpacking ~21 MB per run, which LZMA turns into
+  decompression time: on Linux with a warm page cache an uncompressed
+  stub build is nearly as fast, on Windows it is not. ZIP packaging
+  trades the smaller, compressed artifact for constant startup and no
+  disk writes at all.
+
+* `--cosmo <path>` (alias `--cosmo-toolchain`): Name the
+  [Cosmopolitan Libc](https://github.com/jart/cosmopolitan) `cosmocc`
+  toolchain that builds the APE launcher stub from its C sources at
+  packaging time, overriding the automatic lookup. `<path>` is either
+  the `cosmocc` executable itself or the toolchain directory (one
+  containing `bin/cosmocc`, e.g. an unpacked
+  [cosmocc.zip](https://cosmo.zip/pub/cosmocc/cosmocc.zip)).
+  Notes:
+  * With `--cosmo-ruby`, naming a toolchain explicitly is also how you
+    ask for the launcher stub instead of ZIP packaging (for the
+    extraction semantics: a real on-disk application directory, and
+    `ARGV` untouched by the interpreter's option parser).
+  * When a toolchain is needed but not named, `--cosmo-ruby` looks for
+    one in this order: the `COSMOCC` environment variable (the `cosmocc` executable
+    or its install directory), `cosmocc` in `PATH`, and finally the
+    conventional install locations `~/.cosmocc/*/bin/cosmocc`,
+    `~/cosmocc/*/bin/cosmocc`, `/opt/cosmocc/*/bin/cosmocc`,
+    `/opt/cosmo/bin/cosmocc` and `/usr/local/cosmocc/bin/cosmocc`
+    (newest version first). If none is found the build stops with a
+    message naming all three mechanisms.
+  * Compiled stubs are cached in `~/.cache/ocran` (keyed on the
+    toolchain and stub sources), so only the first build compiles.
+  * Given **without** `--cosmo-ruby`, the packaged Ruby runtime is still
+    the host platform's Ruby — the APE property then applies to the
+    launcher stub, not to the bundled application. See
+    `docs/cosmocc-port-plan.md` for status.
 
 ### Compilation:
 

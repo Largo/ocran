@@ -1,0 +1,480 @@
+checking for --enable-debug-build option... -------------------- no
+
+--------------------
+
+pkg_config: checking for pkg-config for libffi... -------------------- [" ", "", "-lffi"]
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --exists libffi
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --libs libffi |
+=> "-lffi \n"
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lruby-3.3  -lm -lpthread  -lc"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: int main(int argc, char **argv)
+4: {
+5:   return !!argv[argc];
+6: }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I. -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lruby-3.3 -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: int main(int argc, char **argv)
+4: {
+5:   return !!argv[argc];
+6: }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --cflags-only-I libffi |
+=> "\n"
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --cflags-only-other libffi |
+=> "\n"
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --libs-only-l libffi |
+=> "-lffi \n"
+package configuration for libffi
+incflags: 
+cflags: 
+ldflags: 
+libs: -lffi
+
+--------------------
+
+pkg_config: checking for pkg-config for libffi... -------------------- "3.4.8"
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --exists libffi
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu x86_64-linux-gnu-pkg-config --modversion libffi |
+=> "3.4.8\n"
+--------------------
+
+have_header: checking for ffi.h... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <ffi.h>
+/* end */
+
+--------------------
+
+have_library: checking for -lffi... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed      -lffi -lruby-3.3 -lffi  -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: 
+15: int t(void) { ; return 0; }
+/* end */
+
+--------------------
+
+have_header: checking for sys/mman.h... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <sys/mman.h>
+/* end */
+
+--------------------
+
+have_header: checking for link.h... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <link.h>
+/* end */
+
+--------------------
+
+have_header: checking for dlfcn.h... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <dlfcn.h>
+/* end */
+
+--------------------
+
+have_library: checking for -ldl... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: 
+15: int t(void) { ; return 0; }
+/* end */
+
+--------------------
+
+have_func: checking for dlopen()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘dlopen’ undeclared (first use in this function); did you mean ‘popen’?
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))dlopen; return !p; }
+      |                                                         ^~~~~~
+      |                                                         popen
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))dlopen; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void dlopen();
+15: int t(void) { dlopen(); return 0; }
+/* end */
+
+--------------------
+
+have_func: checking for dlclose()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘dlclose’ undeclared (first use in this function); did you mean ‘close’?
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))dlclose; return !p; }
+      |                                                         ^~~~~~~
+      |                                                         close
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))dlclose; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void dlclose();
+15: int t(void) { dlclose(); return 0; }
+/* end */
+
+--------------------
+
+have_func: checking for dlsym()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘dlsym’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))dlsym; return !p; }
+      |                                                         ^~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))dlsym; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void dlsym();
+15: int t(void) { dlsym(); return 0; }
+/* end */
+
+--------------------
+
+have_func: checking for dlerror()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘dlerror’ undeclared (first use in this function); did you mean ‘perror’?
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))dlerror; return !p; }
+      |                                                         ^~~~~~~
+      |                                                         perror
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))dlerror; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void dlerror();
+15: int t(void) { dlerror(); return 0; }
+/* end */
+
+--------------------
+
+have_func: checking for dlinfo()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+conftest.c: In function ‘t’:
+conftest.c:14:57: error: ‘dlinfo’ undeclared (first use in this function)
+   14 | int t(void) { void ((*volatile p)()); p = (void ((*)()))dlinfo; return !p; }
+      |                                                         ^~~~~~
+conftest.c:14:57: note: each undeclared identifier is reported only once for each function it appears in
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))dlinfo; return !p; }
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: extern void dlinfo();
+15: int t(void) { dlinfo(); return 0; }
+/* end */
+
+--------------------
+
+have_const: checking for RTLD_DI_LINKMAP in dlfcn.h... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <dlfcn.h>
+4: 
+5: /*top*/
+6: typedef int conftest_type;
+7: conftest_type conftestval = (int)RTLD_DI_LINKMAP;
+/* end */
+
+--------------------
+
+have_const: checking for FFI_STDCALL in ffi.h... -------------------- no
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+conftest.c:7:34: error: ‘FFI_STDCALL’ undeclared here (not in a function)
+    7 | conftest_type conftestval = (int)FFI_STDCALL;
+      |                                  ^~~~~~~~~~~
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <ffi.h>
+4: 
+5: /*top*/
+6: typedef int conftest_type;
+7: conftest_type conftestval = (int)FFI_STDCALL;
+/* end */
+
+--------------------
+
+check_signedness: checking signedness of size_t... -------------------- unsigned
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+conftest.c:7:5: error: size of array ‘conftest_const’ is negative
+    7 | int conftest_const[((rbcv_typedef_)-1 < 0) ? 1 : -1];
+      |     ^~~~~~~~~~~~~~
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <stddef.h>
+4: typedef size_t rbcv_typedef_;
+5: 
+6: /*top*/
+7: int conftest_const[((rbcv_typedef_)-1 < 0) ? 1 : -1];
+/* end */
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC    -c conftest.c"
+checked program was:
+/* begin */
+1: #include "ruby.h"
+2: 
+3: #include <stddef.h>
+4: typedef size_t rbcv_typedef_;
+5: 
+6: /*top*/
+7: int conftest_const[((rbcv_typedef_)-1 > 0) ? 1 : -1];
+/* end */
+
+--------------------
+
+have_func: checking for rb_str_to_interned_str()... -------------------- yes
+
+LD_LIBRARY_PATH=.:/usr/lib/x86_64-linux-gnu "x86_64-linux-gnu-gcc -o conftest -I/usr/include/x86_64-linux-gnu/ruby-3.3.0 -I/usr/include/ruby-3.3.0/ruby/backward -I/usr/include/ruby-3.3.0 -I.  -Wdate-time -D_FORTIFY_SOURCE=2   -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=BUILDDIR=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC  conftest.c  -L. -L/usr/lib/x86_64-linux-gnu -L. -Wl,-z,relro -Wl,-z,now -fstack-protector-strong -rdynamic -Wl,-export-dynamic -Wl,--no-as-needed     -ldl -lffi  -lffi -lruby-3.3 -ldl -lffi  -lffi -lm -lpthread  -lc"
+checked program was:
+/* begin */
+ 1: #include "ruby.h"
+ 2: 
+ 3: /*top*/
+ 4: extern int t(void);
+ 5: int main(int argc, char **argv)
+ 6: {
+ 7:   if (argc > 1000000) {
+ 8:     int (* volatile tp)(void)=(int (*)(void))&t;
+ 9:     printf("%d", (*tp)());
+10:   }
+11: 
+12:   return !!argv[argc];
+13: }
+14: int t(void) { void ((*volatile p)()); p = (void ((*)()))rb_str_to_interned_str; return !p; }
+/* end */
+
+--------------------
+

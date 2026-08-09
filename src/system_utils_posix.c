@@ -1,6 +1,9 @@
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
+#ifdef __COSMOPOLITAN__
+#include <cosmo.h>  /* GetProgramExecutableName() */
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -360,6 +363,23 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size) {
 /* ===== Path utilities ===== */
 
 char *GetImagePath(void) {
+#ifdef __COSMOPOLITAN__
+    /* Cosmopolitan Libc defines neither __linux__ nor __APPLE__; it resolves
+       the executable path itself on every OS the APE binary runs on. */
+    const char *exe = GetProgramExecutableName();
+    if (!exe || !*exe) {
+        FATAL("GetImagePath: GetProgramExecutableName failed");
+        return NULL;
+    }
+
+    char *result = strdup(exe);
+    if (!result) {
+        FATAL("GetImagePath: strdup failed");
+        return NULL;
+    }
+
+    return result;
+#else
     static char path_buffer[4096];
 #ifdef __APPLE__
     uint32_t size = sizeof(path_buffer);
@@ -388,10 +408,30 @@ char *GetImagePath(void) {
 
     strcpy(result, path_buffer);
     return result;
+#endif /* __COSMOPOLITAN__ */
 }
 
 char *GetTempDirectoryPath(void) {
     const char *tmpdir = getenv("TMPDIR");
+#ifdef __COSMOPOLITAN__
+    /* On Windows, Cosmopolitan Libc translates the magic "/tmp" prefix to
+       a real directory, but WHERE it points differs between cosmo
+       releases (%TMP% in some, C:\tmp in others). This stub and the
+       packed cosmopolitan Ruby may be built against different cosmo
+       versions, so a literal "/tmp/..." extraction path handed to the
+       child can resolve to a DIFFERENT directory than the one the stub
+       extracted into. TMP/TEMP, by contrast, are presented by cosmo in
+       its unambiguous drive-letter form (e.g. /C/Users/x/AppData/Local/
+       Temp) that every cosmo runtime resolves identically, so prefer
+       them. On POSIX hosts they are normally unset and the usual
+       TMPDIR -> /tmp behavior is preserved. */
+    if (!tmpdir || !*tmpdir) {
+        tmpdir = getenv("TMP");
+    }
+    if (!tmpdir || !*tmpdir) {
+        tmpdir = getenv("TEMP");
+    }
+#endif
     if (!tmpdir || !*tmpdir) {
         tmpdir = "/tmp";
     }

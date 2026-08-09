@@ -1,0 +1,137 @@
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fxruby-1.6.50/ext/fox16_c
+/usr/bin/ruby3.3 -I/usr/lib/ruby/vendor_ruby extconf.rb
+checking for fox per pkg-config... yes
+checking for fxscintilla per pkg-config... no
+checking for fxscintilla on Ubuntu with missing libfxscintilla.so link... no
+checking for fxscintilla build... no
+checking for sys/time.h... yes
+checking for signal.h... yes
+checking for deflate() in -lz... yes
+checking for png_create_read_struct() in -lpng... yes
+checking for jpeg_mem_init() in -ljpeg... yes
+checking for TIFFSetErrorHandler() in -ltiff... yes
+checking for XftInit() in -lXft... yes
+checking for XShmQueryVersion() in -lXext... yes
+checking for XFindContext() in -lX11... yes
+checking for glXCreateContext() in -lGL... yes
+checking for gluNewQuadric() in -lGLU... yes
+checking for thread local variables... yes
+checking for rb_thread_call_without_gvl()... yes
+checking for rb_thread_call_with_gvl()... yes
+checking for rb_during_gc()... yes
+creating extconf.h
+creating Makefile
+
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fxruby-1.6.50/ext/fox16_c
+make DESTDIR\= sitearchdir\=./.gem.20260809-1261539-n455ym sitelibdir\=./.gem.20260809-1261539-n455ym clean
+
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fxruby-1.6.50/ext/fox16_c
+make DESTDIR\= sitearchdir\=./.gem.20260809-1261539-n455ym sitelibdir\=./.gem.20260809-1261539-n455ym
+compiling FXRbApp.cpp
+compiling FXRbDataTarget.cpp
+compiling FXRbGLViewer.cpp
+compiling FXRbObjRegistry.cpp
+compiling FXRuby.cpp
+FXRuby.cpp: In function ‘long int FXRbHandleMessage_gvlcb(FX::FXObject*, ID, FX::FXObject*, FX::FXSelector, void*)’:
+FXRuby.cpp:1188:22: warning: ‘VALUE ruby::backward::cxxanyargs::rb_rescue2(VALUE (*)(...), VALUE, VALUE (*)(...), VALUE, ...)’ is deprecated: Use of ANYARGS in this function is deprecated [-Wdeprecated-declarations]
+ 1188 |     retval=rb_rescue2(RUBY_VALUE_METHOD_FUNC(handle_body), reinterpret_cast<VALUE>(&hArgs),
+      |            ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 1189 |                       RUBY_VALUE_METHOD_FUNC(handle_rescue), Qnil,
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 1190 |                       rb_eStandardError, rb_eNameError, 0);
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /usr/include/ruby-3.3.0/ruby/internal/anyargs.h:83,
+                 from /usr/include/ruby-3.3.0/ruby/ruby.h:27,
+                 from /usr/include/ruby-3.3.0/ruby.h:38,
+                 from ./include/FXRbCommon.h:27,
+                 from FXRuby.cpp:31:
+/usr/include/ruby-3.3.0/ruby/backward/cxxanyargs.hpp:284:1: note: declared here
+  284 | rb_rescue2(type *q, VALUE w, type *e, VALUE r, ...)
+      | ^~~~~~~~~~
+FXRuby.cpp: In function ‘FX::FXInputHandle FXRbGetWriteFileHandle(VALUE, FX::FXuint)’:
+FXRuby.cpp:1657:22: warning: ‘rb_io::tied_io_for_writing’ is deprecated: rb_io_get_write_io [-Wdeprecated-declarations]
+ 1657 |   VALUE wrio = fptr->tied_io_for_writing;
+      |                      ^~~~~~~~~~~~~~~~~~~
+In file included from FXRuby.cpp:46:
+/usr/include/ruby-3.3.0/ruby/io.h:193:11: note: declared here
+  193 |     VALUE tied_io_for_writing;
+      |           ^~~~~~~~~~~~~~~~~~~
+FXRuby.cpp:1657:22: warning: ‘rb_io::tied_io_for_writing’ is deprecated: rb_io_get_write_io [-Wdeprecated-declarations]
+ 1657 |   VALUE wrio = fptr->tied_io_for_writing;
+      |                      ^~~~~~~~~~~~~~~~~~~
+/usr/include/ruby-3.3.0/ruby/io.h:193:11: note: declared here
+  193 |     VALUE tied_io_for_writing;
+      |           ^~~~~~~~~~~~~~~~~~~
+FXRuby.cpp:1657:22: warning: ‘rb_io::tied_io_for_writing’ is deprecated: rb_io_get_write_io [-Wdeprecated-declarations]
+ 1657 |   VALUE wrio = fptr->tied_io_for_writing;
+      |                      ^~~~~~~~~~~~~~~~~~~
+/usr/include/ruby-3.3.0/ruby/io.h:193:11: note: declared here
+  193 |     VALUE tied_io_for_writing;
+      |           ^~~~~~~~~~~~~~~~~~~
+FXRuby.cpp: In function ‘void FXRbDestroyAppSensitiveObjects()’:
+FXRuby.cpp:1912:13: warning: ‘int ruby::backward::cxxanyargs::rb_st_foreach(st_table*, int (*)(...), st_data_t)’ is deprecated: Use of ANYARGS in this function is deprecated [-Wdeprecated-declarations]
+ 1912 |   st_foreach(appSensitiveObjs,RUBY_INT_METHOD_FUNC(st_cbfunc_obj),reinterpret_cast<st_data_t>(&objs));
+In file included from /usr/include/ruby-3.3.0/ruby/internal/intern/hash.h:26,
+                 from /usr/include/ruby-3.3.0/ruby/backward/cxxanyargs.hpp:16:
+/usr/include/ruby-3.3.0/ruby/st.h:146:20: note: declared here
+  146 | #define st_foreach rb_st_foreach
+      |                    ^~~~~~~~~~~~~
+/usr/include/ruby-3.3.0/ruby/backward/cxxanyargs.hpp:432:1: note: in expansion of macro ‘st_foreach’
+  432 | st_foreach(st_table *q, int_type *w, st_data_t e)
+      | ^~~~~~~~~~
+FXRuby.cpp:1942:13: warning: ‘int ruby::backward::cxxanyargs::rb_st_foreach(st_table*, int (*)(...), st_data_t)’ is deprecated: Use of ANYARGS in this function is deprecated [-Wdeprecated-declarations]
+ 1942 |   st_foreach(appSensitiveDCs,RUBY_INT_METHOD_FUNC(st_cbfunc_dc),reinterpret_cast<st_data_t>(&dcs));
+/usr/include/ruby-3.3.0/ruby/st.h:146:20: note: declared here
+  146 | #define st_foreach rb_st_foreach
+      |                    ^~~~~~~~~~~~~
+/usr/include/ruby-3.3.0/ruby/backward/cxxanyargs.hpp:432:1: note: in expansion of macro ‘st_foreach’
+  432 | st_foreach(st_table *q, int_type *w, st_data_t e)
+      | ^~~~~~~~~~
+compiling core_wrap.cpp
+compiling dc_wrap.cpp
+dc_wrap.cpp: In function ‘VALUE _wrap_new_FXDCWindow__SWIG_0(int, VALUE*, VALUE)’:
+dc_wrap.cpp:5653:16: warning: ‘VALUE ruby::backward::cxxanyargs::rb_ensure(VALUE (*)(...), VALUE, VALUE (*)(...), VALUE)’ is deprecated: Use of ANYARGS in this function is deprecated [-Wdeprecated-declarations]
+ 5653 |       rb_ensure(RUBY_VALUE_METHOD_FUNC(rb_yield), self, RUBY_VALUE_METHOD_FUNC(FXRbDCWindow::endit), self);
+      |       ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /usr/include/ruby-3.3.0/ruby/internal/anyargs.h:83,
+                 from /usr/include/ruby-3.3.0/ruby/ruby.h:27,
+                 from /usr/include/ruby-3.3.0/ruby.h:38,
+                 from dc_wrap.cpp:901:
+/usr/include/ruby-3.3.0/ruby/backward/cxxanyargs.hpp:310:1: note: declared here
+  310 | rb_ensure(type *q, VALUE w, type *e, VALUE r)
+      | ^~~~~~~~~
+dc_wrap.cpp: In function ‘VALUE _wrap_new_FXDCWindow__SWIG_1(int, VALUE*, VALUE)’:
+dc_wrap.cpp:5696:16: warning: ‘VALUE ruby::backward::cxxanyargs::rb_ensure(VALUE (*)(...), VALUE, VALUE (*)(...), VALUE)’ is deprecated: Use of ANYARGS in this function is deprecated [-Wdeprecated-declarations]
+ 5696 |       rb_ensure(RUBY_VALUE_METHOD_FUNC(rb_yield), self, RUBY_VALUE_METHOD_FUNC(FXRbDCWindow::endit), self);
+      |       ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/ruby-3.3.0/ruby/backward/cxxanyargs.hpp:310:1: note: declared here
+  310 | rb_ensure(type *q, VALUE w, type *e, VALUE r)
+      | ^~~~~~~~~
+compiling dialogs_wrap.cpp
+compiling frames_wrap.cpp
+compiling fx3d_wrap.cpp
+compiling gvl_wrappers.cpp
+compiling iconlist_wrap.cpp
+compiling icons_wrap.cpp
+compiling image_wrap.cpp
+compiling impl.cpp
+compiling label_wrap.cpp
+compiling layout_wrap.cpp
+compiling list_wrap.cpp
+compiling markfuncs.cpp
+compiling mdi_wrap.cpp
+compiling menu_wrap.cpp
+compiling scintilla_wrap.cpp
+compiling table_wrap.cpp
+compiling text_wrap.cpp
+compiling treelist_wrap.cpp
+compiling ui_wrap.cpp
+compiling unregisterOwnedObjects.cpp
+linking shared-object fox16_c.so
+
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fxruby-1.6.50/ext/fox16_c
+make DESTDIR\= sitearchdir\=./.gem.20260809-1261539-n455ym sitelibdir\=./.gem.20260809-1261539-n455ym install
+/usr/bin/install -c -m 0755 fox16_c.so ./.gem.20260809-1261539-n455ym
+
+current directory: /root/workspace/ocran/vendor/bundle/ruby/3.3.0/gems/fxruby-1.6.50/ext/fox16_c
+make DESTDIR\= sitearchdir\=./.gem.20260809-1261539-n455ym sitelibdir\=./.gem.20260809-1261539-n455ym clean

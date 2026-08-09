@@ -8,6 +8,10 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#ifdef __COSMOPOLITAN__
+#include <cosmo.h>           /* IsWindows() */
+#include <libc/nt/runtime.h> /* ExitProcess() */
+#endif
 #include "error.h"
 #include "system_utils.h"
 #include "inst_dir.h"
@@ -96,6 +100,25 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
+#ifdef __COSMOPOLITAN__
+    /*
+       This stub is itself an APE.  It fork/execs the payload interpreter and
+       reads the result with WEXITSTATUS() (system_utils_posix.c), so on
+       Windows the child must keep Cosmopolitan's wait-status exit encoding
+       (status << 8) -- otherwise `exit 3` would come back looking like death
+       by signal 3.  CosmoRuby reports the plain status by default now, which
+       is right for a native parent but wrong for this one; the variable asks
+       it for the old encoding.  Harmless for interpreters that do not know
+       the variable, and a no-op off Windows.  This process still reports the
+       plain status to ITS native parent, at the end of main().
+    */
+    DEBUG("Set 'COSMORUBY_WAIT_STATUS_EXIT' so the payload's status survives waitpid()");
+    if (!SetEnvVar("COSMORUBY_WAIT_STATUS_EXIT", "1")) {
+        FATAL("The script cannot be launched due to a configuration error");
+        goto cleanup;
+    }
+#endif
+
     /*
        RunScript uses the current value of status as its initial value
        and then overwrites it with the external script’s return code.
@@ -140,5 +163,17 @@ cleanup:
 
     FreeInstDir();
     extract_dir = NULL;
+
+#ifdef __COSMOPOLITAN__
+    /* On Windows, Cosmopolitan Libc's exit path encodes the full wait
+       status into the process exit code (code << 8) so that cosmo
+       parents can reconstruct it. Native Windows parents (cmd,
+       PowerShell, CI runners) expect the plain code, so bypass the
+       libc exit path and report the code as-is. */
+    if (IsWindows()) {
+        fflush(NULL);
+        ExitProcess(status);
+    }
+#endif
     return status;
 }
