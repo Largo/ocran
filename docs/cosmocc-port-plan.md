@@ -200,7 +200,8 @@ against a cosmopolitan Ruby 4.0.0 build (`+PRISM +MIMALLOC`,
   installed on the build host (it compiles the APE launcher stub);
   no toolchain is needed on the machines that *run* the result.
 * Native-extension gems cannot be used at all unless the payload
-  provides them.
+  provides them — either as a gem of its own, or as a feature it can
+  resolve without one (a linked-in extension, or its embedded stdlib).
 * Host-vs-payload version skew is only warned about, not resolved; a
   gem packed for the host Ruby may still misbehave under a much newer
   payload Ruby.
@@ -541,6 +542,68 @@ limitations. Both are **fixed** in CosmoRuby (branch `zip-main-fixes`,
    `COSMORUBY_WAIT_STATUS_EXIT=1` for the payload, which asks CosmoRuby
    for the old encoding; with it, 3 is 3 and 7 is 7 again. ZIP packaging
    has no stub and needs nothing.
+
+### Field test: a Rails application as an APE (2026-08-09)
+
+The application `test/test_rails.rb` generates — `rails new --minimal`
+with SQLite and Puma, a scaffolded `Widget`, plus two controllers, a
+route and an ERB view written after scaffolding — packages and serves
+with `--cosmo-ruby` alone, against CosmoRuby 4.0.6 (the build in which
+`sqlite3`, `nokogiri` with libxml2/libxslt, `puma`, `nio4r`, `bigdecimal`
+and `racc` are all linked in). No compiler is involved.
+
+| | Native stub | ZIP packaging |
+|---|---|---|
+| Size | 50.4 MB | 39.0 MB (interpreter alone: 35.7 MB) |
+| Build | 4.8 s | 4.4 s |
+| First request answered after | 1.5 s | 1.8 s |
+
+The `.com`, copied alone into an empty directory and started with
+`unsetenv_others` and no `RUBYOPT`/`GEM_PATH`, serves Rails 8.1.3.1 out of
+its own ZIP store: `/status` reports `x86_64-cosmo`, adapter `SQLite`,
+SQLite 3.40.0 and a database path beside the executable; a full scaffold
+CRUD round trip (form → CSRF token → `POST`/`PATCH`/`DELETE` carrying the
+session cookie) goes through Active Record into that file; the two
+hand-written controllers and the ERB view render; and a record written by
+one run is still there after a restart. Nothing but the application's own
+data directory ever appears next to the binary — the run directory is
+asserted to contain only the `.com` and `railsdemo-data`.
+
+Two things had to change for that, one of them an OCRAN bug:
+
+* **Payload-provides was gated on gemspec names only.** *(fixed)*
+  `Direction.cosmo_gem_disposition` decided that the payload provides a
+  native gem iff `Gem::Specification` inside the payload lists that name.
+  A gemspec is not what makes a library requirable: an extension linked
+  into the APE, or a library in its embedded stdlib, answers `require`
+  with nothing under `/zip/lib/ruby/gems/*/specifications` — `cgi` and
+  `pathname` are both, and both are ordinary native gems on a host Ruby
+  ≥ 3.4, where they would have been reported "incompatible" and would
+  have refused a build that works. A gem now also counts as provided when
+  the payload can resolve its primary feature
+  (`CosmoToolchain.resolvable_features`: one run of the interpreter using
+  `$LOAD_PATH.resolve_feature_path`, which searches exactly as `require`
+  does — built-in extensions included, they resolve to a bare `foo.so` —
+  but executes none of the code it finds).
+* **The interpreter's `openssl` cannot be papered over.** It is a shim
+  over MbedTLS with no `OpenSSL::Cipher`, no `HMAC`, no PBKDF2, no
+  `OpenSSL.fixed_length_secure_compare` and an `OpenSSL::Digest` that is
+  a module of aliases rather than a class hierarchy. Rails *names* those
+  at load time, so `require "rails"` alone raises `NameError` on
+  `OpenSSL::Cipher::CipherError` in `ActiveSupport::MessageEncryptor`.
+  This is not something OCRAN can fix while packaging: the application
+  has to carry the gap-filling file itself (the generator writes
+  `openssl_gap.rb`, a no-op on a complete `openssl`), must set
+  `SECRET_KEY_BASE` and ship no `config/credentials.yml.enc` — reading
+  credentials decrypts with AES-256-GCM and fails, quite apart from the
+  fact that packaging that file means packaging `config/master.key` with
+  it — and must keep the session server-side, because Rails' default
+  `CookieStore` encrypts the cookie. HMAC, PBKDF2 and the digest
+  hierarchy are supplied for real on top of Ruby's own `Digest` and match
+  the host OpenSSL byte for byte; `OpenSSL::Cipher` deliberately is not
+  implemented and raises instead. Active Record encryption and encrypted
+  cookies therefore remain unavailable under a cosmopolitan Ruby until
+  its `openssl` grows a cipher surface (mbedtls has AES, GCM and PKCS5).
 
 ### Not addressed
 

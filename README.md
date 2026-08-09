@@ -887,41 +887,75 @@ shipping a prebuilt database file:
 Calling this during the dependency run as well is what gets
 `db/migrate/*.rb` into `$LOADED_FEATURES`, and therefore into the package.
 
-#### Rails under `--cosmo-ruby` (not currently possible)
+#### Rails as a single portable executable (`--cosmo-ruby`)
 
-An APE cannot `dlopen`, so every native-extension gem has to be compiled
-into the interpreter. Rails needs more of them than any published
-cosmopolitan Ruby provides, and the build stops with, for example:
+The same application packages into one Actually Portable Executable that
+runs on Linux, macOS, Windows and the BSDs without an installed Ruby:
+
+    ocran server.rb app config db public --no-autoload --gem-all \
+      --cosmo-ruby /path/to/ruby.com
+
+No compiler is involved: `--cosmo-ruby` on its own selects the ZIP mode,
+in which the application is injected into the interpreter's own ZIP store.
+Nothing is unpacked at run time — the application is read straight out of
+the executable. A Rails 8.1 application built this way measures **39.0 MB
+and answers its first request 1.8 s after launch**, against 50.4 MB and
+1.5 s for the same application in a native OCRAN executable.
+
+An APE cannot `dlopen`, so **every native extension has to be compiled
+into the interpreter you point at**. For Rails that is `sqlite3`,
+`nokogiri` (and with it libxml2 and libxslt), `puma`, `nio4r`,
+`bigdecimal` and `racc`. CosmoRuby has had all of them since 4.0.6;
+against an interpreter that has not, the build stops before producing
+anything, naming the gem:
 
     ERROR: Gem nokogiri-1.19.4-x86_64-linux-gnu is native (ships prebuilt
     binaries (nokogiri.so)) and cannot run under the packed cosmopolitan
     Ruby (x86_64-cosmo, static)
 
-Measured against CosmoRuby 4.0.6 with a minimal Rails 8.1 application
-(`--minimal --skip-asset-pipeline`, SQLite, Puma), the interpreter is
-missing:
+OCRAN drops the host copy of each gem the payload provides and lets the
+payload's own serve. It recognises those either by a gemspec in the
+payload or, failing that, by asking the payload whether it can resolve the
+gem's primary feature at all: an extension linked into the binary, or a
+library in its embedded stdlib (`cgi` and `pathname` are both), answers
+`require` with no gemspec anywhere.
 
-| Gem | Pulled in by | Notes |
-|---|---|---|
-| `nokogiri` | `actionview` → `rails-html-sanitizer` → `loofah` | unavoidable, `--api` applications included; bundles libxml2, libxslt and gumbo |
-| `puma` | the web server | `puma_http11.so`, a Ragel-generated HTTP parser |
-| `nio4r` | `puma` | small C selector |
-| `bigdecimal` | `activesupport`, `activerecord` | not a default gem since Ruby 3.4 |
-| `racc` | `nokogiri`'s CSS parser | has a pure-Ruby fallback |
+**One real limitation remains, and it is cryptographic.** CosmoRuby's
+`openssl` is a shim over MbedTLS: no `OpenSSL::Cipher`, no
+`OpenSSL::HMAC`, no PBKDF2, no `OpenSSL::Digest` class hierarchy. Rails
+does not merely use those, it *names* them at load time — `require "rails"`
+by itself dies on
 
-`sqlite3` is *not* on that list: CosmoRuby has it linked in, and OCRAN
-drops the host copy in favour of the payload's own. Two further gems,
-`cgi` and `pathname`, are reported as incompatible but are in fact built
-into the interpreter — OCRAN decides what the payload provides from the
-gemspecs under its `/zip/lib/ruby/gems/*/specifications`, and neither of
-those has one there.
+    active_support/message_encryptor.rb:116:in '<class:MessageEncryptor>':
+    uninitialized constant OpenSSL::Cipher (NameError)
 
-Adding a gem to a cosmopolitan Ruby is a documented procedure (that is how
-`sqlite3` got in; see `PORTING-NOTES.md` in the CosmoRuby repository).
-`bigdecimal`, `nio4r` and `racc` are ordinary C extensions with no
-external dependencies; `puma` is similar but larger. `nokogiri` is the
-real obstacle: cosmopolitan carries no libxml2 or libxslt, so both would
-have to be vendored and built as well, which is a project in itself.
+so an application packaged for such an interpreter has to do three things.
+`test/rails_app_generator.rb` does all three, and the file it writes,
+`openssl_gap.rb`, is a no-op on a Ruby with a complete `openssl`:
+
+* **Fill in the missing pieces before Rails loads.** HMAC, PBKDF2,
+  `OpenSSL.fixed_length_secure_compare` and an `OpenSSL::Digest` class
+  hierarchy are a few lines each on top of Ruby's own `Digest`, and they
+  are the real algorithms. `OpenSSL::Cipher` is not: it exists so that
+  Rails can name the constant, and raises if anything tries to encrypt
+  with it. A fake cipher would be worse than no cipher.
+* **Set `SECRET_KEY_BASE`, and ship no `config/credentials.yml.enc`.**
+  Reading credentials decrypts them with AES-256-GCM and fails with
+  `OpenSSL::Cipher::CipherError`. Dropping the file is the right move in
+  any case: packaging it means packaging `config/master.key` beside it,
+  i.e. handing the key to everyone who gets a copy of the executable.
+* **Keep the session off the cookie.** Rails' default `CookieStore`
+  encrypts the session cookie, so it cannot work either;
+  `config.session_store :cache_store` keeps the session server-side and
+  puts only its id in the cookie. Signed cookies, the CSRF token and
+  everything else that needs no more than an HMAC keep working, and a full
+  scaffold CRUD round trip with CSRF token and session cookie is what the
+  test drives through the packaged `.com`.
+
+Active Record encryption, encrypted cookies and anything else that
+actually encrypts stay out of reach until CosmoRuby's `openssl` grows a
+cipher surface — mbedtls has AES, GCM and PKCS5, so it is a bounded job;
+it is tracked in `PORTING-NOTES.md` in the CosmoRuby repository.
 
 ## See elsewhere
 
