@@ -1148,6 +1148,28 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # A packaged application carries its own gems and its own Gemfile, so
+  # nothing of the bundle it is started from may reach it. Bundler hands a
+  # bundle over through BUNDLER_SETUP, which RubyGems requires at
+  # interpreter startup, and through BUNDLE_GEMFILE, which would send the
+  # application's own `require "bundler/setup"` at the wrong Gemfile;
+  # either one aborts the application with GemNotFound over gems that were
+  # never packed.
+  #
+  # pristine_env is deliberately not used here - it clears exactly the
+  # variables this test is about.
+  def test_packaged_app_ignores_the_bundle_it_is_launched_from
+    env = foreign_bundle_env
+
+    with_fixture 'helloworld' do
+      assert_system("ruby", ocran, "helloworld.rb", *DefaultArgs)
+      exe = exe_name("helloworld")
+      with_tmpdir [exe] do
+        assert_system(env, File.join(".", exe))
+      end
+    end
+  end
+
   # With --debug-extract option, exe should unpack to local directory and leave it in place
   def test_debug_extract
     with_fixture 'helloworld' do

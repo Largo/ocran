@@ -229,6 +229,35 @@ module Ocran
       File.identical?(a, b) || File.expand_path(a) == File.expand_path(b)
     end
 
+    # Packed name of the file BUNDLER_SETUP is pointed at.
+    BUNDLER_SETUP_NOOP = Pathname("no_bundler_setup.rb")
+
+    # Keeps the environment of whoever launches the packaged application
+    # from dragging Bundler into it.
+    #
+    # A packaged application carries its own gems and its own Gemfile; the
+    # bundle of the machine it is started from means nothing to it, and
+    # anything of that bundle that survives into the process is fatal rather
+    # than merely wrong - Bundler aborts with GemNotFound as soon as it
+    # cannot materialize gems that were never packed. RUBYOPT is already
+    # overwritten wholesale, but that alone stopped being enough: RubyGems
+    # now requires the file named by BUNDLER_SETUP at interpreter startup,
+    # which is how current Bundler versions set a process up, and
+    # BUNDLE_GEMFILE would still send the application's own
+    # `require "bundler/setup"` at the wrong Gemfile.
+    #
+    # BUNDLER_SETUP names a file to require, so it cannot simply be blanked
+    # - an empty value is still truthy and RubyGems would raise trying to
+    # require it. It is pointed at an empty packed file instead. Bundler
+    # does treat empty BUNDLE_GEMFILE and BUNDLE_LOCKFILE as unset, which is
+    # what lets the application find the Gemfile packed beside it.
+    def neutralize_bundler_env(builder)
+      builder.touch(BUNDLER_SETUP_NOOP)
+      builder.set_env_path("BUNDLER_SETUP", BUNDLER_SETUP_NOOP)
+      builder.export("BUNDLE_GEMFILE", "")
+      builder.export("BUNDLE_LOCKFILE", "")
+    end
+
     def normalized_features
       features = @post_env.loaded_features.map { |feature| Pathname(feature) }
 
@@ -924,6 +953,7 @@ module Ocran
 
       # Set environment variable
       builder.export("RUBYOPT", rubyopt)
+      neutralize_bundler_env(builder)
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
       load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
