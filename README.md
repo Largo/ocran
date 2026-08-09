@@ -785,6 +785,144 @@ file:
       end
     end
 
+### Packaging a Rails application
+
+A Rails application with a SQLite database packages into a single
+executable that serves HTTP. `test/test_rails.rb` builds one from scratch
+on every run (`rails new`, `bin/rails generate scaffold`, plus controllers
+and views written on the fly), packages it and drives a full CRUD round
+trip through the resulting binary; read it as the worked example. It is
+opt-in — run it with `OCRAN_RAILS_TEST=1 ruby -Itest test/test_rails.rb`.
+
+Write a small entry script next to `config/` (Rails' own `config.ru` is
+for a Rack server, not for OCRAN) and point OCRAN at it together with the
+directories Rails reads at run time:
+
+    ocran server.rb app config db public --no-autoload --gem-all
+
+Four things are worth knowing before you try it.
+
+**`--no-autoload` is required.** OCRAN's autoload walker sweeps every
+`Module` in `ObjectSpace` and tries to `const_get` each autoloaded
+constant. Under Rails that means dragging in `I18n::Tests`,
+`Prism::Translation` and everything else the framework declares but never
+loads — minutes of output ending in an error. In production Rails eager
+loads the application itself, so the walker has nothing to contribute.
+
+**`--gem-all` is required.** Dependency detection is `$LOADED_FEATURES`
+based, and Rails reads a great deal it never `require`s. The first thing
+to break without it is `activesupport/lib/active_support/locale/en.rb`,
+which I18n reads as a data file during boot. For the same reason the
+application's own `app`, `config`, `db` and `public` directories have to
+be named on the command line: ERB templates, `database.yml`, locale files
+and migrations are not `require`d and so are invisible to the dependency
+run.
+
+**Gems Rails declares but never loads still have to be inside.** OCRAN
+packs the gemspec of every gem it detects, and RubyGems activates the
+complete declared dependency graph of a gemspec, not just the code you
+actually load. `activesupport` declares `minitest` and `drb`, `railties`
+declares `rake`; a running server loads none of them, so nothing puts them
+in the package, and the executable then dies at startup with
+`Gem::MissingSpecError`. Require them from the entry script:
+
+    begin
+      gem "minitest", "~> 5.0"  # 5.x has no dependencies of its own
+    rescue Gem::LoadError
+    end
+    require "minitest"  # activesupport
+    require "drb"       # activesupport
+    require "rake"      # railties
+
+To find the equivalent list for your own application, boot it and diff the
+declared dependencies against what is loaded:
+
+    Gem.loaded_specs.each_value do |spec|
+      spec.runtime_dependencies.each do |dep|
+        puts "#{dep.name} <- #{spec.name}" unless Gem.loaded_specs.key?(dep.name)
+      end
+    end
+
+**Bundler.** The dependency run happens inside the OCRAN process, so a
+`bundler/setup` in `config/boot.rb` confines it to your bundle; use
+`--gemfile` to point OCRAN at the same `Gemfile`. The test takes the other
+route and removes Bundler from the generated application entirely, letting
+RubyGems activate the gems, which is why it needs neither `bundle install`
+nor the network.
+
+#### Where the database goes
+
+**Not inside the package.** With the native stub the application directory
+is a temporary directory that is created at every start and deleted when
+the process exits: a database written there is thrown away. With
+`--cosmo-ruby` it is a read-only ZIP store inside the executable and the
+write simply fails.
+
+Put mutable state next to the executable instead, using
+`ENV["OCRAN_EXECUTABLE"]` (see [Environment variables](#environment-variables)),
+and tell Rails about it before `config/environment` is loaded:
+
+    base = ENV["OCRAN_EXECUTABLE"] ? File.dirname(File.expand_path(ENV["OCRAN_EXECUTABLE"])) : __dir__
+    data_dir = File.join(base, "myapp-data")
+    FileUtils.mkdir_p(data_dir)
+
+    ENV["DATABASE_URL"] ||= "sqlite3:#{File.join(data_dir, "app.sqlite3")}"
+
+`DATABASE_URL` is the cleanest lever, because `config/database.yml`
+resolves relative paths against `Rails.root`, which is inside the package.
+The same applies to everything else Rails writes:
+
+* **tmp** (cache, pids, sockets) — set `config.paths["tmp"]`, or avoid it
+  altogether with `config.cache_store = :memory_store`.
+* **log** — the generated production environment already logs to stdout;
+  if yours does not, set `config.logger` explicitly.
+* **Active Storage** — point `config.active_storage.service` at a root
+  under your data directory.
+
+Ship the schema in the package and apply it on first run, rather than
+shipping a prebuilt database file:
+
+    ActiveRecord::MigrationContext.new(Rails.root.join("db/migrate").to_s).migrate
+
+Calling this during the dependency run as well is what gets
+`db/migrate/*.rb` into `$LOADED_FEATURES`, and therefore into the package.
+
+#### Rails under `--cosmo-ruby` (not currently possible)
+
+An APE cannot `dlopen`, so every native-extension gem has to be compiled
+into the interpreter. Rails needs more of them than any published
+cosmopolitan Ruby provides, and the build stops with, for example:
+
+    ERROR: Gem nokogiri-1.19.4-x86_64-linux-gnu is native (ships prebuilt
+    binaries (nokogiri.so)) and cannot run under the packed cosmopolitan
+    Ruby (x86_64-cosmo, static)
+
+Measured against CosmoRuby 4.0.6 with a minimal Rails 8.1 application
+(`--minimal --skip-asset-pipeline`, SQLite, Puma), the interpreter is
+missing:
+
+| Gem | Pulled in by | Notes |
+|---|---|---|
+| `nokogiri` | `actionview` → `rails-html-sanitizer` → `loofah` | unavoidable, `--api` applications included; bundles libxml2, libxslt and gumbo |
+| `puma` | the web server | `puma_http11.so`, a Ragel-generated HTTP parser |
+| `nio4r` | `puma` | small C selector |
+| `bigdecimal` | `activesupport`, `activerecord` | not a default gem since Ruby 3.4 |
+| `racc` | `nokogiri`'s CSS parser | has a pure-Ruby fallback |
+
+`sqlite3` is *not* on that list: CosmoRuby has it linked in, and OCRAN
+drops the host copy in favour of the payload's own. Two further gems,
+`cgi` and `pathname`, are reported as incompatible but are in fact built
+into the interpreter — OCRAN decides what the payload provides from the
+gemspecs under its `/zip/lib/ruby/gems/*/specifications`, and neither of
+those has one there.
+
+Adding a gem to a cosmopolitan Ruby is a documented procedure (that is how
+`sqlite3` got in; see `PORTING-NOTES.md` in the CosmoRuby repository).
+`bigdecimal`, `nio4r` and `racc` are ordinary C extensions with no
+external dependencies; `puma` is similar but larger. `nokogiri` is the
+real obstacle: cosmopolitan carries no libxml2 or libxslt, so both would
+have to be vendored and built as well, which is a project in itself.
+
 ## See elsewhere
 
 - [State of Ruby Packagers](https://gist.github.com/YOU54F/3775e66e6090e0371c11601e6b75c305)
