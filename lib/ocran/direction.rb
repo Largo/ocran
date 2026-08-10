@@ -447,15 +447,39 @@ module Ocran
 
       # Windows-only: Add detected DLLs
       if Gem.win_platform? && @option.auto_detect_dlls?
-        detect_dlls.each do |dll|
-          next unless dll.subpath?(exec_prefix) && dll.extname?(".dll") && dll.basename != libruby_so
+        # The Windows loader resolves the imports of a native extension from
+        # the extension's own directory, the application directory of the
+        # packed ruby.exe (bin) plus its SxS assembly (ruby_builtin_dlls),
+        # and the system directories. PATH is not consulted on hardened
+        # systems, and the AddDllDirectory mechanism gems use through
+        # ruby_installer/runtime is not available in a packed app. A detected
+        # DLL that lives anywhere else - a gem's bundled library (e.g.
+        # FreeTDS under tiny_tds' ports/), a devkit's msys64 tree inside the
+        # Ruby prefix, or a directory outside the prefix entirely - is packed
+        # only at a location the loader never searches, and the application
+        # dies with LoadError on machines where nothing masks the gap. So
+        # additionally bundle a copy of every such DLL into bin, next to
+        # ruby.exe, mirroring what the Linux branch below achieves with
+        # LD_LIBRARY_PATH. DLLs from the Windows directory always come from
+        # the target system and are never bundled.
+        windows_dir = Pathname(ENV["SystemRoot"] || "C:/Windows")
+        dlls_in_bin = Set.new
+        add_dll_to_bin = proc do |dll|
+          next if dll.subpath?(bindir) || !dlls_in_bin.add?(dll.basename.to_s.downcase)
 
-          say "Adding detected DLL #{dll}"
+          say "Adding detected DLL #{dll} to bin"
+          builder.copy_to_bin(dll, dll.basename)
+        end
+
+        detect_dlls.each do |dll|
+          next unless dll.extname?(".dll") && dll.basename != libruby_so
+          next if dll.subpath?(windows_dir)
+
           if dll.subpath?(exec_prefix)
+            say "Adding detected DLL #{dll}"
             builder.duplicate_to_exec_prefix(dll)
-          else
-            builder.copy_to_bin(dll, dll.basename)
           end
+          add_dll_to_bin.call(dll)
         end
 
         # Proactively include companion DLLs for loaded native extensions.
@@ -463,7 +487,10 @@ module Ocran
         # directory (e.g., libssl-3-x64.dll alongside openssl.so) that are
         # loaded lazily on first use. Scanning .so directories ensures those
         # DLLs are bundled even when the extension is required but not
-        # exercised during the OCRAN dependency scan.
+        # exercised during the OCRAN dependency scan. They also go into bin:
+        # a copy in archdir only helps extensions in archdir itself, while
+        # the same extension packed at a gem path (openssl and psych are
+        # gems since Ruby 3.x) resolves its imports from bin.
         features.select { |f| f.extname?(".so") && f.subpath?(exec_prefix) }
                 .map(&:dirname).uniq
                 .each do |dir|
@@ -471,6 +498,7 @@ module Ocran
             next unless path.file? && path.extname?(".dll")
             say "Adding companion DLL #{path}"
             builder.duplicate_to_exec_prefix(path)
+            add_dll_to_bin.call(path)
           end
         end
       end
