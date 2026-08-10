@@ -2,7 +2,12 @@ name: Run Tests
 on:
   push:
     branches:
-      - '*'
+      # '**' and not '*': a single star stops at a slash, so every branch
+      # named the way this project names them - fix/..., feat/... - was
+      # never tested until it landed on master, which is where the last two
+      # merges turned red.
+      - '**'
+  workflow_dispatch:
 jobs:
   run-tests-linux:
     strategy:
@@ -31,6 +36,10 @@ jobs:
         run: |
           bundle exec rake build
           bundle exec rake test
+
+      - name: Fail if the test run left the working tree dirty
+        shell: bash
+        run: bash .github/check-clean-tree.sh
 
       - name: Build zlib fixture for cross-distro test
         env:
@@ -65,6 +74,10 @@ jobs:
         run: |
           bundle exec rake build
           bundle exec rake test
+
+      - name: Fail if the test run left the working tree dirty
+        shell: bash
+        run: bash .github/check-clean-tree.sh
 
       - name: Build zlib fixture for cross-system test
         run: ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output zlib_packed
@@ -194,6 +207,10 @@ jobs:
         run: |
           bundle exec rake build
           bundle exec rake test
+
+      - name: Fail if the test run left the working tree dirty
+        shell: bash
+        run: bash .github/check-clean-tree.sh
 
       - name: Build zlib fixture for portability test
         run: bundle exec ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output zlib_packed.exe

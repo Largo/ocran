@@ -41,6 +41,24 @@ class TestOcran < Minitest::Test
   # Path to test fixtures.
   FixturePath = File.expand_path(File.join(File.dirname(__FILE__), 'fixtures'))
 
+  # OCRAN's own lockfile and its content before any test ran. The tests run
+  # Bundler against fixture Gemfiles, and a Bundler that has been pointed at
+  # the wrong lockfile rewrites this one instead of the fixture's. Nothing in
+  # the test run notices - the damage surfaces in whatever runs `bundle exec`
+  # afterwards, which in CI is a build step several minutes later.
+  OwnLockfile = File.join(OcranRoot, "Gemfile.lock")
+  OwnLockfileContent = File.exist?(OwnLockfile) ? File.binread(OwnLockfile) : nil
+
+  # Asserts that running Bundler has not damaged OCRAN's own bundle.
+  def assert_own_lockfile_intact(what)
+    return if OwnLockfileContent.nil?
+
+    assert OwnLockfileContent == File.binread(OwnLockfile),
+           "#{what} rewrote OCRAN's own lockfile (#{OwnLockfile}). " \
+           "Bundler was run with a foreign Gemfile but the lockfile of " \
+           "this bundle; restore it with `git checkout Gemfile.lock`."
+  end
+
   # Create a pristine environment to test built executables. Files are
   # copied and the PATH environment is set to the minimal. Yields to
   # the block, then cleans up.
@@ -134,10 +152,23 @@ class TestOcran < Minitest::Test
   # The environment `bundle exec` sets for the given Gemfile, or nil when
   # that bundle cannot be used here (Bundler missing, gems not installed),
   # so callers can skip rather than fail.
+  #
+  # BUNDLE_LOCKFILE is cleared rather than left alone. `bundle exec` exports
+  # the absolute path of the lockfile it used, and this suite itself runs
+  # under `bundle exec rake test`, so every child inherits OCRAN's own
+  # Gemfile.lock by name. Bundler believes that variable over the Gemfile it
+  # is handed, so resolving a fixture Gemfile here would write the fixture's
+  # dependencies into OCRAN's lockfile - leaving the tests green and every
+  # later `bundle exec` in the same job dead in frozen mode. Unset, Bundler
+  # puts the lockfile next to the Gemfile, which for a fixture means inside
+  # the temporary directory it was copied to.
   def bundle_exec_env(gemfile)
     dump = 'ENV.each { |name, value| puts "#{name}=#{value}" }'
-    output, status = capture_system({ "BUNDLE_GEMFILE" => gemfile.to_s },
+    output, status = capture_system({ "BUNDLE_GEMFILE" => gemfile.to_s,
+                                      "BUNDLE_LOCKFILE" => nil },
                                     "bundle", "exec", "ruby", "-e", dump)
+    assert_own_lockfile_intact("bundle exec against #{gemfile}")
+
     return nil unless status&.success?
 
     env = output.lines.filter_map { |line|
