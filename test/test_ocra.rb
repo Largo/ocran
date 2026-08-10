@@ -1502,6 +1502,32 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # A DLL that the dependency run loads from a directory the Windows
+  # loader does not search at runtime - the layout of fat binary gems
+  # with bundled libraries, e.g. tiny_tds loading FreeTDS from its
+  # ports/ directory - must additionally be bundled into bin next to
+  # ruby.exe, the only location that resolves in every DLL search mode.
+  def test_nonsearched_dll_bundled_to_bin
+    skip "tests Windows DLL bundling" unless Gem.win_platform?
+
+    with_fixture 'portsdll' do
+      dll_source = Dir.glob(File.join(RbConfig::CONFIG['bindir'], '**', '*.dll'))
+                      .reject { |path| File.basename(path) =~ /ruby/i }
+                      .min_by { |path| File.size(path) }
+      skip "no DLL in bindir to use as fixture" if dll_source.nil?
+      mkdir_p 'ports/bin'
+      cp dll_source, 'ports/bin/fakeports.dll'
+
+      assert_system("ruby", ocran, "portsdll.rb", *DefaultArgs)
+      exe = exe_name("portsdll")
+      assert File.exist?(exe)
+      pristine_env exe do
+        system(exe)
+        assert_equal 104, $?.exitstatus, "fakeports.dll was not bundled next to ruby.exe"
+      end
+    end
+  end
+
   # Test that scripts can require a file relative to the location of
   # the script and that such files are correctly added to the
   # executable.
