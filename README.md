@@ -254,7 +254,8 @@ Fine-tuning flags:
     `__dir__` for that — it never meant "next to the exe" in either
     mode, but here it is obviously wrong instead of subtly wrong.
   * `--chdir-first` changes into the directory containing the
-    executable, since the application directory does not exist on disk.
+    executable, since the application directory does not exist on disk;
+    `--chdir-exe-dir` does the same.
   * The whole command line reaches `ARGV`, unchanged. The interpreter
     claims none of it, so `app.com --version`, `app.com -v` and
     `app.com -- x` behave exactly as they would for a natively compiled

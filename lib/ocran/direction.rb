@@ -1380,6 +1380,7 @@ module Ocran
       ZipPayloadBuilder.new(output,
                             cosmo_ruby: @option.cosmo_ruby,
                             chdir_before: @option.chdir_before?,
+                            chdir_exe_dir: @option.chdir_exe_dir?,
                             debug_mode: @option.enable_debug_mode?,
                             &to_proc) => builder
 
