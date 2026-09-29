@@ -847,7 +847,6 @@ module Ocran
           end
           path.find.each do |src|
             next if src.directory?
-            a = Pathname(subdir) / src.relative_path_from(path)
             builder.copy_to_lib(src, Pathname(subdir) / src.relative_path_from(path))
           end
         end
