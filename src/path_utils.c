@@ -7,6 +7,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __COSMOPOLITAN__
+#include <cosmo.h>  /* IsWindows() */
+#endif
 #include "error.h"
 #include "system_utils.h"
 
@@ -29,6 +32,17 @@ bool IsCleanRelativePath(const char *path)
     if (is_path_separator(*path)) {
         return false;
     }
+
+#ifdef __COSMOPOLITAN__
+    /* A cosmopolitan stub splits paths at '/' only, but on Windows the
+       path ends up with the Win32 API, which splits at '\' as well: a
+       name like "..\x" would pass below as a single segment and then
+       climb out of the extraction directory. The packer never emits a
+       backslash in a name, so refuse all of them there. */
+    if (IsWindows() && strchr(path, '\\')) {
+        return false;
+    }
+#endif
 
     /* Validate each path segment */
     const char *p = path;
