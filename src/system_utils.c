@@ -949,10 +949,41 @@ static size_t quoted_args(char *args, char *argv[])
     return args_len;
 }
 
+/*
+ * Creates a job that kills its processes when its last handle is closed,
+ * i.e. when the stub exits or is killed, so that ending the stub (Task
+ * Manager, taskkill /F, a service manager) does not orphan the application.
+ * Processes in the job may create children outside of it, so only the
+ * direct child is tied to the stub: whatever the application starts is
+ * not affected. The handle is not inheritable, and must stay open for as
+ * long as the child runs. Returns NULL on failure.
+ */
+static HANDLE create_kill_on_close_job(void)
+{
+    HANDLE job = CreateJobObjectW(NULL, NULL);
+    if (!job) {
+        DEBUG("CreateJobObjectW failed (%lu)", GetLastError());
+        return NULL;
+    }
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+    ZeroMemory(&info, sizeof(info));
+    info.BasicLimitInformation.LimitFlags =
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
+    if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                 &info, sizeof(info))) {
+        DEBUG("SetInformationJobObject failed (%lu)", GetLastError());
+        CloseHandle(job);
+        return NULL;
+    }
+    return job;
+}
+
 bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
 {
     PROCESS_INFORMATION pi = { 0 };
     STARTUPINFOW        si = { .cb = sizeof(si) };
+    HANDLE job = NULL;
     bool result = false;
     char    *cmd_line  = NULL;
     wchar_t *wapp_name = NULL;
@@ -988,7 +1019,9 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
         APP_ERROR("Windows is terminating the stub; not starting the application");
         goto cleanup;
     }
-    if (!CreateProcessW(wapp_name, wcmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+    /* Suspended, so that the child is in the job before it runs any code. */
+    if (!CreateProcessW(wapp_name, wcmd_line, NULL, NULL, TRUE, CREATE_SUSPENDED,
+                        NULL, NULL, &si, &pi)) {
         DWORD err = GetLastError();
         LeaveCriticalSection(&ChildLock);
         APP_ERROR("Failed to create process (%lu)", err);
@@ -996,6 +1029,23 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
     }
     ChildProcess = pi.hProcess;
     LeaveCriticalSection(&ChildLock);
+
+    /* Tying the child to the stub is best effort: a job the stub itself
+       runs in may forbid it, which must not keep the application from
+       starting. */
+    job = create_kill_on_close_job();
+    if (job && !AssignProcessToJobObject(job, pi.hProcess)) {
+        DEBUG("Could not assign the application to a job (%lu); it will "
+              "outlive the stub if the stub is killed", GetLastError());
+        CloseHandle(job);
+        job = NULL;
+    }
+
+    if (ResumeThread(pi.hThread) == (DWORD)-1) {
+        APP_ERROR("Failed to start the application (%lu)", GetLastError());
+        TerminateProcess(pi.hProcess, 1);
+        goto cleanup;
+    }
 
     if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) {
         APP_ERROR("Failed to wait script process (%lu)", GetLastError());
@@ -1029,6 +1079,11 @@ cleanup:
     }
     if (pi.hThread && pi.hThread != INVALID_HANDLE_VALUE) {
         CloseHandle(pi.hThread);
+    }
+    if (job) {
+        /* Kills the child if it still runs, which happens only when
+           waiting for it failed. */
+        CloseHandle(job);
     }
     return result;
 }
