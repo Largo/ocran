@@ -43,6 +43,21 @@ class TestCosmoToolchain < Minitest::Test
     path
   end
 
+  # The cache entry is used as soon as it exists, so it is created by a
+  # rename, complete and executable, with nothing left beside it.
+  def test_compiled_stub_is_cached_atomically
+    Dir.mktmpdir do |dir|
+      stub = File.join(dir, "stub")
+      File.write(stub, "APE")
+      cached = File.join(dir, "cache", "ocran", "stub-0123")
+      Ocran::CosmoToolchain.install_cached(stub, cached)
+
+      assert_equal "APE", File.read(cached)
+      assert File.executable?(cached)
+      assert_equal ["stub-0123"], Dir.children(File.dirname(cached))
+    end
+  end
+
   # Under `bundle exec` the feature probe inherited BUNDLER_SETUP and
   # BUNDLE_GEMFILE, so the payload failed and every native gem it provides
   # was reported as incompatible.

@@ -353,11 +353,27 @@ module Ocran
           output = File.exist?(log) ? File.read(log) : "(no build output captured)"
           raise "Failed to build the stub with cosmocc (make -C src stub CC=#{cc}):\n#{output}"
         end
-        FileUtils.mkdir_p(File.dirname(cached))
-        FileUtils.cp(File.join(build_dir, "stub"), cached)
-        File.chmod(0755, cached)
+        install_cached(File.join(build_dir, "stub"), cached)
       end
       cached
+    end
+
+    # Puts a compiled stub into the cache. The cache entry is used as soon
+    # as it exists, so it must never be seen half-written - by a build that
+    # runs at the same time, or after one that was interrupted: the copy is
+    # made under a temporary name and renamed into place, which is atomic.
+    def install_cached(stub, cached)
+      require "fileutils"
+
+      FileUtils.mkdir_p(File.dirname(cached))
+      tmp = "#{cached}.#{Process.pid}.tmp"
+      begin
+        FileUtils.cp(stub, tmp)
+        File.chmod(0755, tmp)
+        File.rename(tmp, cached)
+      ensure
+        FileUtils.rm_f(tmp)
+      end
     end
 
     # Cache key covering the toolchain (path, mtime, size — so an updated
