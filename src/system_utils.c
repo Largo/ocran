@@ -129,20 +129,25 @@ char *GetParentPath(const char *path)
         return NULL;
     }
 
-    size_t len = strlen(path);
-    size_t i   = len;
+    size_t root = path_root_length(path);
+    size_t i    = strlen(path);
 
     /* Skip any trailing separators */
-    while (i > 0 && is_path_separator(path[i])) {
+    while (i > root && is_path_separator(path[i - 1])) {
         i--;
     }
 
     /* Skip the last segment’s characters */
-    while (i > 0 && !is_path_separator(path[i])) {
+    while (i > root && !is_path_separator(path[i - 1])) {
         i--;
     }
 
-    /* i==0 ⇒ empty parent */
+    /* Skip the separators before it, keeping the root ("/" or "C:\") */
+    while (i > root && is_path_separator(path[i - 1])) {
+        i--;
+    }
+
+    /* i==0 ⇒ empty parent (relative path with a single segment) */
 
     char *out = malloc(i + 1);
     if (!out) {
