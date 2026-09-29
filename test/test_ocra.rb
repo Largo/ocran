@@ -2386,14 +2386,14 @@ class TestOcran < Minitest::Test
   # at path, with the script as the application. Much quicker to build and
   # start than a packed Ruby, and all that tests of the stub itself need.
   # Yields the StubBuilder for additional opcodes.
-  def build_sh_stub(path, script, **options)
+  def build_sh_stub(path, script, image: "bin/sh", **options)
     require_relative "../lib/ocran/stub_builder"
     File.write("app.sh", script)
     Ocran::StubBuilder.new(Pathname(File.expand_path(path)), **options) do |stub|
       stub.cp(File.realpath("/bin/sh"), "bin/sh")
       stub.cp(File.expand_path("app.sh"), "src/app.sh")
       yield stub if block_given?
-      stub.exec("bin/sh", "src/app.sh")
+      stub.exec(image, "src/app.sh")
     end
   end
 
@@ -2535,6 +2535,41 @@ class TestOcran < Minitest::Test
         end
         unlock.(tmp)
       end
+    end
+  end
+
+  # A payload symlink may only point at a sibling, which is all OCRAN emits
+  # (shared library aliases in bin). The stub used to create any target, so
+  # a tampered executable could link a directory in the extraction dir to
+  # anywhere and have the files extracted after it written there.
+  def test_payload_symlink_escaping_extraction_dir_rejected
+    skip "payload symlinks are POSIX-only" if Gem.win_platform?
+    with_tmpdir do
+      outside = File.expand_path("outside")
+      mkdir_p outside
+
+      [outside, "../../../outside", "../bin", "sub/sh", ".", ".."].each_with_index do |target, i|
+        exe = exe_name("evil#{i}")
+        build_sh_stub(exe, "exit 0\n") do |stub|
+          stub.symlink("bin/escape", target)
+          stub.cp(File.expand_path("app.sh"), "bin/escape/pwned")
+        end
+        tmp = File.expand_path("tmp#{i}")
+        mkdir_p tmp
+        output, status = capture_system({ "TMPDIR" => tmp }, "./#{exe}")
+        refute status.success?, "symlink to #{target.inspect} was accepted:\n#{output}"
+        assert_empty Dir.children(outside), "symlink to #{target.inspect} escaped"
+        assert_empty Dir.children(tmp), "symlink to #{target.inspect}: extraction directory left behind"
+      end
+
+      # Links to siblings keep working.
+      build_sh_stub(exe_name("alias"), "echo aliased\n", image: "bin/alias-of-alias") do |stub|
+        stub.symlink("bin/sh-alias", "sh")
+        stub.symlink("bin/alias-of-alias", "sh-alias")
+      end
+      output, status = capture_system("./alias")
+      assert status.success?, output
+      assert_equal "aliased\n", output
     end
   end
 

@@ -233,8 +233,13 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size) {
         free(parent);
     }
 
-    /* Create/overwrite the file */
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+    /* Create/overwrite the file, but never write through a symlink that
+       happens to sit at its path (the file would land at the link's
+       target). O_EXCL would be stricter still, but on a case-insensitive
+       file system (the macOS default) it would turn two packed names that
+       differ only in case, which merely overwrite each other today, into a
+       failed start. */
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0777);
     if (fd < 0) {
         FATAL("ExportFile: open(\"%s\") failed: %s", path, strerror(errno));
         return false;
