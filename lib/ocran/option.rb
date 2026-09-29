@@ -43,6 +43,7 @@ module Ocran
         :warning? => true,
         :wrapper_exe? => true,
       }
+      @warnings = []
     end
 
     def usage
@@ -86,7 +87,8 @@ Gem content detection modes:
 
 Auto-detection options:
 
---no-dep-run       Don't run script.rb to check for dependencies.
+--no-dep-run       Don't run script.rb to check for dependencies (usually
+                   needs --add-all-core, and --gem-full with --gemfile).
 --no-autoload      Don't load/include script.rb's autoloads.
 --no-autodll       Disable detection of runtime DLL dependencies.
 
@@ -168,6 +170,10 @@ EOF
     GEM_GROUPS = %i[minimal guess all full spec scripts files extras].freeze
     GEM_FILE_SETS = %i[scripts files extras].freeze
 
+    # Warnings about the command line, for the caller to print once output
+    # is set up.
+    attr_reader :warnings
+
     # The value of an option that takes a path or name: the next argument,
     # which must be there and must not be empty.
     def required_argument(argv, option)
@@ -177,6 +183,13 @@ EOF
       value
     end
     private :required_argument
+
+    # Whether a --gem-* option makes every gem be packed with all of its
+    # scripts, which is what a build without the dependency run needs.
+    def whole_gems?
+      gem_options.any? { |negate, group, list| list.nil? && !negate && %i[all full spec scripts].include?(group) }
+    end
+    private :whole_gems?
 
     def parse(argv)
       while (arg = argv.shift)
@@ -329,6 +342,20 @@ EOF
 
       if inno_setup_script && (output_dir || output_zip)
         raise "--innosetup cannot be combined with --output-dir or --output-zip"
+      end
+
+      unless run_script?
+        # Without the dependency run nothing the script loads is detected,
+        # so the libraries it needs must be named some other way.
+        unless add_all_core?
+          @warnings << "--no-dep-run without --add-all-core: the script is not run, so none of the " \
+                       "standard library it requires is detected or packed"
+        end
+        if gemfile && !whole_gems?
+          @warnings << "--no-dep-run with --gemfile but without --gem-all or --gem-full: the script " \
+                       "is not run, so no gem file it loads is detected, and the gems are packed " \
+                       "without their scripts"
+        end
       end
 
       @options[:use_inno_setup?] = !!inno_setup_script

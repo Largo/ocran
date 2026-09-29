@@ -66,4 +66,14 @@ class TestOption < Minitest::Test
   def test_empty_rubyopt_is_accepted
     assert_equal "", parse("app.rb", "--rubyopt", "").rubyopt
   end
+
+  def test_no_dep_run_warns_about_what_is_not_detected
+    assert_empty parse("app.rb").warnings
+    assert_empty parse("app.rb", "--no-dep-run", "--add-all-core").warnings
+    assert_empty parse("app.rb", "--no-dep-run", "--add-all-core", "--gemfile", "Gemfile", "--gem-full").warnings
+
+    assert_match(/--add-all-core/, parse("app.rb", "--no-dep-run").warnings.join)
+    warnings = parse("app.rb", "--no-dep-run", "--add-all-core", "--gemfile", "Gemfile").warnings
+    assert_match(/--gem-all or --gem-full/, warnings.join)
+  end
 end

@@ -161,7 +161,7 @@ Fine-tuning flags:
 
 #### Auto-detection options:
 
-* `--no-dep-run`: Skip running the script to detect dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies. Requires `--add-all-core` and `--gem-full`.
+* `--no-dep-run`: Skip running the script to detect dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies. Nothing the script loads is detected then, so you usually need `--add-all-core` for the standard library and `--gemfile` with `--gem-full` (or `--gem-all`) for gems; OCRAN warns when they are missing.
 * `--no-autoload`: Do not attempt to load `autoload`ed constants.
 * `--no-autodll`: Disable automatic detection of runtime DLL dependencies.
 

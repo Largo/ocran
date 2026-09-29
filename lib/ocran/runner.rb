@@ -31,6 +31,7 @@ module Ocran
       end
 
       Ocran.option = @option
+      @option.warnings.each { |message| warning message }
 
       @ignore_modules = ObjectSpace.each_object(Module).to_a
     end
