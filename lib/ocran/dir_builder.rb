@@ -56,17 +56,33 @@ module Ocran
       @exec_args = [image.to_s, script.to_s, argv.map(&:to_s)]
     end
 
-    # Create a zip archive from a source directory.
+    # PowerShell command for create_zip on Windows. The paths come in through
+    # the environment rather than being spliced into the command, so no
+    # character in them (a quote in a user name, brackets) can change its
+    # meaning; -LiteralPath keeps wildcards in the source path literal.
+    POWERSHELL_ZIP_COMMAND =
+      "$ErrorActionPreference = 'Stop'; " \
+      "Get-ChildItem -LiteralPath $env:OCRAN_ZIP_SOURCE -Force | " \
+      "Compress-Archive -DestinationPath $env:OCRAN_ZIP_DESTINATION"
+
+    # Create a zip archive from a source directory, replacing any archive
+    # already at +zip_path+.
     # Uses the `zip` command on POSIX and PowerShell on Windows.
     def self.create_zip(zip_path, source_dir)
       zip_path = File.expand_path(zip_path.to_s)
+      # Both tools add to an existing archive rather than replace it (zip
+      # keeps entries the new tree no longer has; Compress-Archive refuses
+      # without -Force), so start from nothing.
+      FileUtils.rm_f(zip_path)
       if Gem.win_platform?
-        system("powershell", "-NoProfile", "-Command",
-               "Compress-Archive -Path '#{source_dir}\\*' -DestinationPath '#{zip_path}'",
+        env = { "OCRAN_ZIP_SOURCE" => source_dir.to_s, "OCRAN_ZIP_DESTINATION" => zip_path }
+        system(env, "powershell", "-NoProfile", "-NonInteractive", "-Command", POWERSHELL_ZIP_COMMAND,
                exception: true)
       else
+        # -y stores symlinks (the libruby.so aliases) as links; without it
+        # zip follows them and stores the library once per alias.
         Dir.chdir(source_dir) do
-          system("zip", "-r", zip_path, ".", exception: true)
+          system("zip", "-q", "-r", "-y", zip_path, ".", exception: true)
         end
       end
     end
