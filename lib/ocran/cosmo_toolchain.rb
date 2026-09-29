@@ -38,6 +38,11 @@ module Ocran
       "BUNDLE_LOCKFILE" => nil
     }.freeze
 
+    # Environment for running the payload on the build host: out of any
+    # bundle (see above), and seeing only its own embedded stdlib and gems,
+    # not the build host's.
+    PAYLOAD_ENV = BUNDLER_FREE_ENV.merge("GEM_HOME" => nil, "GEM_PATH" => nil, "RUBYLIB" => nil).freeze
+
     # Name of the environment variable a CosmoRuby build honors to switch
     # OFF running an embedded /zip/main.rb, i.e. to behave as an ordinary
     # interpreter (useful for inspecting a packaged application). Its
@@ -150,8 +155,7 @@ module Ocran
     def query_ruby(ruby)
       script = 'print RUBY_VERSION; print "\t"; print Gem.default_dir; ' \
                'print "\t"; print Gem::Specification.map(&:name).uniq.sort.join(",")'
-      out = IO.popen([BUNDLER_FREE_ENV.merge("GEM_HOME" => nil, "GEM_PATH" => nil, "RUBYLIB" => nil),
-                      "/bin/sh", ruby, "-e", script],
+      out = IO.popen([PAYLOAD_ENV, "/bin/sh", ruby, "-e", script],
                      err: IO::NULL, &:read)
       ok = $?.success?
       version, default_gem_dir, gem_names = out.to_s.split("\t", 3)
@@ -193,8 +197,10 @@ module Ocran
           end
         end
       RUBY
-      out = IO.popen([{ "GEM_HOME" => nil, "GEM_PATH" => nil, "RUBYOPT" => nil, "RUBYLIB" => nil },
-                      "/bin/sh", ruby, "-e", script, *features],
+      # The same environment as query_ruby: under `bundle exec` the payload
+      # would otherwise die setting up the build host's bundle, and every
+      # feature would come back as not provided.
+      out = IO.popen([PAYLOAD_ENV, "/bin/sh", ruby, "-e", script, *features],
                      err: IO::NULL, &:read)
       return [] unless $?.success?
 
