@@ -174,8 +174,10 @@ module Ocran
 
       if @option.use_inno_setup?
         # Native on Windows; on POSIX allow it when an ISCC command is
-        # available (e.g. via Wine wrapper scripts or in tests).
-        if Gem.win_platform? || system("command -v ISCC > /dev/null 2>&1")
+        # available (e.g. via Wine wrapper scripts or in tests). Checked
+        # here, before the files are collected, so a missing ISCC fails fast.
+        require_relative "inno_setup_script_builder"
+        if InnoSetupScriptBuilder.iscc_available?
           direction.build_inno_setup_installer
         else
           raise "Inno Setup is only supported on Windows (no ISCC command found in PATH)"

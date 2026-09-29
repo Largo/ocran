@@ -10,18 +10,18 @@ module Ocran
     ISCC_INVALID_PARAMS = 1
     ISCC_COMPILATION_FAILED = 2
 
-    extend WindowsCommandEscaping
-
     class << self
+      # Whether the ISCC command can be run. On Windows it is invoked
+      # directly and a missing ISCC is reported by compile; on POSIX it is
+      # looked up in PATH (e.g. a Wine wrapper, or a fake ISCC in tests).
+      def iscc_available?
+        return true if Gem.win_platform?
+
+        system("command -v #{ISCC_CMD} > /dev/null 2>&1")
+      end
+
       def compile(iss_filename, quiet: false)
-        # "where" and ">NUL" only exist on Windows; use "command -v" on POSIX
-        # (e.g. when testing the pipeline with a fake ISCC on Linux/macOS).
-        iscc_found = if Gem.win_platform?
-                       true # ISCC is invoked directly; failure is reported below
-                     else
-                       system("command -v #{quote_and_escape(ISCC_CMD)} > /dev/null 2>&1")
-                     end
-        unless iscc_found
+        unless iscc_available?
           raise "ISCC command not found. Is the InnoSetup directory in your PATH?"
         end
 
