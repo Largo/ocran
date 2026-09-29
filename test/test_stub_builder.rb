@@ -24,4 +24,19 @@ class TestStubBuilder < Minitest::Test
       assert_equal "payload failed", error.message
     end
   end
+
+  # The executable is written to a temporary file next to the output and
+  # renamed at the end; a failed build used to leave that file behind.
+  def test_failed_build_leaves_no_temporary_file
+    skip "stub not built (run rake build)" unless File.exist?(Ocran::StubBuilder::STUB_PATH)
+
+    Dir.mktmpdir do |dir|
+      assert_raises(RuntimeError) do
+        Ocran::StubBuilder.new(File.join(dir, "app"), enable_compression: false) do
+          raise "payload failed"
+        end
+      end
+      assert_empty Dir.children(dir)
+    end
+  end
 end
