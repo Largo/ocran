@@ -41,6 +41,11 @@ module Ocran
     # Markers of the ZIP64 format extensions. OCRAN never writes them; an
     # input archive that uses them is rejected rather than corrupted.
     ZIP64_EOCD_LOCATOR_SIGNATURE = "PK\x06\x07".b
+    ZIP64_EOCD_LOCATOR_SIZE = 20
+
+    # Limits of the format without ZIP64.
+    MAX_ENTRIES = 0xffff
+    MAX_OFFSET = 0xffffffff
 
     CENTRAL_SIGNATURE = "PK\x01\x02".b
     LOCAL_SIGNATURE = "PK\x03\x04".b
@@ -167,16 +172,20 @@ module Ocran
               "it cannot be a cosmopolitan APE with an embedded ZIP store"
       end
 
-      if tail.rindex(ZIP64_EOCD_LOCATOR_SIGNATURE)
-        raise "#{path} uses the ZIP64 format extensions, which OCRAN cannot append to"
-      end
-
       _signature, _disk, _cd_disk, _disk_entries, total_entries, cd_size, cd_offset, comment_length =
         tail.byteslice(offset, EOCD_SIZE).unpack("a4vvvvVVv")
 
       eocd_start = size - tail_size + offset
       unless eocd_start + EOCD_SIZE + comment_length == size
         raise "#{path} has trailing data after its ZIP archive; OCRAN cannot append to it"
+      end
+
+      # A ZIP64 archive has its end-of-central-directory locator right
+      # before this record. Only that position counts: the same four bytes
+      # anywhere else in the tail are file data or names.
+      locator_offset = offset - ZIP64_EOCD_LOCATOR_SIZE
+      if locator_offset >= 0 && tail.byteslice(locator_offset, 4) == ZIP64_EOCD_LOCATOR_SIGNATURE
+        raise "#{path} uses the ZIP64 format extensions, which OCRAN cannot append to"
       end
 
       { cd_offset: cd_offset, cd_size: cd_size, total_entries: total_entries }
