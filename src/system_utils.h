@@ -206,6 +206,24 @@ size_t GetMemoryMapSize(const MemoryMap *map);
 bool InitializeSignalHandling(void);
 
 /**
+ * @brief Registers the routine that deletes the extraction directory.
+ *
+ * The routine runs at most once, through RunCleanupRoutine(): at the end of
+ * main(), or on Windows from the console control handler when Windows is
+ * about to terminate the stub (console window closed, system shutdown),
+ * once the child has exited or been ended. It must therefore cope with
+ * being called at any point of main().
+ */
+void SetCleanupRoutine(void (*routine)(void));
+
+/**
+ * @brief Runs the registered cleanup routine unless it has run already.
+ *
+ * If another thread is running it at the time, waits until it is done.
+ */
+void RunCleanupRoutine(void);
+
+/**
  * @brief Dies of the signal that killed the child, if one did.
  *
  * On POSIX, when the child launched by CreateAndWaitForProcess was killed by

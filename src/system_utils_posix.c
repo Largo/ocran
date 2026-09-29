@@ -430,6 +430,27 @@ bool InitializeSignalHandling(void) {
     return true;
 }
 
+static void (*CleanupRoutine)(void) = NULL;
+static bool CleanupDone = false;
+
+void SetCleanupRoutine(void (*routine)(void))
+{
+    CleanupRoutine = routine;
+}
+
+/* Only ever called from the main thread here: signal handlers merely
+   forward, and the main thread outlives the child to clean up. */
+void RunCleanupRoutine(void)
+{
+    if (CleanupDone) {
+        return;
+    }
+    CleanupDone = true;
+    if (CleanupRoutine) {
+        CleanupRoutine();
+    }
+}
+
 void ReraiseChildSignal(void)
 {
     int sig = TerminatingSignal;

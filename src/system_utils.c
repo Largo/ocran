@@ -733,24 +733,120 @@ size_t GetMemoryMapSize(const MemoryMap *map)
     return map->size;
 }
 
+/* Guards ChildProcess and TerminationRequested, which the console control
+   handler thread reads while the main thread launches and reaps the child. */
+static CRITICAL_SECTION ChildLock;
+
+/* Process handle of the running child; NULL while there is none. */
+static HANDLE ChildProcess = NULL;
+
+/* Set by the console control handler when Windows is about to terminate
+   the stub; the main thread then no longer starts the child. */
+static bool TerminationRequested = false;
+
+/* State of the cleanup routine, see RunCleanupRoutine(). */
+#define CLEANUP_PENDING 0
+#define CLEANUP_RUNNING 1
+#define CLEANUP_DONE    2
+static void (*CleanupRoutine)(void) = NULL;
+static volatile LONG CleanupState = CLEANUP_PENDING;
+
+void SetCleanupRoutine(void (*routine)(void))
+{
+    CleanupRoutine = routine;
+}
+
+void RunCleanupRoutine(void)
+{
+    if (InterlockedCompareExchange(&CleanupState, CLEANUP_RUNNING,
+                                   CLEANUP_PENDING) == CLEANUP_PENDING) {
+        if (CleanupRoutine) {
+            CleanupRoutine();
+        }
+        InterlockedExchange(&CleanupState, CLEANUP_DONE);
+        return;
+    }
+
+    /* The other thread is running it: wait until it is done, so that
+       neither thread ends the process in the middle of the cleanup. */
+    while (CleanupState != CLEANUP_DONE) {
+        Sleep(10);
+    }
+}
+
+/* Windows terminates the stub about 5 seconds after a close or shutdown
+   event. These split that time between the child and the cleanup. */
+#define CLOSE_CHILD_WAIT_MS     2500
+#define CLOSE_TERMINATE_WAIT_MS 500
+#define CLOSE_EXTRACT_WAIT_MS   2500
+
 /**
  * @brief Handle console control events in the parent process.
  *
- * This handler ignores all console control events (Ctrl+C, Ctrl+Break, etc.)
- * in the parent process so it can complete cleanup without interruption.
- * Child processes (e.g., Ruby) receive these events and exit quickly,
- * allowing the parent to perform final cleanup tasks.
+ * Ctrl+C and Ctrl+Break are ignored in the parent: the child shares the
+ * console, receives the same event and decides whether to exit, and the
+ * parent cleans up after it as usual.
+ *
+ * Closing the console window and system shutdown are different: Windows
+ * terminates the process as soon as this handler returns, whatever it
+ * returns, so the cleanup has to happen here. The handler waits for the
+ * child (which got the same event) for a bounded time, ends it if it is
+ * still running (its open files could not be deleted otherwise), and runs
+ * the cleanup routine before returning. Should the stub still be extracting,
+ * the main thread does not start the child any more and the handler gives
+ * it a moment to reach its own cleanup first.
+ *
+ * CTRL_LOGOFF_EVENT is ignored like Ctrl+C: it reaches only services, and
+ * does so whenever any user logs off, which a service has to survive.
+ *
+ * Runs on a thread of its own that Windows creates for the event.
  *
  * @param dwCtrlType The type of console control event received.
- * @return TRUE to indicate the event was handled and should be ignored.
+ * @return TRUE to indicate the event was handled.
  */
 static BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 {
+    if (dwCtrlType != CTRL_CLOSE_EVENT && dwCtrlType != CTRL_SHUTDOWN_EVENT) {
+        return TRUE;
+    }
+
+    DEBUG("Console control event %lu: cleaning up before Windows ends the stub",
+          (unsigned long)dwCtrlType);
+
+    HANDLE child = NULL;
+    EnterCriticalSection(&ChildLock);
+    TerminationRequested = true;
+    if (ChildProcess
+        && !DuplicateHandle(GetCurrentProcess(), ChildProcess,
+                            GetCurrentProcess(), &child,
+                            0, FALSE, DUPLICATE_SAME_ACCESS)) {
+        child = NULL;
+    }
+    LeaveCriticalSection(&ChildLock);
+
+    if (child) {
+        if (WaitForSingleObject(child, CLOSE_CHILD_WAIT_MS) == WAIT_TIMEOUT) {
+            DEBUG("The application did not exit in time; terminating it");
+            TerminateProcess(child, (UINT)STATUS_CONTROL_C_EXIT);
+            WaitForSingleObject(child, CLOSE_TERMINATE_WAIT_MS);
+        }
+        CloseHandle(child);
+    } else {
+        DWORD start = GetTickCount();
+        while (CleanupState == CLEANUP_PENDING
+               && GetTickCount() - start < CLOSE_EXTRACT_WAIT_MS) {
+            Sleep(10);
+        }
+    }
+
+    RunCleanupRoutine();
     return TRUE;
 }
 
 bool InitializeSignalHandling(void)
 {
+    InitializeCriticalSection(&ChildLock);
+
     if (!SetConsoleCtrlHandler(ConsoleHandleRoutine, TRUE)) {
         DWORD err = GetLastError();
         APP_ERROR("Failed to set console control handler, Error=%lu", err);
@@ -884,10 +980,22 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
         goto cleanup;
     }
 
-    if (!CreateProcessW(wapp_name, wcmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
-        APP_ERROR("Failed to create process (%lu)", GetLastError());
+    /* Launch under ChildLock, so that the console control handler either
+       sees the child or keeps it from being started at all. */
+    EnterCriticalSection(&ChildLock);
+    if (TerminationRequested) {
+        LeaveCriticalSection(&ChildLock);
+        APP_ERROR("Windows is terminating the stub; not starting the application");
         goto cleanup;
     }
+    if (!CreateProcessW(wapp_name, wcmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+        DWORD err = GetLastError();
+        LeaveCriticalSection(&ChildLock);
+        APP_ERROR("Failed to create process (%lu)", err);
+        goto cleanup;
+    }
+    ChildProcess = pi.hProcess;
+    LeaveCriticalSection(&ChildLock);
 
     if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) {
         APP_ERROR("Failed to wait script process (%lu)", GetLastError());
@@ -912,6 +1020,11 @@ cleanup:
         free(wcmd_line);
     }
     if (pi.hProcess && pi.hProcess != INVALID_HANDLE_VALUE) {
+        /* The console control handler duplicates the handle under the
+           lock; unpublish it before closing it. */
+        EnterCriticalSection(&ChildLock);
+        ChildProcess = NULL;
+        LeaveCriticalSection(&ChildLock);
         CloseHandle(pi.hProcess);
     }
     if (pi.hThread && pi.hThread != INVALID_HANDLE_VALUE) {
