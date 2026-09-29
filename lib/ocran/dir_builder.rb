@@ -22,9 +22,16 @@ module Ocran
     # to the name of the script that is executed. Direction passes the
     # user's script, because what is executed can be a generated launcher
     # (see Direction#generate_rubyopt_launcher).
-    def initialize(path, script_name: nil)
+    #
+    # +chdir_before+ and +chdir_exe_dir+ mirror the stub flags of the same
+    # names (--chdir-first, --chdir-exe-dir): the launch script changes into
+    # the directory of the packed script, or into its own directory, which
+    # is where the output directory keeps the application.
+    def initialize(path, script_name: nil, chdir_before: false, chdir_exe_dir: false)
       @path = Pathname(path)
       @script_name = script_name
+      @chdir_before = chdir_before
+      @chdir_exe_dir = chdir_exe_dir
       @path.mkpath
       @env = {}
       @exec_args = nil
@@ -130,6 +137,17 @@ module Ocran
       escape_percent(value).gsub("#{EXTRACT_ROOT}/", "%SCRIPT_DIR%")
     end
 
+    # The directory the launch script changes into before it starts the
+    # application, as a packed path (see root_path), or nil to stay put.
+    def chdir_target
+      if @chdir_exe_dir
+        EXTRACT_ROOT.to_s
+      elsif @chdir_before && @exec_args
+        dir = File.dirname(@exec_args[1])
+        dir == "." ? EXTRACT_ROOT.to_s : root_path(dir)
+      end
+    end
+
     def script_basename
       return @script_name.to_s if @script_name
 
@@ -152,6 +170,11 @@ module Ocran
         lines << "export #{name}=#{shell_word(value)}"
       end
 
+      if (dir = chdir_target)
+        target = dir == EXTRACT_ROOT.to_s ? '"$SCRIPT_DIR"' : shell_word(dir)
+        lines << "cd #{target} || exit 1"
+      end
+
       if @exec_args
         image, script, argv = @exec_args
         words = [root_path(image), root_path(script), *argv].map { |a| shell_word(a) }
@@ -165,13 +188,21 @@ module Ocran
     def write_batch_script
       script_path = @path / "#{script_basename}.bat"
 
+      # setlocal keeps the variables and the working directory set here from
+      # outliving the script in the cmd.exe session that ran it.
       lines = [
         "@echo off",
+        "setlocal",
         'set "SCRIPT_DIR=%~dp0"',
       ]
 
       @env.each do |name, value|
         lines << "set \"#{name}=#{batch_value(value).tr("/", "\\")}\""
+      end
+
+      if (dir = chdir_target)
+        target = dir == EXTRACT_ROOT.to_s ? "%SCRIPT_DIR%" : batch_value(dir).tr("/", "\\")
+        lines << "cd /d #{quote_and_escape(target)} || exit /b 1"
       end
 
       if @exec_args
