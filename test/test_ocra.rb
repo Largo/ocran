@@ -2506,6 +2506,38 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Directories the application made read-only, or even unreadable, inside
+  # the extraction directory are deleted with everything else. The stub
+  # gave up on the first entry it could not delete.
+  def test_read_only_dirs_in_extraction_dir_deleted
+    skip "POSIX permissions" if Gem.win_platform?
+    with_tmpdir do
+      build_sh_stub(exe_name("roapp"), <<~SH)
+        top="${0%/src/app.sh}"
+        mkdir -p "$top/a/locked/sub" "$top/z/locked"
+        touch "$top/a/locked/sub/file" "$top/z/locked/file"
+        chmod 500 "$top/a/locked/sub"
+        chmod 0 "$top/a/locked" "$top/z/locked"
+      SH
+      tmp = File.expand_path("tmp")
+      mkdir_p tmp
+      begin
+        assert_system({ "TMPDIR" => tmp }, "./roapp")
+        assert_empty Dir.children(tmp), "extraction directory left behind"
+      ensure
+        # Let with_tmpdir remove whatever the stub could not.
+        unlock = lambda do |dir|
+          File.chmod(0700, dir)
+          Dir.children(dir).each do |name|
+            path = File.join(dir, name)
+            unlock.(path) if File.directory?(path) && !File.symlink?(path)
+          end
+        end
+        unlock.(tmp)
+      end
+    end
+  end
+
   # Inno Setup builds must produce a wrapper executable named like --output
   # and install it into {app}, so that user ISS scripts can reference it
   # (e.g. [Run]/[UninstallRun] entries, Windows service registration).

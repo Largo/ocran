@@ -134,6 +134,9 @@ bool CreateDirectoriesRecursively(const char *dir) {
     return true;
 }
 
+/* Keeps going after a failure so that as much as possible gets deleted, and
+   returns false if anything could not be. Failures are only reported in
+   debug mode: the application has run, and there is nobody to act on them. */
 bool DeleteRecursively(const char *path) {
     if (!path || !*path) {
         return false;
@@ -141,23 +144,31 @@ bool DeleteRecursively(const char *path) {
 
     struct stat st;
     if (lstat(path, &st) < 0) {
-        FATAL("DeleteRecursively: stat(\"%s\") failed: %s", path, strerror(errno));
+        APP_ERROR("DeleteRecursively: lstat(\"%s\") failed: %s", path, strerror(errno));
         return false;
     }
 
     if (!S_ISDIR(st.st_mode)) {
-        /* It's a file, just delete it */
+        /* A file or a symlink (which is not followed): just delete it */
         if (unlink(path) < 0) {
-            FATAL("DeleteRecursively: unlink(\"%s\") failed: %s", path, strerror(errno));
+            APP_ERROR("DeleteRecursively: unlink(\"%s\") failed: %s", path, strerror(errno));
             return false;
         }
         return true;
     }
 
+    /* Listing a directory and deleting its entries takes read, write and
+       search permission, which the application may have removed (e.g. a
+       read-only copy of a Go module cache). The directory is the user's
+       own, so give them back. */
+    if ((st.st_mode & S_IRWXU) != S_IRWXU) {
+        chmod(path, (st.st_mode & 07777) | S_IRWXU);
+    }
+
     /* It's a directory, delete contents recursively */
     DIR *dir = opendir(path);
     if (!dir) {
-        FATAL("DeleteRecursively: opendir(\"%s\") failed: %s", path, strerror(errno));
+        APP_ERROR("DeleteRecursively: opendir(\"%s\") failed: %s", path, strerror(errno));
         return false;
     }
 
@@ -171,13 +182,11 @@ bool DeleteRecursively(const char *path) {
         char *child_path = JoinPath(path, entry->d_name);
         if (!child_path) {
             success = false;
-            break;
+            continue;
         }
 
         if (!DeleteRecursively(child_path)) {
-            free(child_path);
             success = false;
-            break;
         }
         free(child_path);
     }
@@ -186,7 +195,7 @@ bool DeleteRecursively(const char *path) {
 
     if (success) {
         if (rmdir(path) < 0) {
-            FATAL("DeleteRecursively: rmdir(\"%s\") failed: %s", path, strerror(errno));
+            APP_ERROR("DeleteRecursively: rmdir(\"%s\") failed: %s", path, strerror(errno));
             return false;
         }
     }
