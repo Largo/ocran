@@ -486,13 +486,24 @@ cleanup:
 // Retrieves the path to the temporary directory for the current user.
 char *GetTempDirectoryPath(void)
 {
-    wchar_t *wtemp_dir = calloc(MAX_PATH, sizeof(*wtemp_dir));
+    /* A TEMP longer than the buffer makes GetTempPathW return the size it
+       needs and leave the buffer undefined, so ask for the size first. */
+    DWORD size = GetTempPathW(0, NULL);
+    if (size == 0) {
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to get temp path length, Error=%lu", err);
+        return NULL;
+    }
+
+    wchar_t *wtemp_dir = calloc((size_t)size + 1, sizeof(*wtemp_dir));
     if (!wtemp_dir) {
         APP_ERROR("Memory allocation failed for temp directory");
         return NULL;
     }
 
-    if (!GetTempPathW(MAX_PATH, wtemp_dir)) {
+    /* On success the length without the terminating NUL comes back. */
+    DWORD len = GetTempPathW(size + 1, wtemp_dir);
+    if (len == 0 || len > size) {
         DWORD err = GetLastError();
         APP_ERROR("Failed to get temp path, Error=%lu", err);
         free(wtemp_dir);
