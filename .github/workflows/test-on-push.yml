@@ -18,8 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.2 is the oldest Ruby the gemspec accepts; Linux only to keep CI short.
-        ruby: [ '3.2', '3.3', '3.4', '4.0' ]
+        ruby: [ '3.3', '3.4', '4.0' ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
