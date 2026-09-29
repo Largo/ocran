@@ -31,6 +31,32 @@ class TestZipWriter < Minitest::Test
     end
   end
 
+  # The limits of the format were checked only after the archive had been
+  # cut open and the new entries written, which left the file broken.
+  def test_too_many_entries_are_refused_before_writing
+    bytes = archive("MZ")
+    with_archive(bytes) do |path|
+      entries = Array.new(Ocran::ZipWriter::MAX_ENTRIES + 1) { |i| entry("f#{i}", "") }
+      error = assert_raises(RuntimeError) { Ocran::ZipWriter.append(path, entries) }
+      assert_match(/too many ZIP entries/, error.message)
+      assert_equal bytes, File.binread(path)
+    end
+  end
+
+  def test_oversized_archive_is_refused_before_writing
+    skip "needs a sparse file" if Gem.win_platform?
+
+    bytes = archive("MZ")
+    with_archive(bytes) do |path|
+      big = File.join(File.dirname(path), "big")
+      File.open(big, "wb") { |f| f.truncate(Ocran::ZipWriter::MAX_OFFSET + 1) }
+      big_entry = Ocran::ZipWriter::Entry.new(name: "big", source: big)
+      error = assert_raises(RuntimeError) { Ocran::ZipWriter.append(path, [big_entry]) }
+      assert_match(/exceed 4 GiB/, error.message)
+      assert_equal bytes, File.binread(path)
+    end
+  end
+
   def test_zip64_locator_before_the_record_is_refused
     locator = ["PK\x06\x07".b, 0, 0, 1].pack("a4VQ<V")
     with_archive(archive("MZ" + ("\0" * 64) + locator)) do |path|

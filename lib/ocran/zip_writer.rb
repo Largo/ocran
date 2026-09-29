@@ -92,6 +92,12 @@ module Ocran
 
         (data || File.binread(source)).b
       end
+
+      def content_size
+        return 0 if directory?
+
+        data ? data.bytesize : File.size(source)
+      end
     end
 
     module_function
@@ -120,6 +126,7 @@ module Ocran
         end
 
         entries = with_parent_directories(entries, existing)
+        check_limits(eocd, central, entries)
 
         before = io.size
         io.truncate(eocd[:cd_offset])
@@ -154,6 +161,26 @@ module Ocran
         missing.each { |name| seen[name] = true }
         missing.map { |name| Entry.new(name: name) } << entry
       }
+    end
+
+    # Raises when the archive would outgrow the format without ZIP64 -
+    # before anything is written, so that a refused append leaves the file
+    # as it was. The size is an upper bound: an entry is never stored larger
+    # than its content (see compress).
+    def check_limits(eocd, central, entries)
+      total_entries = eocd[:total_entries] + entries.size
+      if total_entries > MAX_ENTRIES
+        raise "too many ZIP entries (#{total_entries}); OCRAN does not write ZIP64 archives"
+      end
+
+      size = eocd[:cd_offset] + central.bytesize + EOCD_SIZE
+      entries.each do |entry|
+        name = entry.name.bytesize
+        size += 30 + name + 46 + name + entry.content_size
+      end
+      if size > MAX_OFFSET
+        raise "the packaged archive would exceed 4 GiB; OCRAN does not write ZIP64 archives"
+      end
     end
 
     # Locates and decodes the end-of-central-directory record. The record
@@ -273,10 +300,10 @@ module Ocran
     end
 
     def end_of_central_directory(total_entries, cd_size, cd_offset)
-      if total_entries > 0xffff
+      if total_entries > MAX_ENTRIES
         raise "too many ZIP entries (#{total_entries}); OCRAN does not write ZIP64 archives"
       end
-      if cd_offset + cd_size > 0xffffffff
+      if cd_offset + cd_size > MAX_OFFSET
         raise "the packaged archive would exceed 4 GiB; OCRAN does not write ZIP64 archives"
       end
 
