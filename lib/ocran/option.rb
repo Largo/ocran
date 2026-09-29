@@ -69,7 +69,7 @@ Gem content detection modes:
 --gem-guess=[gem1,...]   Include loaded scripts & best guess (DEFAULT)
 --gem-all[=gem1,..]      Include all scripts & files
 --gem-full[=gem1,..]     Include EVERYTHING
---gem-spec[=gem1,..]     Include files in gemspec (Does not work with Rubygems 1.7+)
+--gem-spec[=gem1,..]     Include the files listed in the gemspec
 
   minimal: loaded scripts
   guess: loaded scripts and other files

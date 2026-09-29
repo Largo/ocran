@@ -151,7 +151,7 @@ These options control which files from included gems are added to the output.
 * `--gem-guess[=gem1,..]`: Include loaded scripts and a best guess of other needed files (DEFAULT).
 * `--gem-all[=gem1,..]`: Include all scripts and important files from the gem.
 * `--gem-full[=gem1,..]`: Include every file in the gem directory.
-* `--gem-spec[=gem1,..]`: Include files listed in the gemspec (not compatible with newer RubyGems).
+* `--gem-spec[=gem1,..]`: Include the files listed in the gemspec.
 
 Fine-tuning flags:
 

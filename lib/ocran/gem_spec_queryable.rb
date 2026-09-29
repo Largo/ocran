@@ -155,7 +155,10 @@ module Ocran
       actual_files = file_sets.flat_map do |set|
         case set
         when :spec
-          files.map { |file| Pathname(file) }
+          # Gem::Specification#files lists paths relative to the gem
+          # directory, and may name files the installed gem does not have
+          # (e.g. excluded from the package).
+          files.map { |file| gem_root / file }.select(&:file?)
         when :loaded
           # Some distros expose gem files under additional paths via symlinks
           # (e.g. Fedora symlinks /usr/share/ruby/psych.rb into the psych gem
@@ -186,8 +189,8 @@ module Ocran
           raise "Invalid file set: #{set}. Please specify a valid file set (:spec, :loaded, :files, :extras, :scripts)."
         end
       end
+      # The file sets overlap (e.g. :loaded and :scripts).
       actual_files.uniq
-      actual_files
     end
   end
 end
