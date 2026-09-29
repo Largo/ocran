@@ -1349,30 +1349,41 @@ module Ocran
       end
 
       bundle_id  = @option.bundle_identifier || "com.example.#{app_name}"
-      icon_entry = @option.icon_filename ? "    <key>CFBundleIconFile</key>\n    <string>AppIcon</string>\n" : ""
+      File.write(contents_dir / "Info.plist",
+                 self.class.info_plist(app_name, bundle_id, icon: !!@option.icon_filename))
 
-      File.write(contents_dir / "Info.plist", <<~PLIST)
+      say "Finished building #{bundle_path} (#{builder.data_size} bytes decompressed)"
+    end
+
+    XML_ESCAPES = { "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", '"' => "&quot;", "'" => "&apos;" }.freeze
+
+    # The Info.plist of a macOS app bundle. The values are XML-escaped: an
+    # app named "R&D" must not produce a property list macOS cannot parse.
+    def self.info_plist(app_name, bundle_id, icon: false)
+      name = app_name.to_s.gsub(/[&<>"']/, XML_ESCAPES)
+      id = bundle_id.to_s.gsub(/[&<>"']/, XML_ESCAPES)
+      icon_entry = icon ? "    <key>CFBundleIconFile</key>\n    <string>AppIcon</string>\n" : ""
+
+      <<~PLIST
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">
         <dict>
           <key>CFBundleName</key>
-          <string>#{app_name}</string>
+          <string>#{name}</string>
           <key>CFBundleDisplayName</key>
-          <string>#{app_name}</string>
+          <string>#{name}</string>
           <key>CFBundleIdentifier</key>
-          <string>#{bundle_id}</string>
+          <string>#{id}</string>
           <key>CFBundleVersion</key>
           <string>1.0</string>
           <key>CFBundlePackageType</key>
           <string>APPL</string>
           <key>CFBundleExecutable</key>
-          <string>#{app_name}</string>
+          <string>#{name}</string>
         #{icon_entry}</dict>
         </plist>
       PLIST
-
-      say "Finished building #{bundle_path} (#{builder.data_size} bytes decompressed)"
     end
 
     # Builds the executable by copying the cosmopolitan Ruby and injecting
