@@ -18,8 +18,13 @@ module Ocran
     # by Direction to build the optional wrapper executable.
     attr_reader :env, :exec_args
 
-    def initialize(path)
+    # +script_name+ names the launch script (without extension); it defaults
+    # to the name of the script that is executed. Direction passes the
+    # user's script, because what is executed can be a generated launcher
+    # (see Direction#generate_rubyopt_launcher).
+    def initialize(path, script_name: nil)
       @path = Pathname(path)
+      @script_name = script_name
       @path.mkpath
       @env = {}
       @exec_args = nil
@@ -126,6 +131,8 @@ module Ocran
     end
 
     def script_basename
+      return @script_name.to_s if @script_name
+
       @exec_args ? Pathname(@exec_args[1]).basename.sub_ext("").to_s : "run"
     end
 

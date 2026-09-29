@@ -1278,7 +1278,7 @@ module Ocran
 
       path = Pathname(path)
       say "Building directory #{path}"
-      builder = DirBuilder.new(path, &to_proc)
+      builder = DirBuilder.new(path, script_name: @option.script.basename.sub_ext("").to_s, &to_proc)
 
       if @option.wrapper_exe?
         # Same wrapper as in Inno Setup builds: a doubleclickable executable

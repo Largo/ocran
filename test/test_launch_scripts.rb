@@ -80,6 +80,18 @@ class TestLaunchScripts < Minitest::Test
     end
   end
 
+  # The executed script can be the generated RUBYOPT launcher; the launch
+  # script is still named after the application's own script.
+  def test_launch_script_is_named_after_the_given_script
+    Dir.mktmpdir do |tmp|
+      Ocran::DirBuilder.new(tmp, script_name: "app") do |b|
+        b.exec("bin/ruby", "src/ocran-rubyopt-launcher.rb")
+      end
+      ext = Gem.win_platform? ? ".bat" : ".sh"
+      assert_equal ["app#{ext}"], Dir.children(tmp)
+    end
+  end
+
   def test_inno_setup_launcher_escapes_percent
     builder = Ocran::LauncherBatchBuilder.new(title: "100% app")
     builder.export("ROOTED", "|/lib/50%")
