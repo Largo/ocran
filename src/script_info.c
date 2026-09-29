@@ -183,6 +183,11 @@ bool RunScript(char *argv[], bool is_chdir_to_script_dir,
     char **merged_argv = NULL;
     char *script_dir = NULL;
 
+    if (!script_info) {
+        APP_ERROR("Failed to copy the script info");
+        goto cleanup;
+    }
+
     app_name = ExpandInstDirPath(script_info[0]);
     if (!app_name) {
         APP_ERROR("Failed to expand application name to installation directory");
