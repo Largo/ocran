@@ -217,13 +217,17 @@ cleanup:
     return result;
 }
 
-// Deletes a directory and all its contents recursively.
+// Deletes a directory and all its contents recursively. Keeps going after a
+// failure so that as much as possible gets deleted; returns false if
+// anything could not be.
 bool DeleteRecursively(const char *path)
 {
     if (!path || !*path) {
         APP_ERROR("path is NULL or empty");
         return false;
     }
+
+    bool success = true;
 
     char *findPath = JoinPath(path, "*");
     if (!findPath) {
@@ -253,6 +257,7 @@ bool DeleteRecursively(const char *path)
             char *name = utf16_to_utf8(wname);
             if (!name) {
                 APP_ERROR("Failed to convert filename to UTF-8");
+                success = false;
                 continue;
             }
 
@@ -260,13 +265,15 @@ bool DeleteRecursively(const char *path)
             free(name);
             if (!subPath) {
                 APP_ERROR("Failed to build delete file path");
-                break;
+                success = false;
+                continue;
             }
 
             wchar_t *wsubPath = utf8_to_utf16(subPath);
             if (!wsubPath) {
                 APP_ERROR("Failed to convert subpath to UTF-16");
                 free(subPath);
+                success = false;
                 continue;
             }
 
@@ -279,13 +286,28 @@ bool DeleteRecursively(const char *path)
                 if (!RemoveDirectoryW(wsubPath)) {
                     DWORD err = GetLastError();
                     APP_ERROR("Failed to delete directory link, Error=%lu", err);
+                    success = false;
                 }
             } else if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
-                DeleteRecursively(subPath);
-            } else if (!DeleteFileW(wsubPath)) {
-                DWORD err = GetLastError();
-                APP_ERROR("Failed to delete file, Error=%lu", err);
-                MoveFileExW(wsubPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+                if (!DeleteRecursively(subPath)) {
+                    success = false;
+                }
+            } else {
+                // DeleteFileW refuses read-only files, e.g. ones the
+                // application copied from a read-only source or git's
+                // object files. Links are left as they are: their
+                // attributes may be their target's.
+                if ((attrs & FILE_ATTRIBUTE_READONLY)
+                    && !(attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+                    SetFileAttributesW(wsubPath, FILE_ATTRIBUTE_NORMAL);
+                }
+                if (!DeleteFileW(wsubPath)) {
+                    DWORD err = GetLastError();
+                    APP_ERROR("Failed to delete file, Error=%lu", err);
+                    // Only succeeds with administrator rights; best effort.
+                    MoveFileExW(wsubPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+                    success = false;
+                }
             }
 
             free(wsubPath);
@@ -300,15 +322,24 @@ bool DeleteRecursively(const char *path)
         return false;
     }
 
+    // RemoveDirectoryW refuses a read-only directory as well.
+    DWORD dir_attrs = GetFileAttributesW(wpath);
+    if (dir_attrs != INVALID_FILE_ATTRIBUTES
+        && (dir_attrs & FILE_ATTRIBUTE_READONLY)
+        && !(dir_attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+        SetFileAttributesW(wpath, FILE_ATTRIBUTE_NORMAL);
+    }
+
     if (!RemoveDirectoryW(wpath)) {
         DWORD err = GetLastError();
         APP_ERROR("Failed to delete directory, Error=%lu", err);
+        // Only succeeds with administrator rights; best effort.
         MoveFileExW(wpath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
         free(wpath);
         return false;
     }
     free(wpath);
-    return true;
+    return success;
 }
 
 static bool generate_unique_name(char *buffer, size_t buffer_size)
