@@ -225,8 +225,23 @@ module Ocran
 
       IO.popen(LZMA_CMD, "r+b") do |lzma|
         _of, @of = @of, lzma
-        Thread.new { yield(self); lzma.close_write }
+        writer = Thread.new do
+          # An error is re-raised in the main thread by writer.value below.
+          Thread.current.report_on_exception = false
+          yield(self)
+        ensure
+          # Always end the compressor's input, also when the block raised:
+          # otherwise copy_stream below waits for more output forever.
+          begin
+            lzma.close_write
+          rescue IOError, SystemCallError
+            # The pipe is already closed or broken; the compressor has
+            # nothing more to read either way.
+          end
+        end
         IO.copy_stream(lzma, _of)
+        writer.value
+      ensure
         @of = _of
       end
 
