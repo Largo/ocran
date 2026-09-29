@@ -492,7 +492,7 @@ module Ocran
         # the same extension packed at a gem path (openssl and psych are
         # gems since Ruby 3.x) resolves its imports from bin.
         features.select { |f| f.extname?(".so") && f.subpath?(exec_prefix) }
-                .map(&:dirname).uniq
+                .map(&:dirname).uniq { |dir| dir.path_key }
                 .each do |dir|
           dir.each_child do |path|
             next unless path.file? && path.extname?(".dll")
@@ -812,7 +812,9 @@ module Ocran
 
         actual_files
       end
-      gem_files.uniq!
+      # Keyed on Pathname#path_key here and below: Array#uniq and Set do not
+      # see the refined, case-insensitive Pathname#eql? on Windows.
+      gem_files.uniq! { |file| file.path_key }
 
       # On some distros parts of a gem are reachable through symlinks at other
       # locations (e.g. Fedora symlinks /usr/share/ruby/psych.rb into the
@@ -820,16 +822,17 @@ module Ocran
       # the same file under different paths. Compare realpaths when removing
       # gem files from the feature list; otherwise a stdlib-level duplicate
       # would be packed as well and shadow the packed gem at runtime.
-      gem_file_set = (gem_files + gem_files.filter_map { |file| file.realpath rescue nil }).to_set
+      gem_file_set = (gem_files + gem_files.filter_map { |file| file.realpath rescue nil })
+                       .to_set { |file| file.path_key }
       features = features.reject do |feature|
-        next true if gem_file_set.include?(feature)
+        next true if gem_file_set.include?(feature.path_key)
 
         real = begin
           feature.realpath
         rescue SystemCallError
           nil
         end
-        real && gem_file_set.include?(real)
+        real && gem_file_set.include?(real.path_key)
       end
 
       # If requested, add all ruby standard libraries
@@ -1043,7 +1046,7 @@ module Ocran
       neutralize_bundler_env(builder)
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
-      load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
+      load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq { |path| path.path_key }
 
       # On POSIX systems, also add the packed Ruby standard library directories
       # to RUBYLIB. The Ruby binary has a compiled-in prefix pointing to the build
@@ -1082,7 +1085,7 @@ module Ocran
       prefix_gem_dirs = (Gem.path.map { |dir| Pathname(dir) } + [Pathname(Gem.default_dir)])
         .select { |dir| dir.subpath?(exec_prefix) }
         .map { |dir| dir.relative_path_from(exec_prefix) }
-        .uniq
+        .uniq { |dir| dir.path_key }
       gem_paths += prefix_gem_dirs
       # RubyGems probes the default gem dir for writability at startup and
       # prints "Can't determine writability of default gem path" on stderr

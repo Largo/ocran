@@ -189,8 +189,9 @@ module Ocran
           raise "Invalid file set: #{set}. Please specify a valid file set (:spec, :loaded, :files, :extras, :scripts)."
         end
       end
-      # The file sets overlap (e.g. :loaded and :scripts).
-      actual_files.uniq
+      # The file sets overlap (e.g. :loaded and :scripts). Keyed on path_key
+      # because Array#uniq does not see the refined Pathname#eql?.
+      actual_files.uniq { |file| file.path_key }
     end
   end
 end

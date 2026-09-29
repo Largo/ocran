@@ -45,21 +45,25 @@ module Ocran
         raise ArgumentError, "Relative paths such as '.' or '..' are not allowed, given: #{target}"
       end
 
-      if (path = @set[target])
-        if path.eql?(source)
+      # Keyed on the normalized target: Hash does not see the refined
+      # Pathname#eql?/hash, and on Windows "lib/Foo.rb" and "lib\foo.rb" are
+      # one file that must not be written twice.
+      key = target.path_key
+      if (entry = @set[key])
+        if entry[1].eql?(source)
           return nil
         else
-          raise "Conflicting sources for the same target. Target: #{target}, Existing Source: #{path}, Given Source: #{source}"
+          raise "Conflicting sources for the same target. Target: #{target}, Existing Source: #{entry[1]}, Given Source: #{source}"
         end
       end
 
-      @set[target] = source
+      @set[key] = [target, source]
       self
     end
 
     def each
       return to_enum(__method__) unless block_given?
-      @set.each { |target, source| yield(source, target) }
+      @set.each_value { |target, source| yield(source, target) }
     end
 
     def to_a

@@ -4,7 +4,24 @@ require "pathname"
 module Ocran
   # The Pathname class in Ruby is modified to handle mixed path separators and
   # to be case-insensitive.
+  #
+  # Caveat: refinements apply only to calls written in a file that is
+  # `using RefinePathname`. Hash, Set, Array#uniq, Array#include? and Array#-
+  # call hash/eql?/== from C, which never sees a refinement, so collections
+  # of Pathnames keep comparing them case- and separator-sensitively. Where
+  # a collection has to treat two spellings of one file as the same, key it
+  # on Pathname#path_key instead (e.g. `paths.uniq { |p| p.path_key }`).
   module RefinePathname
+    # The spelling-independent form of +path+ on this platform: separators
+    # unified and, on case-insensitive file systems (Windows), downcased. On
+    # POSIX it is the path itself.
+    def self.path_key(path)
+      s = path.to_s
+      s = s.tr(File::ALT_SEPARATOR, File::SEPARATOR) if File::ALT_SEPARATOR
+      s = s.downcase if File::FNM_SYSCASE.nonzero?
+      s
+    end
+
     refine Pathname do
       def normalize_file_separator(s)
         if File::ALT_SEPARATOR
@@ -15,56 +32,36 @@ module Ocran
       end
       private :normalize_file_separator
 
-      # Compares two paths for equality based on the case sensitivity of the
-      # Ruby execution environment's file system.
-      # If the file system is case-insensitive, it performs a case-insensitive
-      # comparison. Otherwise, it performs a case-sensitive comparison.
-      def pathequal(a, b)
-        if File::FNM_SYSCASE.nonzero?
-          a.casecmp(b) == 0
-        else
-          a == b
-        end
-      end
-      private :pathequal
-
       def to_posix
         normalize_file_separator(to_s)
+      end
+
+      # See RefinePathname.path_key. Two Pathnames denote the same file on
+      # this platform when their keys are equal.
+      def path_key
+        RefinePathname.path_key(self)
       end
 
       # Checks if two Pathname objects are equal, considering the file system's
       # case sensitivity and path separators. Returns false if the other object is not
       # an Pathname.
-      # This method enables the use of the `uniq` method on arrays of Pathname objects.
+      # NOTE: only calls written in refined code see this; Array#uniq and
+      # the like do not (see the caveat on RefinePathname).
       def eql?(other)
         return false unless other.is_a?(Pathname)
 
-        a = normalize_file_separator(to_s)
-        b = normalize_file_separator(other.to_s)
-        pathequal(a, b)
+        path_key == other.path_key
       end
 
       alias == eql?
       alias === eql?
 
-      # Calculates a normalized hash value for a pathname to ensure consistent
-      # hashing across different environments, particularly in Windows.
-      # This method first normalizes the path by:
-      # 1. Converting the file separator from the platform-specific separator
-      #    to the common POSIX separator ('/') if necessary.
-      # 2. Converting the path to lowercase if the filesystem is case-insensitive.
-      # The normalized path string is then hashed, providing a stable hash value
-      # that is consistent with the behavior of eql? method, thus maintaining
-      # the integrity of hash-based data structures like Hash or Set.
+      # A hash value consistent with eql?, based on the normalized path. As
+      # with eql?, Hash and Set do not call this refinement.
       #
       # @return [Integer] A hash integer based on the normalized path.
       def hash
-        path = if File::FNM_SYSCASE.nonzero?
-                 to_s.downcase
-               else
-                 to_s
-               end
-        normalize_file_separator(path).hash
+        path_key.hash
       end
 
       # Checks if the current path is a sub path of the specified base_directory.
