@@ -144,8 +144,12 @@ bool CreateDirectoriesRecursively(const char *dir)
     memcpy(path, dir, path_len);
     path[path_len] = '\0';
 
+    // Walk up to the deepest existing ancestor, cutting the path at each
+    // separator on the way; p points at the last cut (or the end). The walk
+    // stops at the root ("C:\", "\"), which is never cut off.
+    size_t root = path_root_length(path);
     char *p = path + path_len;
-    do {
+    for (;;) {
         // Convert to UTF-16 for API call
         wpath = utf8_to_utf16(path);
         if (!wpath) {
@@ -156,8 +160,6 @@ bool CreateDirectoriesRecursively(const char *dir)
         DWORD path_attr = GetFileAttributesW(wpath);
         if (path_attr != INVALID_FILE_ATTRIBUTES) {
             if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
-                free(wpath);
-                wpath = NULL;
                 break;
             } else {
                 APP_ERROR("Directory name conflicts with a file(%s)", path);
@@ -165,22 +167,37 @@ bool CreateDirectoriesRecursively(const char *dir)
             }
         } else {
             DWORD err = GetLastError();
-            if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) {
-                // continue;
-            } else {
+            if (err != ERROR_FILE_NOT_FOUND && err != ERROR_PATH_NOT_FOUND) {
                 APP_ERROR("Cannot access the directory, Error=%lu", err);
                 goto cleanup;
             }
         }
 
+        // Find the separator before the last remaining segment
+        char *q = p;
+        while (q > path + root && !is_path_separator(q[-1])) {
+            q--;
+        }
+        if (q <= path + root) {
+            // No ancestor below the root exists: the remaining first
+            // segment has to be created as well.
+            if (!CreateDirectoryW(wpath, NULL)
+                && GetLastError() != ERROR_ALREADY_EXISTS) {
+                DWORD err = GetLastError();
+                APP_ERROR("Failed to create directory '%s', Error=%lu", path, err);
+                goto cleanup;
+            }
+            break;
+        }
+
         free(wpath);
         wpath = NULL;
 
-        while (p > path && !is_path_separator(*p)) {
-            p--;
-        }
+        p = q - 1;
         *p = '\0';
-    } while (p >= path);
+    }
+    free(wpath);
+    wpath = NULL;
 
     char *end = path + path_len;
     for (; p < end; p++) {
@@ -195,7 +212,10 @@ bool CreateDirectoriesRecursively(const char *dir)
             goto cleanup;
         }
 
-        if (!CreateDirectoryW(wpath, NULL)) {
+        // Already existing: a trailing separator names the directory just
+        // created once more, or another process was quicker.
+        if (!CreateDirectoryW(wpath, NULL)
+            && GetLastError() != ERROR_ALREADY_EXISTS) {
             DWORD err = GetLastError();
             APP_ERROR("Failed to create directory '%s', Error=%lu", path, err);
             goto cleanup;
