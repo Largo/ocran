@@ -392,7 +392,17 @@ bool DeleteRecursively(const char *path)
                 continue;
             }
 
-            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            DWORD attrs = findData.dwFileAttributes;
+            if ((attrs & FILE_ATTRIBUTE_DIRECTORY)
+                && (attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+                // A junction or directory symlink: remove the link itself.
+                // Recursing would delete the contents of its target, which
+                // lies outside the directory being deleted.
+                if (!RemoveDirectoryW(wsubPath)) {
+                    DWORD err = GetLastError();
+                    APP_ERROR("Failed to delete directory link, Error=%lu", err);
+                }
+            } else if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
                 DeleteRecursively(subPath);
             } else if (!DeleteFileW(wsubPath)) {
                 DWORD err = GetLastError();
