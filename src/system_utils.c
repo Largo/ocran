@@ -759,6 +759,11 @@ bool InitializeSignalHandling(void)
     return true;
 }
 
+/* Windows has no signal deaths to reproduce: the exit code says it all. */
+void ReraiseChildSignal(void)
+{
+}
+
 bool SetEnvVar(const char *name, const char *value)
 {
     if (!name) {

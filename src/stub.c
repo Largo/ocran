@@ -179,6 +179,10 @@ cleanup:
     FreeInstDir();
     extract_dir = NULL;
 
+    /* A child killed by a signal kills the stub the same way, now that the
+       extraction directory is gone. Returns if the signal did not. */
+    ReraiseChildSignal();
+
 #ifdef __COSMOPOLITAN__
     /* On Windows, Cosmopolitan Libc's exit path encodes the full wait
        status into the process exit code (code << 8) so that cosmo

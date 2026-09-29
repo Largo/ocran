@@ -2382,6 +2382,130 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Packs the host's /bin/sh and the given shell script into an executable
+  # at path, with the script as the application. Much quicker to build and
+  # start than a packed Ruby, and all that tests of the stub itself need.
+  # Yields the StubBuilder for additional opcodes.
+  def build_sh_stub(path, script, **options)
+    require_relative "../lib/ocran/stub_builder"
+    File.write("app.sh", script)
+    Ocran::StubBuilder.new(Pathname(File.expand_path(path)), **options) do |stub|
+      stub.cp(File.realpath("/bin/sh"), "bin/sh")
+      stub.cp(File.expand_path("app.sh"), "src/app.sh")
+      yield stub if block_given?
+      stub.exec("bin/sh", "src/app.sh")
+    end
+  end
+
+  # Starts a packed executable with the termination signals at their
+  # default action, whatever the test runner inherited (a runner started in
+  # the background of a shell ignores SIGINT and SIGQUIT). Signals named in
+  # ignore start out ignored instead.
+  def spawn_with_default_signals(env, exe, ignore: [])
+    trampoline = <<~RUBY
+      %w[INT QUIT HUP TERM].each { |s| trap(s, "SYSTEM_DEFAULT") }
+      #{ignore.inspect}.each { |s| trap(s, "IGNORE") }
+      exec(*ARGV)
+    RUBY
+    Process.spawn(env, RbConfig.ruby, "-e", trampoline, exe)
+  end
+
+  # Process.wait2 that gives up after timeout seconds instead of blocking
+  # for as long as a process ignoring its signal keeps running.
+  def wait2_with_timeout(pid, timeout: 20)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      result = Process.wait2(pid, Process::WNOHANG)
+      return result if result
+      if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        flunk "process #{pid} did not exit within #{timeout}s"
+      end
+      sleep 0.05
+    end
+  end
+
+  def wait_for_file(path, timeout: 20)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    until File.exist?(path)
+      if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        flunk "#{path} did not appear within #{timeout}s"
+      end
+      sleep 0.05
+    end
+  end
+
+  # A termination signal sent to the stub reaches the application, the stub
+  # deletes the extraction directory once the application is gone, and then
+  # dies of the same signal. It used to ignore SIGINT and SIGTERM without
+  # passing them on, so `kill` and `docker stop` did nothing until SIGKILL
+  # skipped the cleanup; SIGHUP killed the stub before its cleanup.
+  def test_termination_signal_forwarded_and_extraction_dir_deleted
+    skip "POSIX signals" if Gem.win_platform?
+    with_tmpdir do
+      build_sh_stub(exe_name("sigapp"), <<~SH)
+        echo "$0" > "$OCRAN_TEST_MARKER"
+        exec sleep 60
+      SH
+
+      %w[TERM HUP INT QUIT].each do |sig|
+        tmp = File.expand_path("tmp-#{sig}")
+        mkdir_p tmp
+        marker = File.expand_path("marker-#{sig}")
+        pid = spawn_with_default_signals(
+          { "TMPDIR" => tmp, "OCRAN_TEST_MARKER" => marker }, "./sigapp")
+        begin
+          wait_for_file(marker)
+          assert_match(/\A#{Regexp.escape(tmp)}\/ocran/, File.read(marker))
+          Process.kill(sig, pid)
+          _, status = wait2_with_timeout(pid)
+          pid = nil
+        ensure
+          if pid
+            Process.kill("KILL", pid)
+            Process.wait(pid)
+          end
+        end
+        assert status.signaled?, "SIG#{sig}: expected a signal death, got #{status.inspect}"
+        assert_equal Signal.list[sig], status.termsig, "SIG#{sig}: #{status.inspect}"
+        assert_empty Dir.children(tmp), "SIG#{sig}: extraction directory left behind"
+      end
+    end
+  end
+
+  # A signal ignored when the stub starts (SIGHUP under nohup) stays
+  # ignored, by the stub and by the application.
+  def test_ignored_signal_stays_ignored
+    skip "POSIX signals" if Gem.win_platform?
+    with_tmpdir do
+      build_sh_stub(exe_name("sigapp"), <<~SH)
+        echo "$0" > "$OCRAN_TEST_MARKER"
+        exec sleep 60
+      SH
+      tmp = File.expand_path("tmp")
+      mkdir_p tmp
+      marker = File.expand_path("marker")
+      pid = spawn_with_default_signals(
+        { "TMPDIR" => tmp, "OCRAN_TEST_MARKER" => marker }, "./sigapp",
+        ignore: %w[HUP])
+      begin
+        wait_for_file(marker)
+        Process.kill("HUP", pid)
+        sleep 0.5
+        assert_nil Process.wait(pid, Process::WNOHANG), "SIGHUP was not ignored"
+        Process.kill("TERM", pid)
+        _, status = wait2_with_timeout(pid)
+        pid = nil
+      ensure
+        if pid
+          Process.kill("KILL", pid)
+          Process.wait(pid)
+        end
+      end
+      assert_equal Signal.list["TERM"], status.termsig, status.inspect
+      assert_empty Dir.children(tmp)
+    end
+  end
+
   # Inno Setup builds must produce a wrapper executable named like --output
   # and install it into {app}, so that user ISS scripts can reference it
   # (e.g. [Run]/[UninstallRun] entries, Windows service registration).
