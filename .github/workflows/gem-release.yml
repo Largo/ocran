@@ -19,9 +19,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: ruby/setup-ruby-pkgs@v1
+      - uses: ruby/setup-ruby-pkgs@2233d39c1315c667a2970436418b520a6300124e # v1.33.5
         with:
           ruby-version: '4.0'
           bundler-cache: true
@@ -51,7 +51,7 @@ jobs:
         run: gem build ocran.gemspec
 
       - name: Upload gem artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gem-${{ matrix.os }}
           path: '*.gem'
@@ -59,9 +59,9 @@ jobs:
   build-source-gem:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         with:
           ruby-version: '4.0'
           bundler-cache: true
@@ -70,7 +70,7 @@ jobs:
         run: gem build ocran-source.gemspec
 
       - name: Upload gem artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gem-source
           path: '*.gem'
@@ -84,10 +84,10 @@ jobs:
       id-token: write   # OIDC token for RubyGems trusted publishing
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Download all gem artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: gem-*
           merge-multiple: true
@@ -111,14 +111,14 @@ jobs:
             --notes-file /tmp/release-notes.txt \
             *.gem
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         with:
           ruby-version: '4.0'
 
       # Trusted publishing: exchanges the workflow's OIDC token for a
       # short-lived RubyGems API key, so no long-lived secret is needed.
       - name: Configure RubyGems credentials
-        uses: rubygems/configure-rubygems-credentials@v2.1.0
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
 
       - name: Push gems to RubyGems
         run: |
