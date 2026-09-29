@@ -1995,6 +1995,18 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # A build that fails on its input reports the reason, not a backtrace.
+  # Only RuntimeError used to be reported that way; an empty argument after
+  # "--" (an ArgumentError of the executable format) dumped OCRAN's stack.
+  def test_user_error_is_reported_without_backtrace
+    with_fixture "helloworld" do
+      output, status = capture_system("ruby", ocran, "helloworld.rb", "--no-lzma", "--quiet", "--", "")
+      refute status.success?, "an empty argument must fail the build"
+      assert_match(/^ERROR: Argument list must not contain empty strings/, output)
+      refute_match(/^\s+from |\.rb:\d+:in /, output)
+    end
+  end
+
   # Would be nice if OCRAN could build from source located beneath the
   # Ruby installation too.
   def test_exec_prefix
