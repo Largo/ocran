@@ -99,14 +99,17 @@ const char *CreateInstDir(bool is_extract_to_exe_dir)
     }
 
     /* Normalize 8.3 short names (e.g. a TEMP under C:\Users\RUNNER~1) so all
-       paths derived from the extraction dir use one consistent spelling. */
+       paths derived from the extraction dir use one consistent spelling.
+       The directory exists by now: should that fail, keep the spelling at
+       hand, so that the directory is still known and gets deleted. */
     char *long_dir = ToLongPath(inst_dir);
-    free(inst_dir);
-    if (!long_dir) {
-        return NULL;
+    if (long_dir) {
+        free(inst_dir);
+        InstDir = long_dir;
+    } else {
+        APP_ERROR("Failed to normalize the extraction directory path");
+        InstDir = inst_dir;
     }
-
-    InstDir = long_dir;
     return InstDir;
 }
 
