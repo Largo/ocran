@@ -2,13 +2,14 @@
 require "pathname"
 require "fileutils"
 require_relative "build_constants"
+require_relative "windows_command_escaping"
 
 module Ocran
   # Builder that outputs all files to a plain directory instead of a self-extracting
   # executable.  A launch script (`.sh` on POSIX, `.bat` on Windows) is written at
   # the root of the directory so the packaged app can be started directly.
   class DirBuilder
-    include BuildConstants
+    include BuildConstants, WindowsCommandEscaping
 
     WINDOWS = Gem.win_platform?
 
@@ -84,10 +85,28 @@ module Ocran
       write_launch_script
     end
 
-    # Replace the EXTRACT_ROOT placeholder ("|") in a value string with
-    # the runtime directory variable.
-    def replace_root(value, root_var)
-      value.gsub("#{EXTRACT_ROOT}/", "#{root_var}/")
+    # Anchors a relative packed path at the extraction root placeholder;
+    # absolute paths are kept as they are.
+    def root_path(path)
+      return path if path.start_with?("#{EXTRACT_ROOT}/") || File.absolute_path?(path)
+      "#{EXTRACT_ROOT}/#{path}"
+    end
+
+    # Quotes +value+ as one POSIX shell word. The extraction root placeholder
+    # becomes "$SCRIPT_DIR"; everything else is single-quoted, so the shell
+    # expands nothing in it.
+    def shell_word(value)
+      word = value.split("#{EXTRACT_ROOT}/", -1).map { |part|
+        part.empty? ? "" : "'#{part.gsub("'", %q('"'"'))}'"
+      }.join('"$SCRIPT_DIR"/')
+      word.empty? ? "''" : word
+    end
+
+    # Renders +value+ for a double-quoted string in a batch file. Percent
+    # signs are doubled so cmd.exe expands nothing in it, and the extraction
+    # root placeholder becomes %SCRIPT_DIR%, which ends in a backslash.
+    def batch_value(value)
+      escape_percent(value).gsub("#{EXTRACT_ROOT}/", "%SCRIPT_DIR%")
     end
 
     def script_basename
@@ -107,24 +126,13 @@ module Ocran
       ]
 
       @env.each do |name, value|
-        replaced = replace_root(value, "$SCRIPT_DIR")
-        lines << "export #{name}=\"#{replaced}\""
+        lines << "export #{name}=#{shell_word(value)}"
       end
 
       if @exec_args
         image, script, argv = @exec_args
-        image_r = replace_root(image, "$SCRIPT_DIR")
-        script_r = replace_root(script, "$SCRIPT_DIR")
-
-        # Prepend SCRIPT_DIR to relative paths
-        image_r = "$SCRIPT_DIR/#{image_r}" unless image_r.start_with?("/", "$SCRIPT_DIR")
-        script_r = "$SCRIPT_DIR/#{script_r}" unless script_r.start_with?("/", "$SCRIPT_DIR")
-
-        args = argv.map { |a| "\"#{replace_root(a, "$SCRIPT_DIR")}\"" }.join(" ")
-        exec_line = "exec \"#{image_r}\" \"#{script_r}\""
-        exec_line += " #{args}" unless args.empty?
-        exec_line += ' "$@"'
-        lines << exec_line
+        words = [root_path(image), root_path(script), *argv].map { |a| shell_word(a) }
+        lines << "exec #{words.join(" ")} \"$@\""
       end
 
       File.write(script_path, lines.join("\n") + "\n")
@@ -136,27 +144,18 @@ module Ocran
 
       lines = [
         "@echo off",
-        "set SCRIPT_DIR=%~dp0",
+        'set "SCRIPT_DIR=%~dp0"',
       ]
 
       @env.each do |name, value|
-        replaced = replace_root(value, "%SCRIPT_DIR%").tr("/", "\\")
-        lines << "set #{name}=#{replaced}"
+        lines << "set \"#{name}=#{batch_value(value).tr("/", "\\")}\""
       end
 
       if @exec_args
         image, script, argv = @exec_args
-        image_r = replace_root(image, "%SCRIPT_DIR%").tr("/", "\\")
-        script_r = replace_root(script, "%SCRIPT_DIR%").tr("/", "\\")
-
-        image_r = "%SCRIPT_DIR%#{image_r}" unless image_r.include?("%SCRIPT_DIR%") || File.absolute_path?(image_r)
-        script_r = "%SCRIPT_DIR%#{script_r}" unless script_r.include?("%SCRIPT_DIR%") || File.absolute_path?(script_r)
-
-        args = argv.map { |a| replace_root(a, "%SCRIPT_DIR%") }.join(" ")
-        exec_line = "\"#{image_r}\" \"#{script_r}\""
-        exec_line += " #{args}" unless args.empty?
-        exec_line += " %*"
-        lines << exec_line
+        words = [root_path(image), root_path(script)].map { |p| batch_value(p).tr("/", "\\") }
+        words += argv.map { |a| batch_value(a) }
+        lines << "#{words.map { |w| quote_and_escape(w) }.join(" ")} %*"
       end
 
       File.write(script_path, lines.join("\r\n") + "\r\n")
