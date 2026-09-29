@@ -13,7 +13,7 @@ OCRAN supports four output formats, all cross-platform:
 * **Zip archive** (`--output-zip`) — same as directory output, packed into a `.zip`.
 
 OCRAN is a fork of [OCRA](https://github.com/larsch/ocra) maintained for
-Ruby 3.2+ compatibility.
+Ruby 3.3+ compatibility.
 
 If you run into errors while using OCRAN, please check the [OCRAN issues](https://github.com/largo/ocran/issues) first.
 
@@ -498,10 +498,10 @@ Notes:
 
 ## Requirements
 
-* Ruby 3.2+
+* Ruby 3.3+
 * For building Windows `.exe`: Windows with [RubyInstaller DevKit](https://rubyinstaller.org/downloads/) (mingw-w64), or Wine on Linux/macOS
 * For building Linux and MacOS binaries: the respective build tools
-* For `--output-dir` / `--output-zip`: any platform with Ruby 3.2+
+* For `--output-dir` / `--output-zip`: any platform with Ruby 3.3+
 * For `--output-zip` on Linux/macOS: the `zip` command must be available
 * For `--output-zip` on Windows: PowerShell (included in Windows 8+)
 

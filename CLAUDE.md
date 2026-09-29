@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OCRAN (One-Click Ruby Application Next) packages Ruby applications for Windows, Linux and macOS. It bundles the script, the Ruby interpreter, gems and native libraries (DLLs / shared objects) into a self-extracting executable (default), a directory (`--output-dir`), a zip (`--output-zip`), a macOS `.app` (`--macosx-bundle`) or an Inno Setup installer (`--innosetup`, Windows). Experimental `--cosmo`/`--cosmo-ruby` modes build Actually Portable Executables with Cosmopolitan. This is a fork of OCRA, maintained for Ruby 3.2+ compatibility.
+OCRAN (One-Click Ruby Application Next) packages Ruby applications for Windows, Linux and macOS. It bundles the script, the Ruby interpreter, gems and native libraries (DLLs / shared objects) into a self-extracting executable (default), a directory (`--output-dir`), a zip (`--output-zip`), a macOS `.app` (`--macosx-bundle`) or an Inno Setup installer (`--innosetup`, Windows). Experimental `--cosmo`/`--cosmo-ruby` modes build Actually Portable Executables with Cosmopolitan. This is a fork of OCRA, maintained for Ruby 3.3+ compatibility.
 
 ## Development Commands
 

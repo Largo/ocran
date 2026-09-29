@@ -16,10 +16,10 @@ Gem::Specification.new do |spec|
     "gems, and native libraries into a self-contained artifact that runs without Ruby installed " \
     "on the target machine: a self-extracting executable (default), a directory (--output-dir), " \
     "a zip archive (--output-zip), or a macOS .app bundle (--macosx-bundle). " \
-    "Fork of OCRA maintained for Ruby 3.2+; migrating code should replace OCRA_EXECUTABLE " \
+    "Fork of OCRA maintained for Ruby 3.3+; migrating code should replace OCRA_EXECUTABLE " \
     "with OCRAN_EXECUTABLE."
   spec.homepage = "https://github.com/largo/ocran"
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = ">= 3.3.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/largo/ocran"
