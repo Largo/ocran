@@ -163,6 +163,21 @@ EOF
       load File.expand_path("cosmo_toolchain.rb", __dir__) unless defined? CosmoToolchain
     end
 
+    # The --gem-<group> options GemSpecQueryable.gem_inclusion_set knows,
+    # and the file sets among them that --no-gem-<set> can take away.
+    GEM_GROUPS = %i[minimal guess all full spec scripts files extras].freeze
+    GEM_FILE_SETS = %i[scripts files extras].freeze
+
+    # The value of an option that takes a path or name: the next argument,
+    # which must be there and must not be empty.
+    def required_argument(argv, option)
+      value = argv.shift
+      raise "#{option} requires an argument" if value.nil? || value.empty?
+
+      value
+    end
+    private :required_argument
+
     def parse(argv)
       while (arg = argv.shift)
         case arg
@@ -173,23 +188,19 @@ EOF
         when "--add-all-core"
           @options[:add_all_core?] = true
         when "--output"
-          path = argv.shift
-          @options[:output_override] = Pathname.new(path).expand_path if path
+          @options[:output_override] = Pathname.new(required_argument(argv, arg)).expand_path
         when "--output-dir"
-          path = argv.shift
-          @options[:output_dir] = Pathname.new(path).expand_path if path
+          @options[:output_dir] = Pathname.new(required_argument(argv, arg)).expand_path
         when "--output-zip"
-          path = argv.shift
-          @options[:output_zip] = Pathname.new(path).expand_path if path
+          @options[:output_zip] = Pathname.new(required_argument(argv, arg)).expand_path
         when "--no-wrapper-exe"
           @options[:wrapper_exe?] = false
         when "--macosx-bundle"
           @options[:macosx_bundle?] = true
         when "--bundle-id"
-          @options[:bundle_identifier] = argv.shift
+          @options[:bundle_identifier] = required_argument(argv, arg)
         when "--dll"
-          path = argv.shift
-          @options[:extra_dlls] << path if path
+          @options[:extra_dlls] << required_argument(argv, arg)
         when "--quiet"
           @options[:quiet?] = true
         when "--verbose"
@@ -205,26 +216,27 @@ EOF
         when "--chdir-exe-dir"
           @options[:chdir_exe_dir?] = true
         when "--icon"
-          path = argv.shift
-          raise "Icon file #{path} not found" unless path && File.exist?(path)
+          path = required_argument(argv, arg)
+          raise "Icon file #{path} not found" unless File.exist?(path)
           @options[:icon_filename] = Pathname.new(path).expand_path
         when "--rubyopt"
-          @options[:rubyopt] = argv.shift
+          # An empty value is meaningful: run with no RUBYOPT at all.
+          @options[:rubyopt] = argv.shift or raise "#{arg} requires an argument"
         when "--cosmo", "--cosmo-toolchain"
           # Kept unresolved until validation: resolving here would report
           # "cosmocc ... is not executable" on a Windows build host, ahead of
           # the clearer "not supported when building on Windows" check.
-          @options[:cosmo_cc] = argv.shift
+          @options[:cosmo_cc] = required_argument(argv, arg)
         when "--cosmo-ruby"
           load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
         when "--gemfile"
-          path = argv.shift
-          raise "Gemfile #{path} not found" unless path && File.exist?(path)
+          path = required_argument(argv, arg)
+          raise "Gemfile #{path} not found" unless File.exist?(path)
           @options[:gemfile] = Pathname.new(path).expand_path
         when "--innosetup"
-          path = argv.shift
-          raise "Inno Script #{path} not found" unless path && File.exist?(path)
+          path = required_argument(argv, arg)
+          raise "Inno Script #{path} not found" unless File.exist?(path)
           @options[:inno_setup_script] = Pathname.new(path).expand_path
         when "--no-autodll"
           @options[:auto_detect_dlls?] = false
@@ -246,10 +258,18 @@ EOF
           @options[:add_all_encoding?] = !$1
         when /\A--(no-)?gem-(\w+)(?:=(.*))?$/
           negate, group, list = $1, $2, $3
-          @options[:gem_options] << [negate, group.to_sym, list&.split(",")] if group
-        when "--help", "-h", /\A--./
+          group = group.to_sym
+          if negate ? !GEM_FILE_SETS.include?(group) : !GEM_GROUPS.include?(group)
+            raise "Invalid gem content detection option #{arg}: use " \
+                  "#{GEM_GROUPS.map { |g| "--gem-#{g}" }.join(", ")} or " \
+                  "#{GEM_FILE_SETS.map { |g| "--no-gem-#{g}" }.join(", ")}"
+          end
+          @options[:gem_options] << [negate, group, list&.split(",")]
+        when "--help", "-h"
           puts usage
           raise SystemExit
+        when /\A--./
+          raise "Unknown option #{arg} (see ocran --help)"
         else
           expanded = Dir.glob(arg)
           if expanded.empty?
@@ -301,6 +321,14 @@ EOF
 
       if chdir_before? && chdir_exe_dir?
         raise "--chdir-first and --chdir-exe-dir cannot be used together"
+      end
+
+      if force_windows? && force_console?
+        raise "--windows and --console cannot be used together"
+      end
+
+      if inno_setup_script && (output_dir || output_zip)
+        raise "--innosetup cannot be combined with --output-dir or --output-zip"
       end
 
       @options[:use_inno_setup?] = !!inno_setup_script
