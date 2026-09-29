@@ -74,7 +74,7 @@ This repository includes `lzma.exe` from the
 [official ip7z/7zip release](https://github.com/ip7z/7zip/releases)
 (version 22.01, from `lzma2201.7z`), used to compress Windows executables.
 
-`stub.exe`, `stubw.exe`, and `edicon.exe` are compiled from source in this
+`stub.exe`, `stubw.exe` and the Linux/macOS `stub` are compiled from source in this
 repository.
 
 ## Installation

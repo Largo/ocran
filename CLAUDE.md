@@ -4,24 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OCRAN (One-Click Ruby Application Next) is a Windows executable builder for Ruby applications. It packages Ruby scripts, the Ruby interpreter, gems, and DLLs into a single `.exe` file. This is a fork of OCRA, maintained for Ruby 3.2+ compatibility.
+OCRAN (One-Click Ruby Application Next) packages Ruby applications for Windows, Linux and macOS. It bundles the script, the Ruby interpreter, gems and native libraries (DLLs / shared objects) into a self-extracting executable (default), a directory (`--output-dir`), a zip (`--output-zip`), a macOS `.app` (`--macosx-bundle`) or an Inno Setup installer (`--innosetup`, Windows). Experimental `--cosmo`/`--cosmo-ruby` modes build Actually Portable Executables with Cosmopolitan. This is a fork of OCRA, maintained for Ruby 3.2+ compatibility.
 
 ## Development Commands
 
 ### Building
 
 ```bash
-rake build          # Compile C stub executables (stub.exe, stubw.exe, edicon.exe)
+rake build          # Compile the C stub (Windows: stub.exe, stubw.exe; Linux/macOS: stub) into share/ocran/
 ```
 
 **Requirements for building stubs:**
-- Windows with RubyInstaller DevKit (mingw-w64)
+- Windows: RubyInstaller DevKit (mingw-w64), used through `ridk exec make`
+- Linux/macOS: gcc/clang and make
 - Run `bin/setup` first to install dependencies and build stubs initially
 
 ### Testing
 
 ```bash
-rake test                           # Run full test suite (all tests in test/test_ocra.rb)
+rake test                           # Run all test/**/test_*.rb (Minitest::TestTask)
 rake test_single[test_name]         # Run a single test (e.g., rake test_single[helloworld])
 ruby -Ilib:test test/test_ocra.rb --name test_helloworld  # Alternative for single test
 ```
@@ -55,8 +56,9 @@ OCRAN operates in two distinct phases:
 - Runs the target Ruby script to detect dependencies (`Kernel#require`, `Kernel#load`)
 - Analyzes gems, DLLs, and resource files
 - Generates a custom opcode format with instructions (create directories, extract files, set env vars)
-- Packages everything into a single `.exe` containing:
-  - The C stub executable (stub.exe or stubw.exe)
+- The core is `lib/ocran/direction.rb` (`Direction#construct`), which drives a builder: `StubBuilder` (executable), `DirBuilder` (directory/zip) or `LauncherBatchBuilder` (Inno Setup)
+- For the default output, packages everything into a single executable containing:
+  - The C stub executable (stub.exe/stubw.exe on Windows, stub on Linux/macOS)
   - The opcode data with all files
   - OCRAN signature (4 bytes: `0x41, 0xb6, 0xba, 0x4e`)
 
@@ -71,7 +73,12 @@ OCRAN operates in two distinct phases:
 
 #### Ruby Layer (`lib/ocran/`)
 
-- **`runner.rb`**: Main orchestrator, parses command-line options
+- **`runner.rb`**: Entry point, dispatches to the output builders
+- **`option.rb`**: Command-line option parsing
+- **`direction.rb`**: Decides what gets packed where (gems, libraries, load paths, environment)
+- **`dir_builder.rb`** / **`launcher_batch_builder.rb`**: Directory output with `.sh`/`.bat` launch scripts, and the Inno Setup `launcher.bat`
+- **`zip_writer.rb`** / **`zip_payload_builder.rb`**: ZIP store injection for `--cosmo-ruby`
+- **`cosmo_toolchain.rb`**: Locates cosmocc and builds the APE stub
 - **`build_facade.rb`**: High-level build process coordinator
 - **`library_detector.rb`**: Detects dependencies by running the target script
 - **`stub_builder.rb`**: Creates the final executable by:
@@ -92,7 +99,8 @@ Modularized C code that runs inside the final `.exe`:
   - Handles code-signed executables (PE header analysis)
   - Supports LZMA compression/decompression
   - **Code signing support**: Detects and handles Windows Authenticode signatures via PE header inspection
-- **`system_utils.c`**: Windows API wrappers (file mapping, path utilities)
+- **`system_utils.c`**: Windows API wrappers (file mapping, path utilities, process launch)
+- **`system_utils_posix.c`**: The same interface for Linux/macOS and Cosmopolitan builds
 - **`inst_dir.c`**: Manages extraction directory lifecycle
 - **`script_info.c`**: Stores and retrieves script execution details
 - **`error.c`**: Error handling and debug output
@@ -104,6 +112,7 @@ The packed data uses a custom bytecode format with operations:
 - `OP_CREATE_FILE` (2): Extract file with content
 - `OP_SETENV` (3): Set environment variable
 - `OP_SET_SCRIPT` (4): Specify script to execute
+- `OP_CREATE_SYMLINK` (5): Create a symlink (POSIX, e.g. libruby soname aliases)
 
 Each operation is followed by size-prefixed strings and binary data.
 
@@ -128,10 +137,11 @@ The codebase handles PE32+ (64-bit) executables:
 ```
 exe/ocran              # Executable entry point
 lib/ocran/runner.rb    # Main orchestrator
+lib/ocran/direction.rb # What gets packed where
 lib/ocran/stub_builder.rb  # Executable builder
 src/stub.c             # C stub main()
 src/unpack.c           # Core unpacking logic with code signing support
-share/ocran/           # Prebuilt binaries (stub.exe, stubw.exe, edicon.exe, lzma.exe)
+share/ocran/           # Built stubs (stub.exe, stubw.exe / stub) and the bundled lzma.exe
 test/test_ocra.rb      # Main test suite
 test/manual/           # Manual tests (not in rake test)
 ```
@@ -155,16 +165,20 @@ Four modes control what gets included from gems:
 
 ### Stub Types
 
-Three stub executables are built from C source:
+Stub executables are built from C source:
 - **stub.exe**: Console mode (uses ruby.exe)
 - **stubw.exe**: Windowed mode (uses rubyw.exe, no console window)
-- **edicon.exe**: Utility to change icons in executables
+- **stub**: Linux/macOS stub (console only)
+
+Icons are changed from Ruby (`lib/ocran/ed_icon.rb`).
 
 ## Working with Tests
 
 ### Test Structure
 
-- `test/test_ocra.rb`: Main test class (TestOcran)
+- `test/test_ocra.rb`: Main test class (TestOcran), end-to-end: builds and runs packed executables
+- `test/test_*.rb`: Fast unit tests (e.g. `test_launch_scripts.rb`, `test_rubyopt_processor.rb`); prefer adding these for pure-Ruby logic
+- `test/test_rails.rb`: Rails packaging test
 - `test/fixtures/`: Test Ruby scripts (helloworld, writefile, etc.)
 - `test/fake_code_signer.rb`: Simulates code signing for tests
 - `test/manual/`: Manual tests requiring special setup
@@ -203,9 +217,10 @@ The Makefile uses gcc with these key flags:
 ## Dependencies and Bundler
 
 OCRAN requires `bundler` for test execution (`test/test_ocra.rb` uses `Bundler.with_original_env`). The current setup uses:
-- minitest 6.0+
-- hoe 4.6+ (build system)
+- minitest 6.0+ and rake 13
 - fiddle 1.0+ (FFI for Windows APIs in Ruby)
+
+The gems are built from `ocran.gemspec` (platform gem with prebuilt stubs) and `ocran-source.gemspec` (compiles the stub on install via `ext/extconf.rb`) by `.github/workflows/gem-release.yml`. `vendor/` and `.bundle/` are local Bundler state and must not be committed.
 
 ## Common Development Patterns
 
