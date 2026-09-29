@@ -2573,6 +2573,42 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # The size in the LZMA header must be the size the payload decompresses
+  # to. The stub allocated the size the header named and parsed all of it,
+  # so a header claiming more than the stream held had uninitialized memory
+  # parsed as opcodes.
+  def test_lzma_size_mismatch_rejected
+    require_relative "../lib/ocran/stub_builder"
+    skip "no LZMA compressor" unless Ocran::StubBuilder::LZMA_CMD
+    skip "shell-based stub test" if Gem.win_platform?
+    with_tmpdir do
+      build_sh_stub(exe_name("lzapp"), "echo unpacked\n", enable_compression: true)
+      output, status = capture_system("./lzapp")
+      assert status.success?, output
+      assert_equal "unpacked\n", output
+
+      data = File.binread("lzapp")
+      # Footer: offset of the header byte, then the signature. The LZMA
+      # stream follows the header byte: 5 bytes of properties, then the
+      # 64-bit decompressed size.
+      size_at = data[-8, 4].unpack1("V") + 1 + 5
+      size = data[size_at, 8].unpack1("Q<")
+
+      { size + 64 => /size mismatch/, size - 1 => /LZMA decompression error/ }.each do |bad_size, reason|
+        File.binwrite("lzbad", data)
+        File.binwrite("lzbad", [bad_size].pack("Q<"), size_at)
+        File.chmod(0755, "lzbad")
+        tmp = File.expand_path("tmp#{bad_size}")
+        mkdir_p tmp
+        output, status = capture_system({ "TMPDIR" => tmp, "OCRAN_DEBUG" => "1" }, "./lzbad")
+        refute status.success?, "size #{bad_size} (actual #{size}) was accepted:\n#{output}"
+        assert_match(reason, output)
+        refute_match(/unpacked/, output)
+        assert_empty Dir.children(tmp), "extraction directory left behind"
+      end
+    end
+  end
+
   # Inno Setup builds must produce a wrapper executable named like --output
   # and install it into {app}, so that user ISS scripts can reference it
   # (e.g. [Run]/[UninstallRun] entries, Windows service registration).

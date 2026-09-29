@@ -224,6 +224,15 @@ static bool decompress_lzma(void *dest, unsigned long long dest_size,
         APP_ERROR("LZMA decompression error: %d, status: %d", res, status);
         return false;
     }
+
+    /* The end mark can come before the buffer is full: the rest of it would
+       then be parsed as opcodes although it holds nothing but whatever
+       malloc left there. */
+    if ((unsigned long long)decompressed_size != dest_size) {
+        APP_ERROR("LZMA decompressed size mismatch: header says %llu bytes, got %llu",
+                  dest_size, (unsigned long long)decompressed_size);
+        return false;
+    }
     return true;
 }
 
