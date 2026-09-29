@@ -150,6 +150,15 @@ class TestLaunchScripts < Minitest::Test
     end
   end
 
+  # The escaping both batch writers share.
+  def test_batch_value
+    esc = Ocran::WindowsCommandEscaping
+    # The root expression goes in after the escaping, so it stays live.
+    assert_equal "%SCRIPT_DIR%lib/50%%", esc.batch_value("|/lib/50%", "%SCRIPT_DIR%")
+    assert_equal "%~dp0lib\\x", esc.batch_value("|\\lib\\x", "%~dp0")
+    assert_equal "a|b 100%%", esc.batch_value("a|b 100%", "%~dp0")
+  end
+
   def test_inno_setup_launcher_escapes_percent
     builder = Ocran::LauncherBatchBuilder.new(title: "100% app")
     builder.export("ROOTED", "|/lib/50%")

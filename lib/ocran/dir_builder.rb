@@ -130,12 +130,9 @@ module Ocran
       word.empty? ? "''" : word
     end
 
-    # Renders +value+ for a double-quoted string in a batch file. Percent
-    # signs are doubled so cmd.exe expands nothing in it, and the extraction
-    # root placeholder becomes %SCRIPT_DIR%, which ends in a backslash.
-    def batch_value(value)
-      escape_percent(value).gsub("#{EXTRACT_ROOT}/", "%SCRIPT_DIR%")
-    end
+    # The batch script's reference to its own directory, which ends in a
+    # backslash; see WindowsCommandEscaping#batch_value.
+    BATCH_SCRIPT_DIR = "%SCRIPT_DIR%"
 
     # The directory the launch script changes into before it starts the
     # application, as a packed path (see root_path), or nil to stay put.
@@ -197,18 +194,18 @@ module Ocran
       ]
 
       @env.each do |name, value|
-        lines << "set \"#{name}=#{batch_value(value).tr("/", "\\")}\""
+        lines << "set \"#{name}=#{batch_value(value, BATCH_SCRIPT_DIR).tr("/", "\\")}\""
       end
 
       if (dir = chdir_target)
-        target = dir == EXTRACT_ROOT.to_s ? "%SCRIPT_DIR%" : batch_value(dir).tr("/", "\\")
+        target = dir == EXTRACT_ROOT.to_s ? BATCH_SCRIPT_DIR : batch_value(dir, BATCH_SCRIPT_DIR).tr("/", "\\")
         lines << "cd /d #{quote_and_escape(target)} || exit /b 1"
       end
 
       if @exec_args
         image, script, argv = @exec_args
-        words = [root_path(image), root_path(script)].map { |p| batch_value(p).tr("/", "\\") }
-        words += argv.map { |a| batch_value(a) }
+        words = [root_path(image), root_path(script)].map { |p| batch_value(p, BATCH_SCRIPT_DIR).tr("/", "\\") }
+        words += argv.map { |a| batch_value(a, BATCH_SCRIPT_DIR) }
         lines << "#{words.map { |w| quote_and_escape(w) }.join(" ")} %*"
       end
 
