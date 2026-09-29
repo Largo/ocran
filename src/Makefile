@@ -36,7 +36,7 @@ BINARIES        := $(addsuffix $(EXEEXT), $(PROG_NAMES))
 LZMA_SRCS       := lzma/LzmaDec.c
 LZMA_OBJS       := $(LZMA_SRCS:.c=.o)
 
-COMMON_SRCS     := $(SYSTEM_UTILS_SRC) inst_dir.c script_info.c unpack.c
+COMMON_SRCS     := $(SYSTEM_UTILS_SRC) path_utils.c inst_dir.c script_info.c unpack.c
 COMMON_OBJS     := $(COMMON_SRCS:.c=.o) $(LZMA_OBJS) $(RESOURCE_OBJ)
 
 VARIANT_SRCS    := stub.c error.c
