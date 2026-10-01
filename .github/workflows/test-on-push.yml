@@ -22,6 +22,10 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+          # Bumped to drop caches saved while a Ruby 3.3 bundle was committed
+          # under vendor/bundle: its binstubs call `ruby3.3`, which the
+          # runners do not have, and every cache hit restored them.
+          cache-version: 1
           apt-get: "xz-utils gcc xpra xserver-xorg-video-dummy libxrandr-dev libfox-1.6-dev swig"
 
       - name: Start xpra to enable GLX
@@ -63,6 +67,10 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+          # Bumped to drop caches saved while a Ruby 3.3 bundle was committed
+          # under vendor/bundle: its binstubs call `ruby3.3`, which the
+          # runners do not have, and every cache hit restored them.
+          cache-version: 1
           brew: "xz fox swig"
 
       - name: Install and start XQuartz
@@ -194,6 +202,10 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+          # Bumped to drop caches saved while a Ruby 3.3 bundle was committed
+          # under vendor/bundle: its binstubs call `ruby3.3`, which the
+          # runners do not have, and every cache hit restored them.
+          cache-version: 1
           mingw: "fox swig"
 
       - name: Install bundle

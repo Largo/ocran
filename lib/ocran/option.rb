@@ -277,7 +277,15 @@ EOF
 
       @options[:output_executable] =
         if output_override
-          output_override
+          # Windows runs a program only by its extension, so a name given
+          # without .exe - `--output myapp`, as a build script shared with
+          # Linux and macOS writes it - gets one there. .exe and .com names
+          # are used as given.
+          if Gem.win_platform? && !output_override.extname?(".exe") && !output_override.extname?(".com")
+            Pathname("#{output_override}.exe")
+          else
+            output_override
+          end
         else
           executable = script
           # If debug mode is enabled, append "-debug" to the filename
