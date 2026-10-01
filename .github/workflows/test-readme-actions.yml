@@ -1,0 +1,60 @@
+# The README's "Building for multiple platforms with GitHub Actions" example,
+# run step for step against OCRAN from this commit instead of the released
+# gem (github issue #61: it failed for every application with a Gemfile).
+#
+# The only deviations from the README are where OCRAN and the application
+# come from: the application is test/fixtures/readme_actions, copied to the
+# workspace root where a user's application lives, and `gem install ocran`
+# installs the source gem built from this checkout. Everything the user's
+# workflow does with them - setup-ruby with bundler-cache, then plain
+# `ocran app.rb` outside Bundler - is unchanged.
+name: Test README GitHub Actions example
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readme-example:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-24.04, macos-14, macos-15-intel]
+        ruby: ['3.4', '4.0']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ocran-src
+
+      - name: Place the application at the workspace root
+        shell: bash
+        run: cp -r ocran-src/test/fixtures/readme_actions/. .
+
+      # As in the README
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: gem install ocran (source gem built from this commit)
+        shell: bash
+        run: |
+          cd ocran-src
+          gem build ocran-source.gemspec
+          gem install --local ocran-*.gem
+
+      # As in the README
+      - run: ocran readme_actions.rb --output readme_actions
+
+      - name: Run the executable without the bundle
+        shell: bash
+        run: |
+          rm -rf vendor .bundle Gemfile Gemfile.lock
+          ./readme_actions${{ runner.os == 'Windows' && '.exe' || '' }}
