@@ -1146,6 +1146,32 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # ruby/setup-ruby's `bundler-cache: true`, which the README's GitHub
+  # Actions example uses, installs the Gemfile's gems into vendor/bundle,
+  # where plain RubyGems never looks. A plain `ocran app.rb` outside Bundler
+  # has to find them all the same, for the dependency run and for packing
+  # (github issue #61).
+  def test_bundle_installed_to_configured_path
+    with_fixture 'bundlepath' do
+      install_dir = File.join("vendor", "bundle", RUBY_ENGINE, RbConfig::CONFIG["ruby_version"])
+      cd "vendoredgem" do
+        assert_system(RbConfig.ruby, "-S", "gem", "build", "vendoredgem.gemspec")
+      end
+      assert_system(RbConfig.ruby, "-S", "gem", "install", "--local", "--no-document",
+                    "--install-dir", install_dir, File.join("vendoredgem", "vendoredgem-0.1.0.gem"))
+      # What `bundle config set --local path vendor/bundle` writes.
+      mkdir_p ".bundle"
+      File.write(File.join(".bundle", "config"), %(---\nBUNDLE_PATH: "vendor/bundle"\n))
+
+      env = { "BUNDLE_PATH" => nil, "BUNDLE_APP_CONFIG" => nil }
+      assert_system(env, "ruby", ocran, "bundlepath.rb", *DefaultArgs)
+      exe = exe_name("bundlepath")
+      pristine_env exe do
+        assert_system(exe)
+      end
+    end
+  end
+
   # `bundle exec ocran app.rb --gemfile Gemfile` from inside a different
   # project's bundle. --gemfile has to decide the dependency run, or the
   # application's own gems - a `path:` gem above all, which exists nowhere
