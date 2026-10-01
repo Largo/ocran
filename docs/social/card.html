@@ -1,0 +1,136 @@
+<!doctype html>
+<!--
+  Social card. Screenshot the page at its exact size:
+    card.html                 1600x900  (16:9)  -> twitter-card.png
+    card.html?format=github   1600x800  (2:1)   -> github-social.png (GitHub social preview)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OCRAN social card</title>
+<script>
+  if (new URLSearchParams(location.search).get('format') === 'github') document.documentElement.classList.add('github');
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent-1: #e0115f; --accent-2: #3d8bff;
+    --headline-from: #ff4d8d; --headline-to: #ff9a62;
+    --bg-1: #0a0e1c; --bg-2: #151b34;
+    --text: #e8ebf5; --muted: #9aa3c0;
+    --win: #0e1326; --win-bar: #121936; --line: rgba(255, 255, 255, 0.08);
+    --t-comment: #6c7699; --t-keyword: #c792ea; --t-const: #ffcb6b; --t-method: #82aaff;
+    --t-string: #c3e88d; --t-symbol: #f78c6c; --t-param: #f07178; --t-punct: #89ddff; --t-num: #f78c6c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 900px; }
+  body {
+    background:
+      radial-gradient(900px 520px at 8% -10%, color-mix(in srgb, var(--accent-1) 28%, transparent), transparent 60%),
+      radial-gradient(900px 600px at 105% 110%, color-mix(in srgb, var(--accent-2) 28%, transparent), transparent 60%),
+      linear-gradient(160deg, var(--bg-1), var(--bg-2));
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    overflow: hidden;
+  }
+  .card { width: 1600px; height: 900px; padding: 56px 96px 48px; display: flex; flex-direction: column; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 10px; padding: 7px 16px; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line);
+    font: 600 17px 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 18px;
+  }
+  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent-1); box-shadow: 0 0 12px var(--accent-1); }
+  h1 { font-size: 54px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.05; }
+  h1 .accent {
+    background: linear-gradient(90deg, var(--headline-from), var(--headline-to)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 22px; }
+  .byline { display: flex; align-items: center; gap: 14px; }
+  .byline img {
+    width: 56px; height: 56px; border-radius: 50%; object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.18); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-1) 18%, transparent);
+  }
+  .byline .name { font: 700 21px 'Inter', sans-serif; }
+  .byline .handle { font: 500 17px 'JetBrains Mono', monospace; color: var(--muted); margin-top: 2px; }
+  .install {
+    font: 500 21px 'JetBrains Mono', monospace; color: var(--text); white-space: nowrap;
+    padding: 14px 20px; border-radius: 12px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line);
+  }
+  .install .prompt { color: var(--accent-1); margin-right: 10px; }
+
+  .window {
+    margin-top: 34px; flex: 1; border-radius: 18px; background: var(--win); border: 1px solid var(--line);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.02) inset; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .bar { flex-shrink: 0; height: 46px; background: var(--win-bar); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 20px; gap: 9px; }
+  .bar i { width: 13px; height: 13px; border-radius: 50%; display: block; }
+  .bar i:nth-child(1) { background: #ff5f57; } .bar i:nth-child(2) { background: #febc2e; } .bar i:nth-child(3) { background: #28c840; }
+  .bar span { margin-left: 16px; font: 500 16px 'JetBrains Mono', monospace; color: var(--muted); }
+  pre { margin: auto 0; padding: 26px 40px; font: 400 24px/1.6 'JetBrains Mono', monospace; color: var(--text); font-variant-ligatures: none; }
+  pre .l { white-space: pre; }
+  /* A terminal, not a file: no line numbers, a coloured prompt instead */
+  .c { color: var(--t-comment); font-style: italic; } .k { color: var(--t-keyword); } .n { color: var(--t-const); }
+  .m { color: var(--t-method); } .s { color: var(--t-string); } .y { color: var(--t-symbol); } .p { color: var(--t-punct); }
+  .v { color: var(--t-param); } .d { color: var(--t-num); }
+  .pr { color: var(--accent-1); font-weight: 700; }
+
+  footer { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    font: 600 17px 'Inter', sans-serif; color: var(--text); padding: 8px 15px; border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line);
+  }
+  .chip b { color: var(--headline-from); font-weight: 700; }
+
+  /* 2:1 for GitHub's social preview */
+  html.github, html.github body, html.github .card { height: 800px; }
+  html.github .card { padding: 42px 96px 36px; }
+  html.github .window { margin-top: 24px; }
+  html.github pre { padding: 18px 40px; font-size: 22px; line-height: 1.42; }
+  html.github footer { margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <header>
+    <div>
+      <div class="pill"><span class="dot"></span>Ruby gem · v1.4.5</div>
+      <h1>Ship your Ruby app as one file.<br><span class="accent">No Ruby needed to run it.</span></h1>
+    </div>
+    <div class="side">
+      <div class="byline">
+        <img src="avatar.jpg" alt="">
+        <div><div class="name">Andi Idogawa</div><div class="handle">@largo</div></div>
+      </div>
+      <div class="install"><span class="prompt">$</span>gem install ocran</div>
+    </div>
+  </header>
+
+  <div class="window">
+    <div class="bar"><i></i><i></i><i></i><span>terminal</span></div>
+<pre><span class="l"><span class="c"># one self-extracting executable: app.exe on Windows, app on Linux/macOS</span></span>
+<span class="l"><span class="pr">$</span> <span class="m">ocran</span> <span class="s">app.rb</span></span>
+<span class="l"> </span>
+<span class="l"><span class="c"># a portable folder, a macOS .app bundle, a Windows installer</span></span>
+<span class="l"><span class="pr">$</span> <span class="m">ocran</span> <span class="y">--output-dir</span> <span class="v">myapp/</span> <span class="s">app.rb</span></span>
+<span class="l"><span class="pr">$</span> <span class="m">ocran</span> <span class="y">--macosx-bundle</span> <span class="y">--bundle-id</span> <span class="v">com.example.myapp</span> <span class="s">app.rb</span></span>
+<span class="l"><span class="pr">$</span> <span class="m">ocran</span> <span class="y">--icon</span> <span class="v">app.ico</span> <span class="y">--innosetup</span> <span class="v">app.iss</span> <span class="s">app.rb</span></span>
+<span class="l"> </span>
+<span class="l"><span class="c"># experimental: one binary for Linux, macOS and Windows, x86-64 and ARM</span></span>
+<span class="l"><span class="pr">$</span> <span class="m">ocran</span> <span class="s">app.rb</span> <span class="y">--cosmo-ruby</span> <span class="v">./ruby.com</span></span></pre>
+  </div>
+
+  <footer>
+    <span class="chip"><b>Windows · Linux · macOS</b></span>
+    <span class="chip">Gems &amp; native DLLs detected</span>
+    <span class="chip">Bundler Gemfile</span>
+    <span class="chip">Rails apps</span>
+    <span class="chip">Code-signing ready</span>
+    <span class="chip">Ruby 3.2+</span>
+  </footer>
+</div>
+</body>
+</html>
