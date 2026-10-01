@@ -191,8 +191,7 @@ module Ocran
         end
       end
       if defined?(Gem)
-        foreign = foreign_bundle_gem_names
-        specs += Gem.loaded_specs.each_value.reject { |spec| foreign.include?(spec.name) }
+        specs += application_loaded_specs
         # Now, we also detect gems that are not included in Gem.loaded_specs.
         # Therefore, we look for any loaded file from a gem path.
         specs += GemSpecQueryable.detect_gems_from(features, verbose: @option.verbose?)
@@ -200,6 +199,46 @@ module Ocran
       # Prioritize the spec detected from Gemfile.
       specs.uniq!(&:name)
       specs
+    end
+
+    # The gems RubyGems had activated when the dependency run ended, less
+    # those that are not the application's.
+    #
+    # Read from the snapshot taken with the loaded features, not from
+    # Gem.loaded_specs, which by now also holds what OCRAN activated for the
+    # build itself - fiddle for DLL detection, tempfile with tmpdir,
+    # fileutils, delegate and etc for the builder - and which every
+    # application used to get packed since 1.3.16 moved the build ahead of
+    # the gem scan. OCRAN's own gem and its runtime dependencies (fiddle) are
+    # dropped as well: the `ocran` command activates them before the
+    # dependency run starts, and since OCRA 1.3.2 they were packed into
+    # every application built from an installed OCRAN, although nothing in a
+    # packaged application loads OCRAN. Only activation is discounted: an
+    # application that does load one of them still gets it packed through
+    # detect_gems_from.
+    def application_loaded_specs
+      @application_loaded_specs ||= begin
+        excluded = foreign_bundle_gem_names | ocran_gem_names
+        @post_env.loaded_specs.reject { |spec| excluded.include?(spec.name) }
+      end
+    end
+
+    # The names of the gem this OCRAN runs from and of the gems it activated
+    # as its runtime dependencies. Empty when OCRAN does not run from an
+    # installed gem, as from a source checkout.
+    def ocran_gem_names
+      specs = @post_env.loaded_specs.to_h { |spec| [spec.name, spec] }
+      own = specs.each_value.find { |spec| Pathname(__dir__).subpath?(spec.gem_dir) }
+      names = Set.new
+      queue = own ? [own] : []
+      while (spec = queue.shift)
+        next unless names.add?(spec.name)
+
+        spec.runtime_dependencies.each do |dep|
+          queue << specs[dep.name] if specs.key?(dep.name)
+        end
+      end
+      names
     end
 
     # The gems RubyGems had already activated for a bundle that is not the
@@ -560,7 +599,7 @@ module Ocran
         archdir = Pathname(RbConfig::CONFIG["archdir"])
         sxs_manifest_dirs << archdir if archdir.exist? && archdir.subpath?(exec_prefix)
         if defined?(Gem)
-          Gem.loaded_specs.each_value do |spec|
+          application_loaded_specs.each do |spec|
             next if spec.extensions.empty?
             ext_dir = Pathname(spec.extension_dir)
             sxs_manifest_dirs << ext_dir if ext_dir.exist? && ext_dir.subpath?(exec_prefix)

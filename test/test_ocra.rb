@@ -1308,6 +1308,27 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # OCRAN activates gems of its own while it builds - tempfile with tmpdir
+  # and delegate for the stub builder of an executable build - and from
+  # 1.3.16 on they were packed into every application, because the gem scan
+  # read Gem.loaded_specs after the build had started instead of the
+  # snapshot taken after the dependency run. Read from OCRAN's verbose
+  # report, since an executable's contents cannot be listed. (OCRAN's own
+  # gem and fiddle, activated by the `ocran` command of an installed OCRAN,
+  # are covered by test-readme-actions.yml: this suite runs OCRAN from a
+  # checkout, where it is not a gem.)
+  def test_build_time_gems_are_not_packed
+    with_fixture 'helloworld' do
+      output, status = capture_system("ruby", ocran, "helloworld.rb", "--no-lzma", "--verbose")
+      assert status&.success?, output
+      packed = output.scan(/^=== Detected gem (\S+?)-\d/).flatten
+      assert_includes packed, "did_you_mean", "the gem report this test reads is missing:\n#{output}"
+      %w[tempfile tmpdir delegate].each do |name|
+        refute_includes packed, name, "#{name} is activated by OCRAN's build, not by helloworld.rb"
+      end
+    end
+  end
+
   # Test that --output-dir produces a directory with the expected layout and
   # a working launch script.
   def test_output_dir
