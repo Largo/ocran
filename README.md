@@ -475,7 +475,7 @@ jobs:
 
       # Run OCRAN on your entry script. Add "-- <args>" if your script needs
       # arguments to exit cleanly during the dependency-detection run.
-      - run: ocran myapp.rb --output myapp
+      - run: ocran myapp.rb
         # produces myapp.exe on Windows, myapp on Linux/macOS
 
       - uses: actions/upload-artifact@v4
