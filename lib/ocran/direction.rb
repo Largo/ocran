@@ -1297,6 +1297,20 @@ module Ocran
       end
     end
 
+    # The PE resource options (version info, string table, manifest), for
+    # every Windows executable the user launches: the self-extracting exe and
+    # the wrapper that installer, directory and zip output start from.
+    def pe_resource_options
+      {
+        version_strings: @option.version_strings,
+        file_version: @option.file_version,
+        product_version: @option.product_version,
+        resource_strings: @option.resource_strings,
+        execution_level: @option.execution_level,
+        application_manifest: @option.application_manifest&.to_s,
+      }
+    end
+
     # Builds the small RUN_IN_EXE_DIR wrapper stub that starts the deployed
     # application directly from the directory the wrapper resides in.
     def build_wrapper_exe(wrapper_path)
@@ -1309,7 +1323,8 @@ module Ocran
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
                       run_in_exe_dir: true,
-                      stub_path: cosmo_stub_path) do |stub|
+                      stub_path: cosmo_stub_path,
+                      **pe_resource_options) do |stub|
         yield(stub)
       end
     end
@@ -1475,6 +1490,7 @@ module Ocran
                       gui_mode: @option.windowed?,
                       icon_path: @option.icon_filename,
                       stub_path: cosmo_stub_path,
+                      **pe_resource_options,
                       &to_proc) => builder
       say "Finished building #{@option.output_executable} (#{@option.output_executable.size} bytes)"
       say "After decompression, the data will expand to #{builder.data_size} bytes."

@@ -18,6 +18,112 @@ rescue LoadError
   $have_win32_api = false
 end
 
+# Read-back helper for PE resources written by Ocran::EdResource. Used by the
+# version-info / manifest / resource-string tests to verify what was embedded.
+# Windows-only; the tests that use it skip on other platforms.
+if Gem.win_platform?
+  require "fiddle/import"
+  require "fiddle/types"
+
+  module PEResourceReader
+    extend Fiddle::Importer
+    dlload "kernel32.dll", "version.dll", "user32.dll"
+    include Fiddle::Win32Types
+    typealias "LPVOID", "void*"
+    typealias "LPCWSTR", "char*"
+    typealias "LPWSTR", "char*"
+    typealias "UINT", "unsigned int"
+    typealias "HMODULE", "void*"
+    typealias "HRSRC", "void*"
+    typealias "HGLOBAL", "void*"
+
+    extern "DWORD GetFileVersionInfoSizeW(LPCWSTR, DWORD*)"
+    extern "BOOL GetFileVersionInfoW(LPCWSTR, DWORD, DWORD, LPVOID)"
+    extern "BOOL VerQueryValueW(LPVOID, LPCWSTR, LPVOID*, UINT*)"
+    extern "HMODULE LoadLibraryExW(LPCWSTR, HANDLE, DWORD)"
+    extern "BOOL FreeLibrary(HMODULE)"
+    extern "HRSRC FindResourceW(HMODULE, LPCWSTR, LPCWSTR)"
+    extern "HGLOBAL LoadResource(HMODULE, HRSRC)"
+    extern "LPVOID LockResource(HGLOBAL)"
+    extern "DWORD SizeofResource(HMODULE, HRSRC)"
+    extern "int LoadStringW(HMODULE, UINT, LPWSTR, int)"
+
+    LOAD_LIBRARY_AS_DATAFILE = 0x2
+    RT_MANIFEST = 24
+    MANIFEST_ID = 1
+
+    module_function
+
+    def w(str)
+      File.expand_path(str).encode("UTF-16LE").b + "\x00\x00".b
+    end
+
+    def version_query(exe, subblock)
+      size = GetFileVersionInfoSizeW(w(exe), [0].pack("L"))
+      return nil if size == 0
+      buf = "\x00".b * size
+      return nil if GetFileVersionInfoW(w(exe), 0, size, buf) == 0
+
+      out_ptr = Fiddle::Pointer.malloc(Fiddle::SIZEOF_VOIDP)
+      out_len = [0].pack("L")
+      sub = subblock.encode("UTF-16LE").b + "\x00\x00".b
+      return nil if VerQueryValueW(buf, sub, out_ptr, out_len) == 0
+      [out_ptr.ptr, out_len.unpack1("L")]
+    end
+
+    # Reads a \StringFileInfo\040904B0\<name> string value.
+    def version_string(exe, name)
+      ptr, len = version_query(exe, "\\StringFileInfo\\040904B0\\#{name}")
+      return nil unless ptr
+      ptr[0, len * 2].force_encoding("UTF-16LE").encode("UTF-8").sub(/\x00+\z/, "")
+    end
+
+    # Returns [major, minor, build, revision] from VS_FIXEDFILEINFO, or nil.
+    def fixed_file_version(exe)
+      ptr, = version_query(exe, "\\")
+      return nil unless ptr
+      _sig, _struc, ms, ls = ptr[0, 16].unpack("V4")
+      [ms >> 16, ms & 0xFFFF, ls >> 16, ls & 0xFFFF]
+    end
+
+    def fixed_product_version(exe)
+      ptr, = version_query(exe, "\\")
+      return nil unless ptr
+      ms, ls = ptr[16, 8].unpack("V2")
+      [ms >> 16, ms & 0xFFFF, ls >> 16, ls & 0xFFFF]
+    end
+
+    def with_module(exe)
+      handle = LoadLibraryExW(w(exe), 0, LOAD_LIBRARY_AS_DATAFILE)
+      raise "LoadLibraryExW failed" if handle == 0
+      begin
+        yield(handle)
+      ensure
+        FreeLibrary(handle)
+      end
+    end
+
+    def manifest(exe)
+      with_module(exe) do |handle|
+        hrsrc = FindResourceW(handle, Fiddle::Pointer.new(MANIFEST_ID), Fiddle::Pointer.new(RT_MANIFEST))
+        return nil if hrsrc.to_i == 0
+        size = SizeofResource(handle, hrsrc)
+        ptr = LockResource(LoadResource(handle, hrsrc))
+        Fiddle::Pointer.new(ptr.to_i)[0, size].force_encoding("UTF-8")
+      end
+    end
+
+    def resource_string(exe, id)
+      with_module(exe) do |handle|
+        buf = "\x00".b * 1024
+        n = LoadStringW(handle, id, buf, 512)
+        return nil if n == 0
+        buf[0, n * 2].force_encoding("UTF-16LE").encode("UTF-8")
+      end
+    end
+  end
+end
+
 include FileUtils
 
 class TestOcran < Minitest::Test
@@ -1379,6 +1485,32 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # The wrapper executable of directory output (and of Inno Setup installers)
+  # is what users launch, so it carries the PE resources like the icon does.
+  def test_output_dir_wrapper_pe_resources
+    skip "Only for windows" unless Gem.win_platform?
+    with_fixture 'helloworld' do
+      outdir = File.expand_path("helloworld_dir")
+      assert_system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output-dir", outdir,
+                    "--set-version-string", "CompanyName", "Acme Corp",
+                    "--set-file-version", "1.2.3.4",
+                    "--uac-level", "asInvoker"]))
+
+      wrapper = File.join(outdir, exe_name("helloworld"))
+      assert_equal "Acme Corp", PEResourceReader.version_string(wrapper, "CompanyName")
+      assert_equal [1, 2, 3, 4], PEResourceReader.fixed_file_version(wrapper)
+      manifest = PEResourceReader.manifest(wrapper)
+      assert manifest, "expected an embedded manifest in the wrapper"
+      assert_includes manifest, 'level="asInvoker"'
+
+      Bundler.with_original_env do
+        assert_system(wrapper, message: "Wrapper executable failed to run")
+      end
+    ensure
+      FileUtils.rm_rf(outdir)
+    end
+  end
+
   # --no-wrapper-exe must omit the wrapper executable from directory output.
   def test_output_dir_no_wrapper_exe
     with_fixture 'helloworld' do
@@ -1783,6 +1915,105 @@ class TestOcran < Minitest::Test
       assert File.exist?(exe)
       pristine_env exe do
         assert_system(exe)
+      end
+    end
+  end
+
+  # Test that --set-version-string and --set-file/product-version embed an
+  # RT_VERSION resource that Windows can read back, and the exe still runs.
+  def test_set_version_string
+    skip "Only for windows" unless Gem.win_platform?
+    with_fixture 'helloworld' do
+      assert system("ruby", ocran,
+                    "--set-version-string", "CompanyName", "Acme Corp",
+                    "--set-version-string", "FileDescription", "Hello Tool",
+                    "--set-file-version", "1.2.3.4",
+                    "--set-product-version", "5.6.7.8",
+                    "helloworld.rb", *DefaultArgs)
+      exe = exe_name("helloworld")
+      assert File.exist?(exe)
+
+      assert_equal "Acme Corp", PEResourceReader.version_string(exe, "CompanyName")
+      assert_equal "Hello Tool", PEResourceReader.version_string(exe, "FileDescription")
+      assert_equal "1.2.3.4", PEResourceReader.version_string(exe, "FileVersion")
+      assert_equal "5.6.7.8", PEResourceReader.version_string(exe, "ProductVersion")
+      assert_equal [1, 2, 3, 4], PEResourceReader.fixed_file_version(exe)
+      assert_equal [5, 6, 7, 8], PEResourceReader.fixed_product_version(exe)
+
+      pristine_env exe do
+        assert system(exe)
+      end
+    end
+  end
+
+  # The OCRAN-style short aliases must behave identically to the rcedit names.
+  def test_version_string_aliases
+    skip "Only for windows" unless Gem.win_platform?
+    with_fixture 'helloworld' do
+      assert system("ruby", ocran,
+                    "--version-string", "CompanyName", "Aliased Inc",
+                    "--file-version", "9.8.7.6",
+                    "--product-version", "1.0.0.0",
+                    "helloworld.rb", *DefaultArgs)
+      exe = exe_name("helloworld")
+      assert File.exist?(exe)
+      assert_equal "Aliased Inc", PEResourceReader.version_string(exe, "CompanyName")
+      assert_equal [9, 8, 7, 6], PEResourceReader.fixed_file_version(exe)
+    end
+  end
+
+  # Test that --set-requested-execution-level patches the manifest. The exe is
+  # NOT run, because a requireAdministrator manifest makes CreateProcess (used by
+  # Kernel#system) fail with ERROR_ELEVATION_REQUIRED outside an elevated session.
+  def test_requested_execution_level
+    skip "Only for windows" unless Gem.win_platform?
+    with_fixture 'helloworld' do
+      assert system("ruby", ocran,
+                    "--set-requested-execution-level", "requireAdministrator",
+                    "helloworld.rb", *DefaultArgs)
+      exe = exe_name("helloworld")
+      assert File.exist?(exe)
+      manifest = PEResourceReader.manifest(exe)
+      assert manifest, "expected an embedded manifest"
+      assert_includes manifest, 'level="requireAdministrator"'
+      # The baseline manifest content must be preserved (single manifest, not a duplicate).
+      assert_includes manifest, "activeCodePage"
+    end
+  end
+
+  # Test that --application-manifest replaces the embedded manifest with the
+  # given file. The fixture manifest uses asInvoker so the exe still runs.
+  def test_application_manifest
+    skip "Only for windows" unless Gem.win_platform?
+    with_fixture 'manifest' do
+      assert system("ruby", ocran,
+                    "--application-manifest", "app.manifest",
+                    "manifest.rb", *DefaultArgs)
+      exe = exe_name("manifest")
+      assert File.exist?(exe)
+      manifest = PEResourceReader.manifest(exe)
+      assert manifest, "expected an embedded manifest"
+      assert_includes manifest, "ocran-test-manifest-marker"
+      pristine_env exe do
+        assert system(exe)
+      end
+    end
+  end
+
+  # Test that --set-resource-string writes an RT_STRING table entry by id.
+  def test_resource_string
+    skip "Only for windows" unless Gem.win_platform?
+    with_fixture 'helloworld' do
+      assert system("ruby", ocran,
+                    "--set-resource-string", "7", "lucky seven",
+                    "--set-resource-string", "42", "the answer",
+                    "helloworld.rb", *DefaultArgs)
+      exe = exe_name("helloworld")
+      assert File.exist?(exe)
+      assert_equal "lucky seven", PEResourceReader.resource_string(exe, 7)
+      assert_equal "the answer", PEResourceReader.resource_string(exe, 42)
+      pristine_env exe do
+        assert system(exe)
       end
     end
   end
