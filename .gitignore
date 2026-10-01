@@ -8,3 +8,10 @@ README.txt
 *.res
 share/ocran/stub
 src/stub
+# Machine-local Bundler and cosmo state, never part of the project:
+# `bundle config set path vendor/bundle` (ruby/setup-ruby's bundler-cache)
+# writes .bundle/config and installs into vendor/bundle, whose binstubs
+# carry the installing Ruby's path in their shebang.
+/vendor/bundle/
+/.bundle/
+.ape-*
