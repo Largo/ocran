@@ -120,7 +120,9 @@ module Ocran
     def initialize(path, chdir_before: nil, chdir_to_exe_dir: nil,
                    debug_extract: nil, debug_mode: nil,
                    enable_compression: nil, gui_mode: nil, icon_path: nil,
-                   run_in_exe_dir: nil, stub_path: nil)
+                   run_in_exe_dir: nil, stub_path: nil,
+                   version_strings: nil, file_version: nil, product_version: nil,
+                   resource_strings: nil, execution_level: nil, application_manifest: nil)
       @dirs = FilePathSet.new
       @files = FilePathSet.new
       @data_size = 0
@@ -150,6 +152,21 @@ module Ocran
         if icon_path && WINDOWS
           require_relative "ed_icon"
           EdIcon.update_icon(stub, icon_path.to_s)
+        end
+
+        # Embed rcedit-style PE resources: version info, manifest, string table
+        # (Windows only). This must run before the opcode data is appended below,
+        # because BeginUpdateResource/EndUpdateResource rewrites the whole PE file.
+        if WINDOWS
+          manifest_xml = application_manifest ? File.read(application_manifest, encoding: "UTF-8") : nil
+          require_relative "ed_resource"
+          EdResource.update(stub,
+                            version_strings: version_strings,
+                            file_version: file_version,
+                            product_version: product_version,
+                            resource_strings: resource_strings,
+                            manifest_xml: manifest_xml,
+                            execution_level: execution_level)
         end
 
         File.open(stub, "ab") do |of|

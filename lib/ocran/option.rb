@@ -6,10 +6,14 @@ module Ocran
     load File.expand_path("refine_pathname.rb", __dir__) unless defined? RefinePathname
     using RefinePathname
 
+    # Valid values for --set-requested-execution-level (manifest UAC levels).
+    EXECUTION_LEVELS = %w[asInvoker highestAvailable requireAdministrator].freeze
+
     def initialize
       @options = {
         :add_all_core? => false,
         :add_all_encoding? => true,
+        :application_manifest => nil,
         :argv => [],
         :auto_detect_dlls? => true,
         :bundle_identifier => nil,
@@ -23,7 +27,9 @@ module Ocran
         :enable_compression? => true,
         :enable_debug_extract? => false,
         :enable_debug_mode? => false,
+        :execution_level => nil,
         :extra_dlls => [],
+        :file_version => nil,
         :force_console? => false,
         :force_windows? => false,
         :gem_options => [],
@@ -35,7 +41,9 @@ module Ocran
         :output_dir => nil,
         :output_override => nil,
         :output_zip => nil,
+        :product_version => nil,
         :quiet? => false,
+        :resource_strings => {},
         :roundhouse? => false,
         :roundhouse_app => nil,
         :roundhouse_options => [],
@@ -47,6 +55,7 @@ module Ocran
         :spinel? => false,
         :spinel_options => [],
         :verbose? => false,
+        :version_strings => {},
         :warning? => true,
         :wasm_options => [],
         :wasm_output => nil,
@@ -129,6 +138,20 @@ Executable options:
                    translated to their packed locations at build time.
 --debug            Executable will be verbose.
 --debug-extract    Executable will unpack to local dir and not delete after.
+
+PE resource options (Windows, rcedit-compatible):
+
+--set-version-string <key> <value>  Add a StringFileInfo entry (e.g. CompanyName).
+                                     Alias: --version-string
+--set-file-version <x.y.z.w>         Set the file version. Alias: --file-version
+--set-product-version <x.y.z.w>      Set the product version. Alias: --product-version
+--set-resource-string <id> <value>   Set an RT_STRING table entry by numeric id.
+                                     Alias: --resource-string
+--set-requested-execution-level <level>  Set the manifest UAC level (asInvoker,
+                                     highestAvailable, requireAdministrator).
+                                     Alias: --uac-level
+--application-manifest <file>        Embed the given file as the application manifest.
+                                     Alias: --manifest
 
 Experimental options:
 
@@ -288,6 +311,34 @@ EOF
           path = required_argument(argv, arg)
           raise "Icon file #{path} not found" unless File.exist?(path)
           @options[:icon_filename] = Pathname.new(path).expand_path
+        when "--set-version-string", "--version-string"
+          key = argv.shift
+          value = argv.shift
+          raise "#{arg} requires a key and a value" unless key && value
+          @options[:version_strings][key] = value
+        when "--set-file-version", "--file-version"
+          value = argv.shift
+          raise "#{arg} requires a version string" unless value
+          @options[:file_version] = value
+        when "--set-product-version", "--product-version"
+          value = argv.shift
+          raise "#{arg} requires a version string" unless value
+          @options[:product_version] = value
+        when "--set-resource-string", "--resource-string"
+          id = argv.shift
+          value = argv.shift
+          raise "#{arg} requires an id and a value" unless id && value
+          @options[:resource_strings][id.to_i] = value
+        when "--set-requested-execution-level", "--uac-level"
+          level = argv.shift
+          unless EXECUTION_LEVELS.include?(level)
+            raise "#{arg} must be one of: #{EXECUTION_LEVELS.join(", ")}"
+          end
+          @options[:execution_level] = level
+        when "--application-manifest", "--manifest"
+          path = argv.shift
+          raise "Manifest file #{path} not found" unless path && File.exist?(path)
+          @options[:application_manifest] = Pathname.new(path).expand_path
         when "--rubyopt"
           # An empty value is meaningful: run with no RUBYOPT at all.
           @options[:rubyopt] = argv.shift or raise "#{arg} requires an argument"
@@ -606,6 +657,8 @@ EOF
 
     def add_all_encoding? = @options[__method__]
 
+    def application_manifest = @options[__method__]
+
     def argv = @options[__method__]
 
     def bundle_identifier = @options[__method__]
@@ -645,7 +698,11 @@ EOF
 
     def enable_debug_mode? = @options[__method__]
 
+    def execution_level = @options[__method__]
+
     def extra_dlls = @options[__method__]
+
+    def file_version = @options[__method__]
 
     def force_autoload? = @options[__method__]
 
@@ -671,7 +728,11 @@ EOF
 
     def output_zip = @options[__method__]
 
+    def product_version = @options[__method__]
+
     def quiet? = @options[__method__]
+
+    def resource_strings = @options[__method__]
 
     def wrapper_exe? = @options[__method__]
 
@@ -742,6 +803,8 @@ EOF
     def use_inno_setup? = @options[__method__]
 
     def verbose? = @options[__method__]
+
+    def version_strings = @options[__method__]
 
     def warning? = @options[__method__]
 
