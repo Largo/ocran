@@ -1293,6 +1293,21 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # A build script shared between platforms, like the README's GitHub
+  # Actions example, writes `--output myapp`. Windows runs a program only by
+  # its extension, so there the name gets .exe; elsewhere it is used as given.
+  def test_output_option_without_extension
+    with_fixture 'helloworld' do
+      assert_system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output", "goodbyeworld"]))
+      exe = exe_name("goodbyeworld")
+      assert File.exist?(exe), "#{exe} was not built, found: #{Dir["goodbyeworld*"].inspect}"
+      refute File.exist?("goodbyeworld"), "extensionless executable built on Windows" if Gem.win_platform?
+      pristine_env exe do
+        assert_system(exe)
+      end
+    end
+  end
+
   # Test that --output-dir produces a directory with the expected layout and
   # a working launch script.
   def test_output_dir

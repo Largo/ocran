@@ -51,7 +51,7 @@ jobs:
           gem install --local ocran-*.gem
 
       # As in the README
-      - run: ocran readme_actions.rb
+      - run: ocran readme_actions.rb --output readme_actions
 
       - name: Run the executable without the bundle
         shell: bash
