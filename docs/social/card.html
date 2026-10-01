@@ -42,6 +42,10 @@
     font: 600 17px 'JetBrains Mono', monospace; color: var(--muted); margin-bottom: 18px;
   }
   .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent-1); box-shadow: 0 0 12px var(--accent-1); }
+  .pills { display: flex; gap: 12px; }
+  .pill.credit { padding: 3px 16px 3px 4px; }
+  .pill.credit b { color: var(--text); font-weight: 700; }
+  .pill.credit img { width: 32px; height: 32px; border-radius: 50%; background: #f1f2f8; image-rendering: pixelated; }
   h1 { font-size: 54px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.05; }
   h1 .accent {
     background: linear-gradient(90deg, var(--headline-from), var(--headline-to)); -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -49,10 +53,12 @@
 
   .side { display: flex; flex-direction: column; align-items: flex-end; gap: 22px; }
   .byline { display: flex; align-items: center; gap: 14px; }
+  .byline .faces { display: flex; }
   .byline img {
-    width: 56px; height: 56px; border-radius: 50%; object-fit: cover;
+    width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: #f1f2f8;
     border: 2px solid rgba(255, 255, 255, 0.18); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-1) 18%, transparent);
   }
+  .byline img + img { margin-left: -14px; border-color: var(--bg-1); }
   .byline .name { font: 700 21px 'Inter', sans-serif; }
   .byline .handle { font: 500 17px 'JetBrains Mono', monospace; color: var(--muted); margin-top: 2px; }
   .install {
@@ -97,13 +103,16 @@
 <div class="card">
   <header>
     <div>
-      <div class="pill"><span class="dot"></span>Ruby gem · v1.4.5</div>
+      <div class="pills">
+        <div class="pill"><span class="dot"></span>Ruby gem · v1.4.5</div>
+        <div class="pill credit"><img src="avatar-larsch.png" alt="">based on <b>larsch/ocra</b></div>
+      </div>
       <h1>Ship your Ruby app as one file.<br><span class="accent">No Ruby needed to run it.</span></h1>
     </div>
     <div class="side">
       <div class="byline">
-        <img src="avatar.jpg" alt="">
-        <div><div class="name">Andi Idogawa</div><div class="handle">@largo</div></div>
+        <div class="faces"><img src="avatar.jpg" alt=""><img src="avatar-shinokaro.png" alt=""></div>
+        <div><div class="name">Andi Idogawa &amp; shinokaro</div><div class="handle">@largo · @shinokaro</div></div>
       </div>
       <div class="install"><span class="prompt">$</span>gem install ocran</div>
     </div>
