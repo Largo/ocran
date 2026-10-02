@@ -1,0 +1,14 @@
+PATH
+  remote: shouter
+  specs:
+    shouter (0.1.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  shouter!

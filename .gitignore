@@ -8,3 +8,11 @@ README.txt
 *.res
 share/ocran/stub
 src/stub
+# Local Bundler state (setup-ruby installs CI gems into vendor/bundle too:
+# a committed vendor/bundle/ruby/3.3.0 shadowed CI's own bundle for Ruby 3.3)
+/vendor/
+/.bundle/
+# Left in the working directory by Cosmopolitan's APE loader
+.ape-*
+# Agent worktrees
+/.claude/worktrees/

@@ -27,7 +27,7 @@ module Ocran
     def build
       @build_file.tap do |f|
         f.puts "@echo off"
-        @environments.each { |name, val| f.puts build_set_command(name, batch_value(val)) }
+        @environments.each { |name, val| f.puts build_set_command(name, batch_value(val, BATCH_FILE_DIR)) }
         f.puts build_set_command("OCRAN_EXECUTABLE", BATCH_FILE_PATH)
         f.puts build_start_command(@title, @executable, @script, *@args, chdir_before: @chdir_before)
         f
@@ -47,15 +47,8 @@ module Ocran
       @executable, @script, @args = executable, script, args
     end
 
-    # Renders a build-time value for the batch file: percent signs are
-    # escaped so cmd.exe takes the value literally, then the extraction root
-    # placeholder becomes the batch file's own directory.
-    def batch_value(s)
-      escape_percent(s).gsub(/#{Regexp.escape(EXTRACT_ROOT.to_s)}[\/\\]/, BATCH_FILE_DIR)
-    end
-    private :batch_value
-
-    # +value+ is inserted as is and must already be escaped (see batch_value).
+    # +value+ is inserted as is and must already be escaped (see
+    # WindowsCommandEscaping#batch_value).
     def build_set_command(name, value)
       "set \"#{name}=#{value}\""
     end
@@ -77,7 +70,7 @@ module Ocran
 
       cmd << quote_and_escape("#{BATCH_FILE_DIR}#{escape_percent(executable)}")
       cmd << quote_and_escape("#{BATCH_FILE_DIR}#{escape_percent(script)}")
-      cmd += args.map { |arg| quote_and_escape(batch_value(arg)) }
+      cmd += args.map { |arg| quote_and_escape(batch_value(arg, BATCH_FILE_DIR)) }
 
       # Forward batch file arguments to the command with `%*`
       cmd << "%*"

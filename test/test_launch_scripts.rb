@@ -74,10 +74,89 @@ class TestLaunchScripts < Minitest::Test
       end
       builder.send(:write_batch_script)
       bat = File.read(File.join(tmp, "app.bat")).split("\r\n")
-      assert_equal 'set "SCRIPT_DIR=%~dp0"', bat[1]
-      assert_equal 'set "ROOTED=%SCRIPT_DIR%lib\50%%"', bat[2]
-      assert_equal '"%SCRIPT_DIR%bin\ruby.exe" "%SCRIPT_DIR%src\app.rb" "a & b" %*', bat[3]
+      assert_equal "setlocal", bat[1]
+      assert_equal 'set "SCRIPT_DIR=%~dp0"', bat[2]
+      assert_equal 'set "ROOTED=%SCRIPT_DIR%lib\50%%"', bat[3]
+      assert_equal '"%SCRIPT_DIR%bin\ruby.exe" "%SCRIPT_DIR%src\app.rb" "a & b" %*', bat[4]
     end
+  end
+
+  # Builds a directory whose launch script runs a packed script that prints
+  # its working directory, with the given chdir options.
+  def build_pwd_dir(parent, **chdir)
+    out = File.join(parent, NASTY_DIR)
+    FileUtils.mkdir_p(File.join(out, "src"))
+    File.write(File.join(out, "src", "pwd.rb"), "puts Dir.pwd")
+    Ocran::DirBuilder.new(out, **chdir) do |b|
+      b.exec(RbConfig.ruby, "src/pwd.rb")
+    end
+    out
+  end
+
+  # --chdir-first and --chdir-exe-dir were ignored by the launch scripts.
+  def test_shell_script_chdir_first_changes_into_the_script_directory
+    skip "shell launch script is POSIX only" if Gem.win_platform?
+
+    Dir.mktmpdir do |tmp|
+      out = build_pwd_dir(tmp, chdir_before: true)
+      assert_equal [File.join(File.realpath(out), "src")], run_launch_script("sh", File.join(out, "pwd.sh"), chdir: tmp)
+    end
+  end
+
+  def test_shell_script_chdir_exe_dir_changes_into_its_own_directory
+    skip "shell launch script is POSIX only" if Gem.win_platform?
+
+    Dir.mktmpdir do |tmp|
+      out = build_pwd_dir(tmp, chdir_exe_dir: true)
+      assert_equal [File.realpath(out)], run_launch_script("sh", File.join(out, "pwd.sh"), chdir: tmp)
+    end
+  end
+
+  def test_shell_script_keeps_the_working_directory_by_default
+    skip "shell launch script is POSIX only" if Gem.win_platform?
+
+    Dir.mktmpdir do |tmp|
+      out = build_pwd_dir(tmp)
+      assert_equal [File.realpath(tmp)], run_launch_script("sh", File.join(out, "pwd.sh"), chdir: tmp)
+    end
+  end
+
+  def test_batch_script_chdir_text
+    Dir.mktmpdir do |tmp|
+      first = Ocran::DirBuilder.new(File.join(tmp, "first"), chdir_before: true) do |b|
+        b.exec("bin/ruby.exe", "src/50%/app.rb")
+      end
+      exe_dir = Ocran::DirBuilder.new(File.join(tmp, "exe_dir"), chdir_exe_dir: true) do |b|
+        b.exec("bin/ruby.exe", "src/app.rb")
+      end
+      [first, exe_dir].each { |builder| builder.send(:write_batch_script) }
+
+      assert_includes File.read(File.join(tmp, "first", "app.bat")).split("\r\n"),
+                      'cd /d "%SCRIPT_DIR%src\50%%" || exit /b 1'
+      assert_includes File.read(File.join(tmp, "exe_dir", "app.bat")).split("\r\n"),
+                      'cd /d "%SCRIPT_DIR%" || exit /b 1'
+    end
+  end
+
+  # The executed script can be the generated RUBYOPT launcher; the launch
+  # script is still named after the application's own script.
+  def test_launch_script_is_named_after_the_given_script
+    Dir.mktmpdir do |tmp|
+      Ocran::DirBuilder.new(tmp, script_name: "app") do |b|
+        b.exec("bin/ruby", "src/ocran-rubyopt-launcher.rb")
+      end
+      ext = Gem.win_platform? ? ".bat" : ".sh"
+      assert_equal ["app#{ext}"], Dir.children(tmp)
+    end
+  end
+
+  # The escaping both batch writers share.
+  def test_batch_value
+    esc = Ocran::WindowsCommandEscaping
+    # The root expression goes in after the escaping, so it stays live.
+    assert_equal "%SCRIPT_DIR%lib/50%%", esc.batch_value("|/lib/50%", "%SCRIPT_DIR%")
+    assert_equal "%~dp0lib\\x", esc.batch_value("|\\lib\\x", "%~dp0")
+    assert_equal "a|b 100%%", esc.batch_value("a|b 100%", "%~dp0")
   end
 
   def test_inno_setup_launcher_escapes_percent

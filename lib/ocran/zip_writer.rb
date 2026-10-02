@@ -41,6 +41,11 @@ module Ocran
     # Markers of the ZIP64 format extensions. OCRAN never writes them; an
     # input archive that uses them is rejected rather than corrupted.
     ZIP64_EOCD_LOCATOR_SIGNATURE = "PK\x06\x07".b
+    ZIP64_EOCD_LOCATOR_SIZE = 20
+
+    # Limits of the format without ZIP64.
+    MAX_ENTRIES = 0xffff
+    MAX_OFFSET = 0xffffffff
 
     CENTRAL_SIGNATURE = "PK\x01\x02".b
     LOCAL_SIGNATURE = "PK\x03\x04".b
@@ -87,6 +92,12 @@ module Ocran
 
         (data || File.binread(source)).b
       end
+
+      def content_size
+        return 0 if directory?
+
+        data ? data.bytesize : File.size(source)
+      end
     end
 
     module_function
@@ -115,6 +126,7 @@ module Ocran
         end
 
         entries = with_parent_directories(entries, existing)
+        check_limits(eocd, central, entries)
 
         before = io.size
         io.truncate(eocd[:cd_offset])
@@ -151,6 +163,26 @@ module Ocran
       }
     end
 
+    # Raises when the archive would outgrow the format without ZIP64 -
+    # before anything is written, so that a refused append leaves the file
+    # as it was. The size is an upper bound: an entry is never stored larger
+    # than its content (see compress).
+    def check_limits(eocd, central, entries)
+      total_entries = eocd[:total_entries] + entries.size
+      if total_entries > MAX_ENTRIES
+        raise "too many ZIP entries (#{total_entries}); OCRAN does not write ZIP64 archives"
+      end
+
+      size = eocd[:cd_offset] + central.bytesize + EOCD_SIZE
+      entries.each do |entry|
+        name = entry.name.bytesize
+        size += 30 + name + 46 + name + entry.content_size
+      end
+      if size > MAX_OFFSET
+        raise "the packaged archive would exceed 4 GiB; OCRAN does not write ZIP64 archives"
+      end
+    end
+
     # Locates and decodes the end-of-central-directory record. The record
     # is searched for from the end of the file because a ZIP archive is
     # identified by its tail, which is what allows one to be appended to an
@@ -167,16 +199,20 @@ module Ocran
               "it cannot be a cosmopolitan APE with an embedded ZIP store"
       end
 
-      if tail.rindex(ZIP64_EOCD_LOCATOR_SIGNATURE)
-        raise "#{path} uses the ZIP64 format extensions, which OCRAN cannot append to"
-      end
-
       _signature, _disk, _cd_disk, _disk_entries, total_entries, cd_size, cd_offset, comment_length =
         tail.byteslice(offset, EOCD_SIZE).unpack("a4vvvvVVv")
 
       eocd_start = size - tail_size + offset
       unless eocd_start + EOCD_SIZE + comment_length == size
         raise "#{path} has trailing data after its ZIP archive; OCRAN cannot append to it"
+      end
+
+      # A ZIP64 archive has its end-of-central-directory locator right
+      # before this record. Only that position counts: the same four bytes
+      # anywhere else in the tail are file data or names.
+      locator_offset = offset - ZIP64_EOCD_LOCATOR_SIZE
+      if locator_offset >= 0 && tail.byteslice(locator_offset, 4) == ZIP64_EOCD_LOCATOR_SIGNATURE
+        raise "#{path} uses the ZIP64 format extensions, which OCRAN cannot append to"
       end
 
       { cd_offset: cd_offset, cd_size: cd_size, total_entries: total_entries }
@@ -264,10 +300,10 @@ module Ocran
     end
 
     def end_of_central_directory(total_entries, cd_size, cd_offset)
-      if total_entries > 0xffff
+      if total_entries > MAX_ENTRIES
         raise "too many ZIP entries (#{total_entries}); OCRAN does not write ZIP64 archives"
       end
-      if cd_offset + cd_size > 0xffffffff
+      if cd_offset + cd_size > MAX_OFFSET
         raise "the packaged archive would exceed 4 GiB; OCRAN does not write ZIP64 archives"
       end
 

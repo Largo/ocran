@@ -1,8 +1,0 @@
-## String#interpolate
-
-    require 'facets/string/interpolate'
-
-    a = 1
-
-    String.interpolate{ 'this is #{a}' }.assert == 'this is 1'
-

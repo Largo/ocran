@@ -43,10 +43,11 @@ module Ocran
     # Uncompressed size of everything packed, for the build summary.
     attr_reader :data_size
 
-    def initialize(path, cosmo_ruby:, chdir_before: false, debug_mode: false)
+    def initialize(path, cosmo_ruby:, chdir_before: false, chdir_exe_dir: false, debug_mode: false)
       @path = Pathname(path)
       @cosmo_ruby = Pathname(cosmo_ruby)
       @chdir_before = chdir_before
+      @chdir_exe_dir = chdir_exe_dir
       @debug_mode = debug_mode
       @entries = []
       @names = {}
@@ -200,15 +201,23 @@ module Ocran
     # here: the application lives inside the archive and zipos cannot be a
     # working directory. The directory holding the executable is the
     # closest equivalent, and the one an application that keeps data next
-    # to itself actually wants.
+    # to itself actually wants. That is exactly what --chdir-exe-dir asks
+    # for, so both options do the same in this mode.
     def chdir_source
-      return "" unless @chdir_before
-
-      <<~RUBY.chomp
-        # --chdir-first: the archive cannot be a working directory, so use
-        # the directory the executable was started from.
-        Dir.chdir(File.dirname(executable))
-      RUBY
+      if @chdir_exe_dir
+        <<~RUBY.chomp
+          # --chdir-exe-dir: start in the directory holding the executable.
+          Dir.chdir(File.dirname(executable))
+        RUBY
+      elsif @chdir_before
+        <<~RUBY.chomp
+          # --chdir-first: the archive cannot be a working directory, so use
+          # the directory the executable was started from.
+          Dir.chdir(File.dirname(executable))
+        RUBY
+      else
+        ""
+      end
     end
 
     # Environment variables other than the load-path ones, exported as is.

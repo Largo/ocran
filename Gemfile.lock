@@ -29,8 +29,6 @@ GEM
       rouge (>= 3.26.0, < 4.0.0)
       super_module (~> 1.4.1)
       text-table (>= 1.2.4, < 2.0.0)
-    hoe (4.6.1)
-      rake (~> 13.0)
     libui (0.1.2)
     libui (0.1.2-arm64-darwin)
     libui (0.1.2-x64-mingw)
@@ -83,10 +81,10 @@ DEPENDENCIES
   fiddle (~> 1.0)
   fxruby
   glimmer-dsl-libui
-  hoe (~> 4.6)
   logger
   matrix
   minitest (~> 6.0)
+  rake (~> 13.0)
 
 BUNDLED WITH
   4.0.8

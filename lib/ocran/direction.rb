@@ -191,8 +191,7 @@ module Ocran
         end
       end
       if defined?(Gem)
-        foreign = foreign_bundle_gem_names
-        specs += Gem.loaded_specs.each_value.reject { |spec| foreign.include?(spec.name) }
+        specs += application_loaded_specs
         # Now, we also detect gems that are not included in Gem.loaded_specs.
         # Therefore, we look for any loaded file from a gem path.
         specs += GemSpecQueryable.detect_gems_from(features, verbose: @option.verbose?)
@@ -200,6 +199,46 @@ module Ocran
       # Prioritize the spec detected from Gemfile.
       specs.uniq!(&:name)
       specs
+    end
+
+    # The gems RubyGems had activated when the dependency run ended, less
+    # those that are not the application's.
+    #
+    # Read from the snapshot taken with the loaded features, not from
+    # Gem.loaded_specs, which by now also holds what OCRAN activated for the
+    # build itself - fiddle for DLL detection, tempfile with tmpdir,
+    # fileutils, delegate and etc for the builder - and which every
+    # application used to get packed since 1.3.16 moved the build ahead of
+    # the gem scan. OCRAN's own gem and its runtime dependencies (fiddle) are
+    # dropped as well: the `ocran` command activates them before the
+    # dependency run starts, and since OCRA 1.3.2 they were packed into
+    # every application built from an installed OCRAN, although nothing in a
+    # packaged application loads OCRAN. Only activation is discounted: an
+    # application that does load one of them still gets it packed through
+    # detect_gems_from.
+    def application_loaded_specs
+      @application_loaded_specs ||= begin
+        excluded = foreign_bundle_gem_names | ocran_gem_names
+        @post_env.loaded_specs.reject { |spec| excluded.include?(spec.name) }
+      end
+    end
+
+    # The names of the gem this OCRAN runs from and of the gems it activated
+    # as its runtime dependencies. Empty when OCRAN does not run from an
+    # installed gem, as from a source checkout.
+    def ocran_gem_names
+      specs = @post_env.loaded_specs.to_h { |spec| [spec.name, spec] }
+      own = specs.each_value.find { |spec| Pathname(__dir__).subpath?(spec.gem_dir) }
+      names = Set.new
+      queue = own ? [own] : []
+      while (spec = queue.shift)
+        next unless names.add?(spec.name)
+
+        spec.runtime_dependencies.each do |dep|
+          queue << specs[dep.name] if specs.key?(dep.name)
+        end
+      end
+      names
     end
 
     # The gems RubyGems had already activated for a bundle that is not the
@@ -492,7 +531,7 @@ module Ocran
         # the same extension packed at a gem path (openssl and psych are
         # gems since Ruby 3.x) resolves its imports from bin.
         features.select { |f| f.extname?(".so") && f.subpath?(exec_prefix) }
-                .map(&:dirname).uniq
+                .map(&:dirname).uniq { |dir| dir.path_key }
                 .each do |dir|
           dir.each_child do |path|
             next unless path.file? && path.extname?(".dll")
@@ -560,7 +599,7 @@ module Ocran
         archdir = Pathname(RbConfig::CONFIG["archdir"])
         sxs_manifest_dirs << archdir if archdir.exist? && archdir.subpath?(exec_prefix)
         if defined?(Gem)
-          Gem.loaded_specs.each_value do |spec|
+          application_loaded_specs.each do |spec|
             next if spec.extensions.empty?
             ext_dir = Pathname(spec.extension_dir)
             sxs_manifest_dirs << ext_dir if ext_dir.exist? && ext_dir.subpath?(exec_prefix)
@@ -812,7 +851,9 @@ module Ocran
 
         actual_files
       end
-      gem_files.uniq!
+      # Keyed on Pathname#path_key here and below: Array#uniq and Set do not
+      # see the refined, case-insensitive Pathname#eql? on Windows.
+      gem_files.uniq! { |file| file.path_key }
 
       # On some distros parts of a gem are reachable through symlinks at other
       # locations (e.g. Fedora symlinks /usr/share/ruby/psych.rb into the
@@ -820,16 +861,17 @@ module Ocran
       # the same file under different paths. Compare realpaths when removing
       # gem files from the feature list; otherwise a stdlib-level duplicate
       # would be packed as well and shadow the packed gem at runtime.
-      gem_file_set = (gem_files + gem_files.filter_map { |file| file.realpath rescue nil }).to_set
+      gem_file_set = (gem_files + gem_files.filter_map { |file| file.realpath rescue nil })
+                       .to_set { |file| file.path_key }
       features = features.reject do |feature|
-        next true if gem_file_set.include?(feature)
+        next true if gem_file_set.include?(feature.path_key)
 
         real = begin
           feature.realpath
         rescue SystemCallError
           nil
         end
-        real && gem_file_set.include?(real)
+        real && gem_file_set.include?(real.path_key)
       end
 
       # If requested, add all ruby standard libraries
@@ -844,7 +886,6 @@ module Ocran
           end
           path.find.each do |src|
             next if src.directory?
-            a = Pathname(subdir) / src.relative_path_from(path)
             builder.copy_to_lib(src, Pathname(subdir) / src.relative_path_from(path))
           end
         end
@@ -1043,7 +1084,7 @@ module Ocran
       neutralize_bundler_env(builder)
       # Add the load path that are required with the correct path after
       # src_prefix was adjusted.
-      load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq
+      load_path = src_load_path.map { |path| SRCDIR / path.relative_path_from(inst_src_prefix) }.uniq { |path| path.path_key }
 
       # On POSIX systems, also add the packed Ruby standard library directories
       # to RUBYLIB. The Ruby binary has a compiled-in prefix pointing to the build
@@ -1082,7 +1123,7 @@ module Ocran
       prefix_gem_dirs = (Gem.path.map { |dir| Pathname(dir) } + [Pathname(Gem.default_dir)])
         .select { |dir| dir.subpath?(exec_prefix) }
         .map { |dir| dir.relative_path_from(exec_prefix) }
-        .uniq
+        .uniq { |dir| dir.path_key }
       gem_paths += prefix_gem_dirs
       # RubyGems probes the default gem dir for writability at startup and
       # prints "Can't determine writability of default gem path" on stderr
@@ -1278,7 +1319,11 @@ module Ocran
 
       path = Pathname(path)
       say "Building directory #{path}"
-      builder = DirBuilder.new(path, &to_proc)
+      builder = DirBuilder.new(path,
+                               script_name: @option.script.basename.sub_ext("").to_s,
+                               chdir_before: @option.chdir_before?,
+                               chdir_exe_dir: @option.chdir_exe_dir?,
+                               &to_proc)
 
       if @option.wrapper_exe?
         # Same wrapper as in Inno Setup builds: a doubleclickable executable
@@ -1342,30 +1387,41 @@ module Ocran
       end
 
       bundle_id  = @option.bundle_identifier || "com.example.#{app_name}"
-      icon_entry = @option.icon_filename ? "    <key>CFBundleIconFile</key>\n    <string>AppIcon</string>\n" : ""
+      File.write(contents_dir / "Info.plist",
+                 self.class.info_plist(app_name, bundle_id, icon: !!@option.icon_filename))
 
-      File.write(contents_dir / "Info.plist", <<~PLIST)
+      say "Finished building #{bundle_path} (#{builder.data_size} bytes decompressed)"
+    end
+
+    XML_ESCAPES = { "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", '"' => "&quot;", "'" => "&apos;" }.freeze
+
+    # The Info.plist of a macOS app bundle. The values are XML-escaped: an
+    # app named "R&D" must not produce a property list macOS cannot parse.
+    def self.info_plist(app_name, bundle_id, icon: false)
+      name = app_name.to_s.gsub(/[&<>"']/, XML_ESCAPES)
+      id = bundle_id.to_s.gsub(/[&<>"']/, XML_ESCAPES)
+      icon_entry = icon ? "    <key>CFBundleIconFile</key>\n    <string>AppIcon</string>\n" : ""
+
+      <<~PLIST
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">
         <dict>
           <key>CFBundleName</key>
-          <string>#{app_name}</string>
+          <string>#{name}</string>
           <key>CFBundleDisplayName</key>
-          <string>#{app_name}</string>
+          <string>#{name}</string>
           <key>CFBundleIdentifier</key>
-          <string>#{bundle_id}</string>
+          <string>#{id}</string>
           <key>CFBundleVersion</key>
           <string>1.0</string>
           <key>CFBundlePackageType</key>
           <string>APPL</string>
           <key>CFBundleExecutable</key>
-          <string>#{app_name}</string>
+          <string>#{name}</string>
         #{icon_entry}</dict>
         </plist>
       PLIST
-
-      say "Finished building #{bundle_path} (#{builder.data_size} bytes decompressed)"
     end
 
     # Builds the executable by copying the cosmopolitan Ruby and injecting
@@ -1380,6 +1436,7 @@ module Ocran
       ZipPayloadBuilder.new(output,
                             cosmo_ruby: @option.cosmo_ruby,
                             chdir_before: @option.chdir_before?,
+                            chdir_exe_dir: @option.chdir_exe_dir?,
                             debug_mode: @option.enable_debug_mode?,
                             &to_proc) => builder
 

@@ -6,8 +6,19 @@ module Ocran
     load File.expand_path("command_output.rb", __dir__)
     include CommandOutput
 
-    def fatal_error(statement)
-      error statement
+    # Errors that describe a problem with the input or the build host - an
+    # invalid option, a missing file, a path OCRAN cannot write, a value too
+    # large for the executable format - rather than a bug in OCRAN. They
+    # are reported by their message; a backtrace would only bury it. Any
+    # other exception is a bug and keeps Ruby's full report.
+    USER_ERRORS = [RuntimeError, ArgumentError, SystemCallError, IOError].freeze
+
+    # Reports a USER_ERRORS exception and exits. With --verbose the
+    # backtrace is shown too, for when the message is not enough.
+    def user_error(e)
+      message = e.instance_of?(RuntimeError) ? e.message : "#{e.message} (#{e.class})"
+      error message
+      STDERR.puts e.backtrace.map { |line| "\tfrom #{line}" } if @option&.verbose? && e.backtrace
       exit false
     end
 
@@ -18,11 +29,9 @@ module Ocran
       load File.expand_path("option.rb", __dir__)
       @option = Option.new.tap do |opt|
         opt.parse(ARGV)
-      rescue RuntimeError => e
-        # Capture RuntimeError during parsing and display an appropriate
-        # error message to the user. This error usually occurs from invalid
-        # option arguments.
-        fatal_error e.message
+      rescue *USER_ERRORS => e
+        # Invalid option arguments, usually; report them as such.
+        user_error e
       else
         # Update ARGV with the parsed command line arguments to pass to
         # the user's script. This ensures the script executes based on
@@ -31,6 +40,7 @@ module Ocran
       end
 
       Ocran.option = @option
+      @option.warnings.each { |message| warning message }
 
       @ignore_modules = ObjectSpace.each_object(Module).to_a
     end
@@ -49,6 +59,7 @@ module Ocran
       else
         warn_about_foreign_bundle
       end
+      expose_bundle_install_path
       say "Loading script to check dependencies"
       $PROGRAM_NAME = @option.script.to_s
     end
@@ -110,6 +121,58 @@ module Ocran
               (app_gemfile ? "; pass --gemfile #{app_gemfile} to package against that bundle" : "")
     end
 
+    # `bundle install` puts the gems where Bundler is configured to put them,
+    # and a configured path - `bundle config set path vendor/bundle`, which is
+    # what ruby/setup-ruby's `bundler-cache: true` does - is a place only
+    # Bundler looks. The dependency run loads the script as plain Ruby, so
+    # its first `require` of a gem from such a bundle raised LoadError
+    # although the bundle was installed (github issue #61).
+    #
+    # Add the bundle's install directory to the gem path. Its gems become
+    # visible exactly as if they had been installed into Ruby's own gem
+    # directory, and nothing more: setting the bundle up would also hide
+    # every gem the Gemfile does not list, breaking scripts that work today.
+    # A bundle installed into the system gems, the ordinary case outside CI,
+    # changes nothing, and under `bundle exec` Bundler has already put its
+    # gems on the gem path.
+    def expose_bundle_install_path
+      return if @pre_env.bundler_setup_loaded?
+
+      gemfile = @option.application_gemfile or return
+      path = bundle_install_path(gemfile) or return
+      return if Gem.path.any? { |gem_path| same_file?(gem_path, path) }
+
+      verbose "Adding #{path}, where the bundle of #{gemfile} is installed, to the gem path"
+      Gem.paths = { "GEM_HOME" => Gem.dir, "GEM_PATH" => (Gem.path + [path]).join(File::PATH_SEPARATOR) }
+    end
+
+    # Ruby run in a child process to print where Bundler installs the bundle
+    # of BUNDLE_GEMFILE, or nothing when that is the system gems.
+    BUNDLE_PATH_QUERY = <<~RUBY
+      require "bundler"
+      print Bundler.bundle_path unless Bundler.configured_bundle_path.use_system_gems?
+    RUBY
+    private_constant :BUNDLE_PATH_QUERY
+
+    # The directory the bundle of the given Gemfile is installed into when
+    # that is not the system gems, or nil. Bundler decides it from its
+    # settings - .bundle/config beside the Gemfile, the user's configuration
+    # and BUNDLE_* variables - without evaluating the Gemfile.
+    #
+    # Asked in a child process: loading Bundler here, before the dependency
+    # run, would put Bundler's files among the script's loaded features and
+    # pack them into every application with a Gemfile.
+    def bundle_install_path(gemfile)
+      env = { "BUNDLE_GEMFILE" => gemfile.to_s, "RUBYOPT" => nil, "BUNDLER_SETUP" => nil }
+      path = IO.popen(env, [RbConfig.ruby, "-e", BUNDLE_PATH_QUERY], err: File::NULL, &:read)
+      return nil unless $?.success? && !path.empty? && File.directory?(path)
+
+      path
+    rescue SystemCallError => e
+      verbose "Could not ask Bundler where the bundle of #{gemfile} is installed: #{e.message}"
+      nil
+    end
+
     # The Gemfile this process was started against, if any.
     def active_bundler_gemfile
       return ENV["BUNDLE_GEMFILE"] unless ENV["BUNDLE_GEMFILE"].to_s.empty?
@@ -153,6 +216,24 @@ module Ocran
     end
 
     def build
+      # Native compilation hands the source to an ahead-of-time compiler, and
+      # --wasm to a WebAssembly runtime; nothing was loaded, and none of the
+      # packaging below applies.
+      if @option.spinel? || @option.roundhouse? || @option.wasm_runtime
+        Dir.chdir(@pre_env.pwd)
+        if @option.wasm_runtime
+          require_relative "wasm_builder"
+          WasmBuilder.new(@option).build
+        elsif @option.roundhouse?
+          require_relative "roundhouse_builder"
+          RoundhouseBuilder.new(@option).build
+        else
+          require_relative "spinel_builder"
+          SpinelBuilder.new(@option).build
+        end
+        return
+      end
+
       # If the script was run and autoload is enabled, attempt to autoload libraries.
       if @option.force_autoload?
         attempt_load_autoload(@ignore_modules)
@@ -173,8 +254,10 @@ module Ocran
 
       if @option.use_inno_setup?
         # Native on Windows; on POSIX allow it when an ISCC command is
-        # available (e.g. via Wine wrapper scripts or in tests).
-        if Gem.win_platform? || system("command -v ISCC > /dev/null 2>&1")
+        # available (e.g. via Wine wrapper scripts or in tests). Checked
+        # here, before the files are collected, so a missing ISCC fails fast.
+        require_relative "inno_setup_script_builder"
+        if InnoSetupScriptBuilder.iscc_available?
           direction.build_inno_setup_installer
         else
           raise "Inno Setup is only supported on Windows (no ISCC command found in PATH)"
@@ -190,8 +273,8 @@ module Ocran
       else
         direction.build_stab_exe
       end
-    rescue RuntimeError => e
-      fatal_error e.message
+    rescue *USER_ERRORS => e
+      user_error e
     end
   end
 end
