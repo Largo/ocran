@@ -121,6 +121,53 @@ jobs:
           chmod +x zlib_packed
           ./zlib_packed
 
+  # --spinel against the real compiler: Spinel is built from source (a few
+  # minutes, cached by its revision) and the end-to-end test compiles the
+  # fixture and runs the binary. The other jobs skip that test because the
+  # runners have no Spinel.
+  test-spinel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          cache-version: 1
+
+      - name: Check out Spinel
+        uses: actions/checkout@v4
+        with:
+          repository: matz/spinel
+          path: spinel-src
+
+      - name: Spinel revision
+        id: spinel
+        run: echo "sha=$(git -C spinel-src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Spinel build
+        id: cache-spinel
+        uses: actions/cache@v4
+        with:
+          path: ~/.local
+          key: spinel-${{ runner.os }}-${{ steps.spinel.outputs.sha }}
+
+      - name: Build and install Spinel
+        if: steps.cache-spinel.outputs.cache-hit != 'true'
+        run: |
+          cd spinel-src
+          make deps
+          make -j"$(nproc)"
+          make install PREFIX="$HOME/.local"
+
+      - name: Run the native compilation tests
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          spinel --version
+          bundle exec ruby -Ilib:test test/test_native_compilation.rb --verbose
+
   test-source-gem-install:
     strategy:
       fail-fast: false
