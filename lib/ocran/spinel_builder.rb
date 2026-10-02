@@ -172,8 +172,10 @@ module Ocran
       nil
     end
 
+    # Relative to the working directory when inside it, else absolute.
     def display(path)
-      Pathname(path).relative_path_from(Pathname.pwd).to_s
+      rel = Pathname(path).relative_path_from(Pathname.pwd).to_s
+      rel.start_with?("..") ? path.to_s : rel
     rescue ArgumentError
       path.to_s
     end

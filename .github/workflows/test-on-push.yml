@@ -168,6 +168,36 @@ jobs:
           spinel --version
           bundle exec ruby -Ilib:test test/test_native_compilation.rb --verbose
 
+  # --wasm against the real runtimes: ruby.wasm and PicoRuby from npm, rbwasm
+  # from the ruby_wasm gem, and the exports run under Node. The other jobs
+  # skip those tests because they have no ruby_wasm.
+  test-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          cache-version: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cache the runtimes from npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ocran/npm
+          key: ocran-npm-${{ hashFiles('lib/ocran/wasm_builder.rb') }}
+
+      - name: Install ruby_wasm
+        run: gem install ruby_wasm --no-document
+
+      - name: Run the WebAssembly export tests
+        run: bundle exec ruby -Ilib:test test/test_wasm_export.rb --verbose
+
   test-source-gem-install:
     strategy:
       fail-fast: false

@@ -48,6 +48,11 @@ module Ocran
         :spinel_options => [],
         :verbose? => false,
         :warning? => true,
+        :wasm_options => [],
+        :wasm_output => nil,
+        :wasm_ruby => nil,
+        :wasm_runtime => nil,
+        :wasm_zip? => false,
         :wrapper_exe? => true,
       }
     end
@@ -175,6 +180,26 @@ Native compilation (experimental):
                    support. Requires roundhouse, spinel and spin.
 --roundhouse-opt <arg>  Pass <arg> to roundhouse (repeatable), e.g.
                    --roundhouse-opt --survey
+
+WebAssembly (experimental):
+
+--wasm[=ruby|picoruby]  Export the application as a web page that runs it
+                   in the browser on WebAssembly: a folder (default
+                   <scriptname>-wasm, or --output-dir) or a zip archive
+                   (--output-zip, or an --output name ending in .zip) with
+                   index.html, the runtime and the application.
+                   ruby: ruby.wasm, CRuby with its standard library; needs
+                   rbwasm (gem install ruby_wasm). Gems must be listed in
+                   the application's Gemfile.
+                   picoruby: PicoRuby, a 2 MB mruby-based runtime with its
+                   own small library and no gems; needs nothing installed.
+                   OCRAN reports what in the program and its gems may not
+                   work there. The script is not run at build time.
+--picoruby         Same as --wasm=picoruby.
+--wasm-ruby <x.y>  The CRuby version for --wasm (4.0, 3.4, 3.3 or 3.2;
+                   default: this Ruby's, when ruby.wasm has it).
+--wasm-opt <arg>   Pass <arg> to `rbwasm build` (repeatable), used when the
+                   application has gems.
 EOF
     end
 
@@ -253,6 +278,21 @@ EOF
           @options[:spinel_options] << arg
         when "--roundhouse"
           @options[:roundhouse?] = true
+        when /\A--wasm(?:=(.*))?\z/
+          runtime = $1.nil? || $1.empty? ? "ruby" : $1
+          @options[:wasm_runtime] =
+            case runtime
+            when "ruby", "ruby.wasm", "cruby" then :ruby
+            when "picoruby" then :picoruby
+            else raise "Unknown --wasm runtime #{runtime.inspect} (use --wasm=ruby or --wasm=picoruby)"
+            end
+        when "--picoruby"
+          @options[:wasm_runtime] = :picoruby
+        when "--wasm-ruby"
+          @options[:wasm_ruby] = argv.shift or raise "--wasm-ruby requires a version (e.g. 3.4)"
+        when "--wasm-opt"
+          arg = argv.shift or raise "--wasm-opt requires an argument"
+          @options[:wasm_options] << arg
         when "--roundhouse-opt"
           arg = argv.shift or raise "--roundhouse-opt requires an argument"
           @options[:roundhouse_options] << arg
@@ -324,6 +364,10 @@ EOF
       raise "No script file specified" if source_files.empty?
 
       @options[:script] = source_files.first
+
+      if wasm_runtime
+        parse_wasm
+      end
 
       if spinel?
         reject_with_native_compilation("--spinel", output_dir: "--output-dir")
@@ -434,6 +478,27 @@ EOF
       end
     end
 
+    # Validates --wasm and works out where the site goes: a zip archive for
+    # --output-zip or an --output name ending in .zip, a folder otherwise.
+    def parse_wasm
+      mode = wasm_runtime == :picoruby ? "--wasm=picoruby" : "--wasm"
+      reject_with_native_compilation(mode, output_zip: false)
+      raise "#{mode} cannot be used with --spinel or --roundhouse" if spinel? || roundhouse?
+      raise "--output-dir and --output-zip cannot be used together" if output_dir && output_zip
+
+      suffix = wasm_runtime == :picoruby ? "-picoruby" : "-wasm"
+      if output_zip || output_override&.extname?(".zip")
+        @options[:wasm_zip?] = true
+        @options[:wasm_output] = output_zip || output_override
+      else
+        @options[:wasm_output] = output_dir || output_override ||
+                                 Pathname("#{script.basename(".*")}#{suffix}").expand_path
+      end
+      # Nothing runs at build time: the browser is where the program runs.
+      @options[:run_script?] = false
+    end
+    private :parse_wasm
+
     # Validates --roundhouse and works out the application and the output
     # directory.
     def parse_roundhouse
@@ -469,16 +534,16 @@ EOF
 
     # Native compilation produces a program, not a package of one, so the
     # options that shape a package do not apply to it.
-    def reject_with_native_compilation(mode, output_dir: nil)
+    def reject_with_native_compilation(mode, output_dir: nil, output_zip: true)
       conflicts = {
         "--innosetup" => inno_setup_script,
         "--macosx-bundle" => @options[:macosx_bundle?],
-        "--output-zip" => output_zip,
         "--cosmo/--cosmo-ruby" => cosmo?,
         "--windows" => force_windows?,
         "--icon" => icon_filename,
       }
       conflicts[output_dir] = self.output_dir if output_dir
+      conflicts["--output-zip"] = self.output_zip if output_zip
       conflicts.each do |name, given|
         raise "#{name} cannot be used with #{mode}" if given
       end
@@ -573,6 +638,18 @@ EOF
     def spinel? = @options[__method__]
 
     def spinel_options = @options[__method__]
+
+    # :ruby (ruby.wasm) or :picoruby with --wasm, else nil.
+    def wasm_runtime = @options[__method__]
+
+    def wasm_options = @options[__method__]
+
+    def wasm_ruby = @options[__method__]
+
+    # The folder or zip archive --wasm writes.
+    def wasm_output = @options[__method__]
+
+    def wasm_zip? = @options[__method__]
 
     def run_script? = @options[__method__]
 

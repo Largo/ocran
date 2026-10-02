@@ -206,11 +206,15 @@ module Ocran
     end
 
     def build
-      # Native compilation hands the source to an ahead-of-time compiler;
-      # nothing was loaded, and none of the packaging below applies.
-      if @option.spinel? || @option.roundhouse?
+      # Native compilation hands the source to an ahead-of-time compiler, and
+      # --wasm to a WebAssembly runtime; nothing was loaded, and none of the
+      # packaging below applies.
+      if @option.spinel? || @option.roundhouse? || @option.wasm_runtime
         Dir.chdir(@pre_env.pwd)
-        if @option.roundhouse?
+        if @option.wasm_runtime
+          require_relative "wasm_builder"
+          WasmBuilder.new(@option).build
+        elsif @option.roundhouse?
           require_relative "roundhouse_builder"
           RoundhouseBuilder.new(@option).build
         else
