@@ -446,13 +446,16 @@ There are two runtimes:
   CRuby compiled to WebAssembly, with its whole standard library (about
   30 MB). It needs `rbwasm` from the `ruby_wasm` gem (`gem install ruby_wasm`;
   OCRAN also uses `RBWASM` when it is set).
-  * Without gems, OCRAN packs your files into the prebuilt interpreter from
-    npm, which takes seconds.
-  * Gems must be listed in the application's Gemfile and installed. With
-    gems, OCRAN runs `rbwasm build`. Its first run compiles CRuby and the
-    gems for WebAssembly, which takes several minutes, and is cached in
-    `~/.cache/ocran/ruby_wasm`. Gems with C extensions are cross-compiled
-    for WASI, and the ones that link system libraries usually fail.
+  * OCRAN packs your files into the prebuilt interpreter from npm, which
+    takes seconds. Gems must be listed in the application's Gemfile and
+    installed (`bundle install`); pure-Ruby gems are packed in beside your
+    files, at `/gems`, and put on the load path in place of
+    `bundler/setup`, so `require "bundler/setup"` in your program is fine.
+  * Only when a gem has a C extension does OCRAN run `rbwasm build`. Its
+    first run compiles CRuby and the gems for WebAssembly, which takes
+    several minutes, and is cached in `~/.cache/ocran/ruby_wasm`. The
+    extensions are cross-compiled for WASI, and the ones that link system
+    libraries usually fail.
   * The Ruby version follows the Ruby you run OCRAN with. Use
     `--wasm-ruby 3.4` to choose another one. Pass extra flags to
     `rbwasm build` with `--wasm-opt <arg>`.

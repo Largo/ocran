@@ -6,11 +6,12 @@ require "open3"
 require "rbconfig"
 require "bundler"
 require_relative "../lib/ocran/wasm_compatibility"
+require_relative "../lib/ocran/aot_toolchain"
 
 # Tests for --wasm. The runtimes come from npm; these tests put stand-in
 # files into OCRAN's npm cache (XDG_CACHE_HOME) and a stand-in rbwasm in
-# RBWASM, so they run offline and without ruby_wasm installed. Whether the
-# exported page really runs is checked by hand in a browser.
+# RBWASM, so they run offline and without ruby_wasm installed. The tests
+# at the end run the real exports under Node where the tools are there.
 class TestWasmExport < Minitest::Test
   OcranRoot = File.expand_path("..", __dir__)
   FixturePath = File.join(__dir__, "fixtures")
@@ -66,7 +67,7 @@ class TestWasmExport < Minitest::Test
   end
 
   def test_ruby_wasm_scan_flags_platform_gaps
-    analysis = scan(::Ocran::RubyWasmCompatibility, <<~RUBY, gemfile_gems: [])
+    analysis = scan(::Ocran::RubyWasmCompatibility, <<~RUBY, bundle: [])
       require "json"
       require "net/http"
       system("ls")
@@ -92,13 +93,13 @@ class TestWasmExport < Minitest::Test
                  .find { |f| Gem::Specification.find_by_path(f) == spec }
     skip "#{spec.name} has no top-level feature" unless feature
 
-    without = scan(::Ocran::RubyWasmCompatibility, "require #{feature.inspect}\n", gemfile_gems: nil)
+    without = scan(::Ocran::RubyWasmCompatibility, "require #{feature.inspect}\n", bundle: nil)
     assert_match(/the application has no Gemfile/, without.report)
 
-    unlisted = scan(::Ocran::RubyWasmCompatibility, "require #{feature.inspect}\n", gemfile_gems: ["other"])
+    unlisted = scan(::Ocran::RubyWasmCompatibility, "require #{feature.inspect}\n", bundle: [])
     assert_match(/not in the application's Gemfile\.lock/, unlisted.report)
 
-    listed = scan(::Ocran::RubyWasmCompatibility, "require #{feature.inspect}\n", gemfile_gems: [spec.name])
+    listed = scan(::Ocran::RubyWasmCompatibility, "require #{feature.inspect}\n", bundle: [spec])
     refute_match(/Gemfile/, listed.report)
   end
 
@@ -150,8 +151,9 @@ class TestWasmExport < Minitest::Test
     %w[index.html wasm.rb picoruby.wasm].each { |name| assert_includes zip, name }
   end
 
-  # A stand-in for rbwasm: `pack` logs its arguments and copies its input
-  # module to the -o path.
+  # A stand-in for rbwasm: `pack` logs its arguments, copies its input
+  # module to the -o path and keeps a copy of each --dir it was given under
+  # @tmp/packed/<guest dir>.
   def fake_rbwasm
     path = File.join(@tmp, "rbwasm")
     File.write(path, <<~SH)
@@ -160,6 +162,11 @@ class TestWasmExport < Minitest::Test
       input="$2"
       while [ $# -gt 0 ]; do
         if [ "$1" = "-o" ]; then out="$2"; shift; fi
+        if [ "$1" = "--dir" ]; then
+          host="${2%%::*}"; guest="${2##*::}"
+          mkdir -p "#{@tmp}/packed" && cp -r "$host" "#{@tmp}/packed/${guest#/}"
+          shift
+        fi
         shift
       done
       cp "$input" "$out"
@@ -168,9 +175,7 @@ class TestWasmExport < Minitest::Test
     path
   end
 
-  def test_ruby_wasm_export_packs_sources
-    posix_only
-    dir = fixture("wasm")
+  def cache_ruby_wasm
     version = RUBY_VERSION.split(".").first(2).join(".")
     version = "4.0" unless %w[4.0 3.4 3.3 3.2].include?(version)
     ruby_wasm = begin
@@ -180,6 +185,12 @@ class TestWasmExport < Minitest::Test
     end
     cache_npm("@ruby/#{version}-wasm-wasi", ruby_wasm, "dist/ruby+stdlib.wasm" => "prebuilt ruby")
     cache_npm("@ruby/wasm-wasi", ruby_wasm, "dist/browser.umd.js" => "// umd")
+  end
+
+  def test_ruby_wasm_export_packs_sources
+    posix_only
+    dir = fixture("wasm")
+    cache_ruby_wasm
 
     out, status = ocran(dir, "wasm.rb", "--wasm", "--output-dir", "site", env: { "RBWASM" => fake_rbwasm })
     assert status.success?, out
@@ -196,6 +207,95 @@ class TestWasmExport < Minitest::Test
     assert_match(/DefaultRubyVM/, html)
     assert_match(%r{/src/wasm\.rb}, html)
     refute_match(%r{/bundle/setup}, html)
+    refute_match(%r{/gems/setup}, html)
+  end
+
+  # A pure-Ruby gem from the Gemfile is packed into the prebuilt interpreter
+  # rather than built: the gem's files at /gems, and a setup file on the
+  # page that puts them on the load path in place of bundler/setup.
+  def test_ruby_wasm_export_packs_pure_gems
+    posix_only
+    dir = fixture("wasm_gems")
+    cache_ruby_wasm
+
+    out, status = ocran(dir, "wasm_gems.rb", "--wasm", "--output-dir", "site", env: { "RBWASM" => fake_rbwasm })
+    assert status.success?, out
+    assert_match(/Packing the gems of Gemfile into the module \(shouter\)/, out)
+    refute_match(/rbwasm build|Building ruby\.wasm/, out)
+
+    args = File.read(File.join(@tmp, "rbwasm-args")).lines(chomp: true)
+    assert_equal "pack", args.first
+    guests = args.each_cons(2).select { |flag, _| flag == "--dir" }.map { |_, dir| dir.split("::").last }
+    assert_equal ["/src", "/gems"], guests
+
+    packed = File.join(@tmp, "packed", "gems")
+    assert File.file?(File.join(packed, "shouter-0.1.0", "lib", "shouter.rb")), "gem not packed:\n#{out}"
+    assert File.file?(File.join(packed, ".shims", "bundler", "setup.rb"))
+    setup = File.read(File.join(packed, "setup.rb"))
+    assert_match(%r{\$LOAD_PATH\.unshift\("/gems/shouter-0\.1\.0/lib", "/gems/\.shims"\)}, setup)
+    assert_includes File.read(File.join(dir, "site", "index.html")), "/gems/setup.rb"
+    refute_match(/gemspec|unlikely to run/, out)
+  end
+
+  # --- The real runtimes -------------------------------------------------
+  #
+  # These export with the real rbwasm and the runtimes from npm (downloaded
+  # into the user's cache on the first run), then run the export under Node
+  # with the same loader the page uses: test/support/run_ruby_wasm.js and
+  # run_picoruby.js. They skip where Node or rbwasm is missing.
+
+  def node
+    @node ||= ::Ocran::AotToolchain.search_path("node") or skip "Node is not installed"
+  end
+
+  def real_rbwasm
+    bin = begin
+      Gem.bin_path("ruby_wasm", "rbwasm")
+    rescue Gem::LoadError, Gem::Exception
+      ::Ocran::AotToolchain.search_path("rbwasm")
+    end
+    bin or skip "the ruby_wasm gem is not installed"
+  end
+
+  def run_export(runner, site)
+    Open3.capture2e(node, File.join(__dir__, "support", runner), site)
+  end
+
+  def test_ruby_wasm_export_runs_under_node
+    node
+    real_rbwasm
+    dir = fixture("wasm")
+    out, status = ocran(dir, "wasm.rb", "--wasm", "--output-dir", "site", env: { "XDG_CACHE_HOME" => nil })
+    assert status.success?, out
+
+    run_out, run_status = run_export("run_ruby_wasm.js", File.join(dir, "site"))
+    assert run_status.success?, run_out
+    assert_match(/Hello, WebAssembly!\n+14\n/, run_out)
+  end
+
+  def test_ruby_wasm_export_with_gems_runs_under_node
+    node
+    real_rbwasm
+    dir = fixture("wasm_gems")
+    out, status = ocran(dir, "wasm_gems.rb", "--wasm", "--output-dir", "site", env: { "XDG_CACHE_HOME" => nil })
+    assert status.success?, out
+    refute_match(/Building ruby\.wasm/, out)
+
+    run_out, run_status = run_export("run_ruby_wasm.js", File.join(dir, "site"))
+    assert run_status.success?, run_out
+    assert_match(/HELLO FROM A GEM! \(shouter 0\.1\.0\)/, run_out)
+    assert_match(/{"gems":1}/, run_out)
+  end
+
+  def test_picoruby_export_runs_under_node
+    node
+    dir = fixture("wasm")
+    out, status = ocran(dir, "wasm.rb", "--picoruby", env: { "XDG_CACHE_HOME" => nil })
+    assert status.success?, out
+
+    run_out, run_status = run_export("run_picoruby.js", File.join(dir, "wasm-picoruby"))
+    assert run_status.success?, run_out
+    assert_equal "Hello, WebAssembly!\n14\n", run_out
   end
 
   def test_wasm_option_validation

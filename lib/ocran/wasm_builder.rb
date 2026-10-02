@@ -19,10 +19,12 @@ module Ocran
   # ruby (the default) - ruby.wasm (https://github.com/ruby/ruby.wasm),
   #   CRuby with its whole standard library compiled to WebAssembly. The
   #   application's files are packed into the interpreter's module with
-  #   rbwasm (gem install ruby_wasm), at /src. Without gems that is the
-  #   prebuilt interpreter from npm and a pack, which takes seconds; gems
-  #   listed in the application's Gemfile need `rbwasm build`, which
-  #   compiles CRuby and the gems for WebAssembly once and caches it.
+  #   rbwasm (gem install ruby_wasm), at /src. The interpreter is the
+  #   prebuilt one from npm, and the gems of the application's Gemfile are
+  #   packed in beside the sources, at /gems, with a setup file that puts
+  #   them on the load path in place of bundler/setup; that takes seconds.
+  #   Only a gem with a C extension needs `rbwasm build`, which compiles
+  #   CRuby and the gems for WebAssembly once and caches it.
   #
   # picoruby - PicoRuby (https://github.com/picoruby/picoruby), the mruby
   #   based Ruby for microcontrollers, whose WebAssembly build is 2 MB
@@ -82,7 +84,8 @@ module Ocran
 
     def build_ruby_wasm(work, site)
       gemfile = @option.application_gemfile
-      analysis = RubyWasmCompatibility.new(@script, gemfile_gems: locked_gems(gemfile),
+      bundle = gemfile ? resolve_bundle(gemfile) : []
+      analysis = RubyWasmCompatibility.new(@script, bundle: gemfile && bundle.map { |gem| bundle_spec(gem) },
                                                     project_dirs: project_dirs).analyze
 
       rbwasm = find_rbwasm
@@ -105,32 +108,119 @@ module Ocran
       npm_version = ruby_wasm_version
       verbose "Using rbwasm #{npm_version} at #{rbwasm.last}, Ruby #{ruby_version}"
 
-      with_gems = needs_gems?(analysis, gemfile)
-      base = if with_gems
-               build_with_gems(rbwasm, gemfile, ruby_version, work, analysis)
-             else
-               say "Using the prebuilt ruby.wasm (Ruby #{ruby_version} with its standard library)"
-               NpmPackage.fetch("@ruby/#{ruby_version}-wasm-wasi", npm_version, ["dist/ruby+stdlib.wasm"]) { |s| say s }
+      native = bundle.select { |gem| gem["native"] }
+      dirs = []
+      if native.empty?
+        say "Using the prebuilt ruby.wasm (Ruby #{ruby_version} with its standard library)"
+        base = NpmPackage.fetch("@ruby/#{ruby_version}-wasm-wasi", npm_version, ["dist/ruby+stdlib.wasm"]) { |s| say s }
                          .fetch("dist/ruby+stdlib.wasm")
-             end
+        setup = nil
+        unless bundle.empty?
+          say "Packing the gems of #{display(gemfile)} into the module (#{bundle.map { |g| g["name"] }.join(", ")})"
+          gems = File.join(work, "gems")
+          stage_gems(gems, bundle)
+          dirs.push("--dir", "#{gems}::#{GEMS_MOUNT}")
+          setup = GEMS_SETUP
+        end
+      else
+        base = build_with_gems(rbwasm, gemfile, ruby_version, work, analysis, native.map { |g| g["name"] })
+        setup = "/bundle/setup"
+      end
 
       src = File.join(work, "src")
       main = stage_sources(src, analysis)
       say "Packing #{display(@script)} into the WebAssembly module"
-      run_or_fail([*rbwasm, "pack", base, "--dir", "#{src}::/src", "-o", File.join(site, "app.wasm")],
+      run_or_fail([*rbwasm, "pack", base, "--dir", "#{src}::/src", *dirs, "-o", File.join(site, "app.wasm")],
                   "rbwasm could not pack the application", analysis)
 
       runtime = NpmPackage.fetch("@ruby/wasm-wasi", npm_version, ["dist/browser.umd.js"]) { |s| say s }
       FileUtils.cp(runtime.fetch("dist/browser.umd.js"), File.join(site, "browser.umd.js"))
-      File.write(File.join(site, "index.html"), ruby_wasm_html("/src/#{main}", gems: with_gems))
+      File.write(File.join(site, "index.html"), ruby_wasm_html("/src/#{main}", setup: setup))
+    end
+
+    # Where the gems are packed inside the module, and the file that puts
+    # them on the load path. It is required in place of bundler/setup,
+    # which has no Gemfile to read in the browser; a shim makes the
+    # application's own `require "bundler/setup"` a no-op as well.
+    GEMS_MOUNT = "/gems"
+    GEMS_SETUP = "/gems/setup.rb"
+
+    # Directories of a gem that an application never loads.
+    GEM_SKIP = %w[test spec features benchmark benchmarks .git .github].freeze
+
+    # Ruby run in a child process to list the gems of BUNDLE_GEMFILE as
+    # Bundler resolves them: every gem of the lock, with where it is
+    # installed. Bundler is asked in a child so that it never loads here.
+    BUNDLE_QUERY = <<~RUBY
+      require "bundler"
+      require "json"
+      specs = Bundler.definition.specs.reject { |s| s.name == "bundler" }
+      puts JSON.generate(specs.map { |s|
+        default = s.respond_to?(:default_gem?) && s.default_gem?
+        { "name" => s.name, "version" => s.version.to_s, "path" => s.full_gem_path,
+          "require_paths" => s.full_require_paths, "default" => default,
+          "native" => !s.extensions.empty? || s.platform.to_s != "ruby" }
+      })
+    RUBY
+    private_constant :BUNDLE_QUERY
+
+    # The gems the application's Gemfile.lock resolves to, as hashes (see
+    # BUNDLE_QUERY), without the default gems: ruby.wasm's standard library
+    # has those already.
+    def resolve_bundle(gemfile)
+      lockfile = Pathname("#{gemfile}.lock")
+      lockfile = gemfile.dirname + "gems.locked" if gemfile.basename.to_s == "gems.rb"
+      return [] unless lockfile.file?
+
+      env = { "BUNDLE_GEMFILE" => gemfile.to_s, "RUBYOPT" => nil, "BUNDLER_SETUP" => nil, "BUNDLE_LOCKFILE" => nil }
+      output, status = Open3.capture2e(env, RbConfig.ruby, "-e", BUNDLE_QUERY, chdir: File.dirname(gemfile))
+      unless status.success?
+        STDERR.puts "Bundler could not resolve the gems of #{display(gemfile)}:"
+        STDERR.puts output.lines.last(MAX_OUTPUT_LINES).map { |l| "  #{l}" }.join
+        STDERR.puts
+        STDERR.puts "The gems have to be installed for this Ruby: run `bundle install` in #{display(File.dirname(gemfile))}."
+        raise "the application's gems could not be resolved"
+      end
+      JSON.parse(output.lines.last).reject { |gem| gem["default"] }
+    end
+
+    # Copies the gems into dir, each under name-version, and writes the
+    # setup file that puts their require paths on the load path.
+    def stage_gems(dir, bundle)
+      load_paths = bundle.flat_map do |gem|
+        home = File.join(dir, "#{gem["name"]}-#{gem["version"]}")
+        copy_gem(gem["path"], home)
+        gem["require_paths"].map do |path|
+          rel = Pathname(path).relative_path_from(Pathname(gem["path"])).to_s
+          File.join(GEMS_MOUNT, File.basename(home), rel == "." ? "" : rel).chomp("/")
+        end
+      end
+
+      shim = File.join(dir, ".shims", "bundler")
+      FileUtils.mkdir_p(shim)
+      File.write(File.join(shim, "setup.rb"), "# The gems are on the load path already; see #{GEMS_SETUP}.\n")
+      File.write(File.join(dir, "setup.rb"), <<~RUBY)
+        # Written by OCRAN: the application's gems, packed at #{GEMS_MOUNT}, take the
+        # place of the bundle. Required before the program instead of bundler/setup.
+        $LOAD_PATH.unshift(#{(load_paths + [File.join(GEMS_MOUNT, ".shims")]).map(&:inspect).join(", ")})
+      RUBY
+    end
+
+    def copy_gem(from, to)
+      FileUtils.mkdir_p(to)
+      Dir.children(from).each do |entry|
+        next if GEM_SKIP.include?(entry)
+
+        FileUtils.cp_r(File.join(from, entry), File.join(to, entry))
+      end
     end
 
     # `rbwasm build` compiles CRuby for WebAssembly together with the gems
     # the Gemfile lists, under /bundle. Its downloads and build trees are
     # kept in OCRAN's cache, so only the first build is slow.
-    def build_with_gems(rbwasm, gemfile, ruby_version, work, analysis)
-      gems = analysis.gems.values.reject(&:stdlib).map(&:name)
-      say "Building ruby.wasm with the gems of #{display(gemfile)} (#{gems.join(", ")})"
+    def build_with_gems(rbwasm, gemfile, ruby_version, work, analysis, native)
+      say "Building ruby.wasm with the gems of #{display(gemfile)}: #{native.join(", ")} " \
+          "#{native.size == 1 ? "has" : "have"} a C extension, which the prebuilt interpreter cannot load"
       say "The first build compiles CRuby for WebAssembly and takes several minutes; later builds reuse it"
 
       cache = File.join(cache_dir, "ruby_wasm")
@@ -153,21 +243,16 @@ module Ocran
       output
     end
 
-    def needs_gems?(analysis, gemfile)
-      gemfile && analysis.gems.values.any? { |gem| !gem.stdlib }
-    end
-
-    # Names of the gems in the application's Gemfile.lock, or nil without a
-    # Gemfile. Read without Bundler, which would otherwise be packed into
-    # nothing here but still pulls its settings in.
-    def locked_gems(gemfile)
-      return nil unless gemfile
-
-      lockfile = Pathname("#{gemfile}.lock")
-      lockfile = gemfile.dirname + "gems.locked" if gemfile.basename.to_s == "gems.rb"
-      return [] unless lockfile.file?
-
-      lockfile.read.scan(/^    ([^\s(]+) \(/).flatten.uniq
+    # A specification standing for a gem of the bundle, for the scan: the
+    # gem's name, version, require paths and whether it has an extension.
+    def bundle_spec(gem)
+      home = Pathname(gem["path"])
+      Gem::Specification.new do |s|
+        s.name = gem["name"]
+        s.version = gem["version"]
+        s.require_paths = gem["require_paths"].map { |path| Pathname(path).relative_path_from(home).to_s }
+        s.extensions = ["ext/extconf.rb"] if gem["native"]
+      end.tap { |s| s.full_gem_path = gem["path"] }
     end
 
     # The rbwasm command: the RBWASM environment variable, else through this
@@ -389,8 +474,10 @@ module Ocran
 
     # --- Pages ----------------------------------------------------------
 
-    def ruby_wasm_html(main, gems:)
-      setup = gems ? %(require "/bundle/setup"\n) : ""
+    # setup: a feature to require before the program, which puts its gems
+    # on the load path (GEMS_SETUP, or /bundle/setup after rbwasm build).
+    def ruby_wasm_html(main, setup:)
+      setup = setup ? %(require #{setup.inspect}\n) : ""
       ruby = <<~RUBY
         #{setup}$0 = #{main.inspect}
         Dir.chdir(File.dirname($0))

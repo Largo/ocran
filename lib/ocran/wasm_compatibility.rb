@@ -31,11 +31,12 @@ module Ocran
 
     PROCESS_CALLS = %i[system spawn exec fork].freeze
 
-    # gemfile_gems: names of the gems the application's Gemfile.lock lists,
-    #               or nil when it has no Gemfile
-    def initialize(script, gemfile_gems: nil, project_dirs: nil)
+    # bundle: the Gem::Specifications of the application's Gemfile.lock, as
+    #         Bundler resolves them (so a gem installed from a path is among
+    #         them), or nil when it has no Gemfile
+    def initialize(script, bundle: nil, project_dirs: nil)
       super(script, project_dirs: project_dirs)
-      @gemfile_gems = gemfile_gems
+      @bundle = bundle
     end
 
     def target = "ruby.wasm"
@@ -57,12 +58,19 @@ module Ocran
 
     def missing_stdlib_message(_name) = nil
 
+    # The bundle's own gems first: a gem Bundler installs from a path or a
+    # git checkout is not among the installed gems.
+    def find_gem(feature)
+      (@bundle || []).find { |spec| spec.full_require_paths.any? { |dir| File.file?(File.join(dir, "#{feature}.rb")) } } ||
+        super
+    end
+
     def gem_problem(gem)
       return nil if gem.stdlib
 
-      if @gemfile_gems.nil?
+      if @bundle.nil?
         [:error, "the application has no Gemfile, and ruby.wasm only contains the gems a Gemfile lists"]
-      elsif !@gemfile_gems.include?(gem.name)
+      elsif @bundle.none? { |spec| spec.name == gem.name }
         [:error, "not in the application's Gemfile.lock, and ruby.wasm only contains the gems it lists"]
       elsif gem.native
         [:warning, "has a C extension, which rbwasm cross-compiles for WASI; extensions that link system " \
