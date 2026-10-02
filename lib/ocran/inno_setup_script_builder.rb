@@ -10,18 +10,18 @@ module Ocran
     ISCC_INVALID_PARAMS = 1
     ISCC_COMPILATION_FAILED = 2
 
-    extend WindowsCommandEscaping
-
     class << self
+      # Whether the ISCC command can be run. On Windows it is invoked
+      # directly and a missing ISCC is reported by compile; on POSIX it is
+      # looked up in PATH (e.g. a Wine wrapper, or a fake ISCC in tests).
+      def iscc_available?
+        return true if Gem.win_platform?
+
+        system("command -v #{ISCC_CMD} > /dev/null 2>&1")
+      end
+
       def compile(iss_filename, quiet: false)
-        # "where" and ">NUL" only exist on Windows; use "command -v" on POSIX
-        # (e.g. when testing the pipeline with a fake ISCC on Linux/macOS).
-        iscc_found = if Gem.win_platform?
-                       true # ISCC is invoked directly; failure is reported below
-                     else
-                       system("command -v #{quote_and_escape(ISCC_CMD)} > /dev/null 2>&1")
-                     end
-        unless iscc_found
+        unless iscc_available?
           raise "ISCC command not found. Is the InnoSetup directory in your PATH?"
         end
 
@@ -101,22 +101,32 @@ module Ocran
       @files.add?(source, target)
     end
 
+    # Inno Setup expands "{...}" as a constant (e.g. {app}) in the Name,
+    # DestDir and DestName parameters, and "{{" is how a literal brace is
+    # written there. Source is read by the compiler, which expands no
+    # constants in it (short of the external flag), so it stays as it is.
+    def escape_braces(s)
+      s.to_s.gsub("{", "{{")
+    end
+    private :escape_braces
+
     def build_dir_item(target)
-      name = File.join("{app}", target)
+      name = File.join("{app}", escape_braces(target))
       "Name: #{quote_and_escape(name)};"
     end
     private :build_dir_item
 
     def build_file_item(source, target)
-      dest_dir = File.join("{app}", File.dirname(target))
+      dest_dir = File.join("{app}", escape_braces(File.dirname(target)))
       s = [
         "Source: #{quote_and_escape(source)};",
         "DestDir: #{quote_and_escape(dest_dir)};"
       ]
       src_name = File.basename(source)
       dest_name = File.basename(target)
-      if src_name != dest_name
-        s << "DestName: #{quote_and_escape(dest_name)};"
+      # A name taken over from Source would be expanded unescaped.
+      if src_name != dest_name || dest_name.include?("{")
+        s << "DestName: #{quote_and_escape(escape_braces(dest_name))};"
       end
       s.join(" ")
     end

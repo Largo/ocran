@@ -6,8 +6,19 @@ module Ocran
     load File.expand_path("command_output.rb", __dir__)
     include CommandOutput
 
-    def fatal_error(statement)
-      error statement
+    # Errors that describe a problem with the input or the build host - an
+    # invalid option, a missing file, a path OCRAN cannot write, a value too
+    # large for the executable format - rather than a bug in OCRAN. They
+    # are reported by their message; a backtrace would only bury it. Any
+    # other exception is a bug and keeps Ruby's full report.
+    USER_ERRORS = [RuntimeError, ArgumentError, SystemCallError, IOError].freeze
+
+    # Reports a USER_ERRORS exception and exits. With --verbose the
+    # backtrace is shown too, for when the message is not enough.
+    def user_error(e)
+      message = e.instance_of?(RuntimeError) ? e.message : "#{e.message} (#{e.class})"
+      error message
+      STDERR.puts e.backtrace.map { |line| "\tfrom #{line}" } if @option&.verbose? && e.backtrace
       exit false
     end
 
@@ -18,11 +29,9 @@ module Ocran
       load File.expand_path("option.rb", __dir__)
       @option = Option.new.tap do |opt|
         opt.parse(ARGV)
-      rescue RuntimeError => e
-        # Capture RuntimeError during parsing and display an appropriate
-        # error message to the user. This error usually occurs from invalid
-        # option arguments.
-        fatal_error e.message
+      rescue *USER_ERRORS => e
+        # Invalid option arguments, usually; report them as such.
+        user_error e
       else
         # Update ARGV with the parsed command line arguments to pass to
         # the user's script. This ensures the script executes based on
@@ -31,6 +40,7 @@ module Ocran
       end
 
       Ocran.option = @option
+      @option.warnings.each { |message| warning message }
 
       @ignore_modules = ObjectSpace.each_object(Module).to_a
     end
@@ -173,8 +183,10 @@ module Ocran
 
       if @option.use_inno_setup?
         # Native on Windows; on POSIX allow it when an ISCC command is
-        # available (e.g. via Wine wrapper scripts or in tests).
-        if Gem.win_platform? || system("command -v ISCC > /dev/null 2>&1")
+        # available (e.g. via Wine wrapper scripts or in tests). Checked
+        # here, before the files are collected, so a missing ISCC fails fast.
+        require_relative "inno_setup_script_builder"
+        if InnoSetupScriptBuilder.iscc_available?
           direction.build_inno_setup_installer
         else
           raise "Inno Setup is only supported on Windows (no ISCC command found in PATH)"
@@ -190,8 +202,8 @@ module Ocran
       else
         direction.build_stab_exe
       end
-    rescue RuntimeError => e
-      fatal_error e.message
+    rescue *USER_ERRORS => e
+      user_error e
     end
   end
 end

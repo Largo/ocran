@@ -151,7 +151,7 @@ These options control which files from included gems are added to the output.
 * `--gem-guess[=gem1,..]`: Include loaded scripts and a best guess of other needed files (DEFAULT).
 * `--gem-all[=gem1,..]`: Include all scripts and important files from the gem.
 * `--gem-full[=gem1,..]`: Include every file in the gem directory.
-* `--gem-spec[=gem1,..]`: Include files listed in the gemspec (not compatible with newer RubyGems).
+* `--gem-spec[=gem1,..]`: Include the files listed in the gemspec.
 
 Fine-tuning flags:
 
@@ -161,7 +161,7 @@ Fine-tuning flags:
 
 #### Auto-detection options:
 
-* `--no-dep-run`: Skip running the script to detect dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies. Requires `--add-all-core` and `--gem-full`.
+* `--no-dep-run`: Skip running the script to detect dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies. Nothing the script loads is detected then, so you usually need `--add-all-core` for the standard library and `--gemfile` with `--gem-full` (or `--gem-all`) for gems; OCRAN warns when they are missing.
 * `--no-autoload`: Do not attempt to load `autoload`ed constants.
 * `--no-autodll`: Disable automatic detection of runtime DLL dependencies.
 
@@ -254,7 +254,8 @@ Fine-tuning flags:
     `__dir__` for that — it never meant "next to the exe" in either
     mode, but here it is obviously wrong instead of subtly wrong.
   * `--chdir-first` changes into the directory containing the
-    executable, since the application directory does not exist on disk.
+    executable, since the application directory does not exist on disk;
+    `--chdir-exe-dir` does the same.
   * The whole command line reaches `ARGV`, unchanged. The interpreter
     claims none of it, so `app.com --version`, `app.com -v` and
     `app.com -- x` behave exactly as they would for a natively compiled
