@@ -1,15 +1,12 @@
 require "rubygems"
 require 'bundler/setup'
-require "hoe"
+require "minitest/test_task"
 
-Hoe.plugin :minitest
+# rake test: runs test/**/test_*.rb. The gems themselves are built from
+# ocran.gemspec and ocran-source.gemspec (see .github/workflows/gem-release.yml).
+Minitest::TestTask.create
 
-Hoe.spec "ocran" do
-  developer "Lars Christensen", "larsch@belunktum.dk"
-  developer "Andi Idogawa", "andi@idogawa.com"
-  license "MIT"
-  self.history_file = "CHANGELOG.txt"
-end
+task :default => :test
 
 WINDOWS = Gem.win_platform?
 STUB_DIR   = "share/ocran"

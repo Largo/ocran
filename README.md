@@ -15,7 +15,7 @@ OCRAN supports four output formats, all cross-platform:
 * **Zip archive** (`--output-zip`) — same as directory output, packed into a `.zip`.
 
 OCRAN is a fork of [OCRA](https://github.com/larsch/ocra) maintained for
-Ruby 3.2+ compatibility.
+Ruby 3.3+ compatibility.
 
 If you run into errors while using OCRAN, please check the [OCRAN issues](https://github.com/largo/ocran/issues) first.
 
@@ -76,7 +76,7 @@ This repository includes `lzma.exe` from the
 [official ip7z/7zip release](https://github.com/ip7z/7zip/releases)
 (version 22.01, from `lzma2201.7z`), used to compress Windows executables.
 
-`stub.exe`, `stubw.exe`, and `edicon.exe` are compiled from source in this
+`stub.exe`, `stubw.exe` and the Linux/macOS `stub` are compiled from source in this
 repository.
 
 ## Installation
@@ -153,7 +153,7 @@ These options control which files from included gems are added to the output.
 * `--gem-guess[=gem1,..]`: Include loaded scripts and a best guess of other needed files (DEFAULT).
 * `--gem-all[=gem1,..]`: Include all scripts and important files from the gem.
 * `--gem-full[=gem1,..]`: Include every file in the gem directory.
-* `--gem-spec[=gem1,..]`: Include files listed in the gemspec (not compatible with newer RubyGems).
+* `--gem-spec[=gem1,..]`: Include the files listed in the gemspec.
 
 Fine-tuning flags:
 
@@ -163,7 +163,7 @@ Fine-tuning flags:
 
 #### Auto-detection options:
 
-* `--no-dep-run`: Skip running the script to detect dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies. Requires `--add-all-core` and `--gem-full`.
+* `--no-dep-run`: Skip running the script to detect dependencies. Use this if your script has side effects during load or if you are manually specifying all dependencies. Nothing the script loads is detected then, so you usually need `--add-all-core` for the standard library and `--gemfile` with `--gem-full` (or `--gem-all`) for gems; OCRAN warns when they are missing.
 * `--no-autoload`: Do not attempt to load `autoload`ed constants.
 * `--no-autodll`: Disable automatic detection of runtime DLL dependencies.
 
@@ -256,7 +256,8 @@ Fine-tuning flags:
     `__dir__` for that — it never meant "next to the exe" in either
     mode, but here it is obviously wrong instead of subtly wrong.
   * `--chdir-first` changes into the directory containing the
-    executable, since the application directory does not exist on disk.
+    executable, since the application directory does not exist on disk;
+    `--chdir-exe-dir` does the same.
   * The whole command line reaches `ARGV`, unchanged. The interpreter
     claims none of it, so `app.com --version`, `app.com -v` and
     `app.com -- x` behave exactly as they would for a natively compiled
@@ -635,10 +636,10 @@ Notes:
 
 ## Requirements
 
-* Ruby 3.2+
+* Ruby 3.3+
 * For building Windows `.exe`: Windows with [RubyInstaller DevKit](https://rubyinstaller.org/downloads/) (mingw-w64), or Wine on Linux/macOS
 * For building Linux and MacOS binaries: the respective build tools
-* For `--output-dir` / `--output-zip`: any platform with Ruby 3.2+
+* For `--output-dir` / `--output-zip`: any platform with Ruby 3.3+
 * For `--output-zip` on Linux/macOS: the `zip` command must be available
 * For `--output-zip` on Windows: PowerShell (included in Windows 8+)
 

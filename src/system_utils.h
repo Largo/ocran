@@ -18,6 +18,18 @@ static inline bool is_path_separator(char c) {
 #endif
 }
 
+/* Length of the root prefix of an absolute path ("/", or "C:\" on
+   Windows), which a parent path never loses; 0 for a relative path. */
+static inline size_t path_root_length(const char *path) {
+#ifdef _WIN32
+    if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
+        && path[1] == ':' && is_path_separator(path[2])) {
+        return 3;
+    }
+#endif
+    return is_path_separator(path[0]) ? 1 : 0;
+}
+
 /**
  * @brief   Check if a path is a “clean” relative path.
  *

@@ -55,6 +55,7 @@ module Ocran
         :wasm_zip? => false,
         :wrapper_exe? => true,
       }
+      @warnings = []
     end
 
     def usage
@@ -81,7 +82,7 @@ Gem content detection modes:
 --gem-guess=[gem1,...]   Include loaded scripts & best guess (DEFAULT)
 --gem-all[=gem1,..]      Include all scripts & files
 --gem-full[=gem1,..]     Include EVERYTHING
---gem-spec[=gem1,..]     Include files in gemspec (Does not work with Rubygems 1.7+)
+--gem-spec[=gem1,..]     Include the files listed in the gemspec
 
   minimal: loaded scripts
   guess: loaded scripts and other files
@@ -98,7 +99,8 @@ Gem content detection modes:
 
 Auto-detection options:
 
---no-dep-run       Don't run script.rb to check for dependencies.
+--no-dep-run       Don't run script.rb to check for dependencies (usually
+                   needs --add-all-core, and --gem-full with --gemfile).
 --no-autoload      Don't load/include script.rb's autoloads.
 --no-autodll       Disable detection of runtime DLL dependencies.
 
@@ -219,6 +221,32 @@ EOF
       load File.expand_path("cosmo_toolchain.rb", __dir__) unless defined? CosmoToolchain
     end
 
+    # The --gem-<group> options GemSpecQueryable.gem_inclusion_set knows,
+    # and the file sets among them that --no-gem-<set> can take away.
+    GEM_GROUPS = %i[minimal guess all full spec scripts files extras].freeze
+    GEM_FILE_SETS = %i[scripts files extras].freeze
+
+    # Warnings about the command line, for the caller to print once output
+    # is set up.
+    attr_reader :warnings
+
+    # The value of an option that takes a path or name: the next argument,
+    # which must be there and must not be empty.
+    def required_argument(argv, option)
+      value = argv.shift
+      raise "#{option} requires an argument" if value.nil? || value.empty?
+
+      value
+    end
+    private :required_argument
+
+    # Whether a --gem-* option makes every gem be packed with all of its
+    # scripts, which is what a build without the dependency run needs.
+    def whole_gems?
+      gem_options.any? { |negate, group, list| list.nil? && !negate && %i[all full spec scripts].include?(group) }
+    end
+    private :whole_gems?
+
     def parse(argv)
       while (arg = argv.shift)
         case arg
@@ -229,23 +257,19 @@ EOF
         when "--add-all-core"
           @options[:add_all_core?] = true
         when "--output"
-          path = argv.shift
-          @options[:output_override] = Pathname.new(path).expand_path if path
+          @options[:output_override] = Pathname.new(required_argument(argv, arg)).expand_path
         when "--output-dir"
-          path = argv.shift
-          @options[:output_dir] = Pathname.new(path).expand_path if path
+          @options[:output_dir] = Pathname.new(required_argument(argv, arg)).expand_path
         when "--output-zip"
-          path = argv.shift
-          @options[:output_zip] = Pathname.new(path).expand_path if path
+          @options[:output_zip] = Pathname.new(required_argument(argv, arg)).expand_path
         when "--no-wrapper-exe"
           @options[:wrapper_exe?] = false
         when "--macosx-bundle"
           @options[:macosx_bundle?] = true
         when "--bundle-id"
-          @options[:bundle_identifier] = argv.shift
+          @options[:bundle_identifier] = required_argument(argv, arg)
         when "--dll"
-          path = argv.shift
-          @options[:extra_dlls] << path if path
+          @options[:extra_dlls] << required_argument(argv, arg)
         when "--quiet"
           @options[:quiet?] = true
         when "--verbose"
@@ -261,21 +285,21 @@ EOF
         when "--chdir-exe-dir"
           @options[:chdir_exe_dir?] = true
         when "--icon"
-          path = argv.shift
-          raise "Icon file #{path} not found" unless path && File.exist?(path)
+          path = required_argument(argv, arg)
+          raise "Icon file #{path} not found" unless File.exist?(path)
           @options[:icon_filename] = Pathname.new(path).expand_path
         when "--rubyopt"
-          @options[:rubyopt] = argv.shift
+          # An empty value is meaningful: run with no RUBYOPT at all.
+          @options[:rubyopt] = argv.shift or raise "#{arg} requires an argument"
         when "--cosmo", "--cosmo-toolchain"
           # Kept unresolved until validation: resolving here would report
           # "cosmocc ... is not executable" on a Windows build host, ahead of
           # the clearer "not supported when building on Windows" check.
-          @options[:cosmo_cc] = argv.shift
+          @options[:cosmo_cc] = required_argument(argv, arg)
         when "--spinel"
           @options[:spinel?] = true
         when "--spinel-opt"
-          arg = argv.shift or raise "--spinel-opt requires an argument"
-          @options[:spinel_options] << arg
+          @options[:spinel_options] << required_argument(argv, arg)
         when "--roundhouse"
           @options[:roundhouse?] = true
         when /\A--wasm(?:=(.*))?\z/
@@ -289,23 +313,21 @@ EOF
         when "--picoruby"
           @options[:wasm_runtime] = :picoruby
         when "--wasm-ruby"
-          @options[:wasm_ruby] = argv.shift or raise "--wasm-ruby requires a version (e.g. 3.4)"
+          @options[:wasm_ruby] = required_argument(argv, arg)
         when "--wasm-opt"
-          arg = argv.shift or raise "--wasm-opt requires an argument"
-          @options[:wasm_options] << arg
+          @options[:wasm_options] << required_argument(argv, arg)
         when "--roundhouse-opt"
-          arg = argv.shift or raise "--roundhouse-opt requires an argument"
-          @options[:roundhouse_options] << arg
+          @options[:roundhouse_options] << required_argument(argv, arg)
         when "--cosmo-ruby"
           load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
         when "--gemfile"
-          path = argv.shift
-          raise "Gemfile #{path} not found" unless path && File.exist?(path)
+          path = required_argument(argv, arg)
+          raise "Gemfile #{path} not found" unless File.exist?(path)
           @options[:gemfile] = Pathname.new(path).expand_path
         when "--innosetup"
-          path = argv.shift
-          raise "Inno Script #{path} not found" unless path && File.exist?(path)
+          path = required_argument(argv, arg)
+          raise "Inno Script #{path} not found" unless File.exist?(path)
           @options[:inno_setup_script] = Pathname.new(path).expand_path
         when "--no-autodll"
           @options[:auto_detect_dlls?] = false
@@ -327,10 +349,18 @@ EOF
           @options[:add_all_encoding?] = !$1
         when /\A--(no-)?gem-(\w+)(?:=(.*))?$/
           negate, group, list = $1, $2, $3
-          @options[:gem_options] << [negate, group.to_sym, list&.split(",")] if group
-        when "--help", "-h", /\A--./
+          group = group.to_sym
+          if negate ? !GEM_FILE_SETS.include?(group) : !GEM_GROUPS.include?(group)
+            raise "Invalid gem content detection option #{arg}: use " \
+                  "#{GEM_GROUPS.map { |g| "--gem-#{g}" }.join(", ")} or " \
+                  "#{GEM_FILE_SETS.map { |g| "--no-gem-#{g}" }.join(", ")}"
+          end
+          @options[:gem_options] << [negate, group, list&.split(",")]
+        when "--help", "-h"
           puts usage
           raise SystemExit
+        when /\A--./
+          raise "Unknown option #{arg} (see ocran --help)"
         else
           @options[:inputs] << arg
         end
@@ -412,6 +442,28 @@ EOF
 
       if chdir_before? && chdir_exe_dir?
         raise "--chdir-first and --chdir-exe-dir cannot be used together"
+      end
+
+      if force_windows? && force_console?
+        raise "--windows and --console cannot be used together"
+      end
+
+      if inno_setup_script && (output_dir || output_zip)
+        raise "--innosetup cannot be combined with --output-dir or --output-zip"
+      end
+
+      unless run_script?
+        # Without the dependency run nothing the script loads is detected,
+        # so the libraries it needs must be named some other way.
+        unless add_all_core?
+          @warnings << "--no-dep-run without --add-all-core: the script is not run, so none of the " \
+                       "standard library it requires is detected or packed"
+        end
+        if gemfile && !whole_gems?
+          @warnings << "--no-dep-run with --gemfile but without --gem-all or --gem-full: the script " \
+                       "is not run, so no gem file it loads is detected, and the gems are packed " \
+                       "without their scripts"
+        end
       end
 
       @options[:use_inno_setup?] = !!inno_setup_script

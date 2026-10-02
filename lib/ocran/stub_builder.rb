@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+require "fileutils"
 require "tempfile"
 require_relative "file_path_set"
 
@@ -138,38 +139,45 @@ module Ocran
                  else
                    STUB_PATH
                  end
-      IO.copy_stream(stub_src, stub_tmp)
-      stub = stub_tmp
+      begin
+        IO.copy_stream(stub_src, stub_tmp)
+        stub = stub_tmp
 
-      # Clear any invalid security directory entries from the stub (Windows only)
-      self.class.clear_invalid_security_entry(stub) if WINDOWS
+        # Clear any invalid security directory entries from the stub (Windows only)
+        self.class.clear_invalid_security_entry(stub) if WINDOWS
 
-      # Embed icon resource (Windows only)
-      if icon_path && WINDOWS
-        require_relative "ed_icon"
-        EdIcon.update_icon(stub, icon_path.to_s)
-      end
-
-      File.open(stub, "ab") do |of|
-        @of = of
-        @opcode_offset = @of.size
-
-        write_header(debug_mode, debug_extract, chdir_before, enable_compression, run_in_exe_dir, chdir_to_exe_dir)
-
-        b = proc {
-          yield(self)
-        }
-
-        if enable_compression && LZMA_CMD
-          compress(&b)
-        else
-          b.yield
+        # Embed icon resource (Windows only)
+        if icon_path && WINDOWS
+          require_relative "ed_icon"
+          EdIcon.update_icon(stub, icon_path.to_s)
         end
 
-        write_footer
-      end
+        File.open(stub, "ab") do |of|
+          @of = of
+          @opcode_offset = @of.size
 
-      File.rename(stub, path)
+          write_header(debug_mode, debug_extract, chdir_before, enable_compression, run_in_exe_dir, chdir_to_exe_dir)
+
+          b = proc {
+            yield(self)
+          }
+
+          if enable_compression && LZMA_CMD
+            compress(&b)
+          else
+            b.yield
+          end
+
+          write_footer
+        end
+
+        File.rename(stub, path)
+      rescue Exception
+        # The half-written executable sits next to the requested output,
+        # under a name nobody would look for; do not leave it behind.
+        FileUtils.rm_f(stub_tmp)
+        raise
+      end
       File.chmod(0755, path) unless WINDOWS
     end
 
@@ -225,8 +233,23 @@ module Ocran
 
       IO.popen(LZMA_CMD, "r+b") do |lzma|
         _of, @of = @of, lzma
-        Thread.new { yield(self); lzma.close_write }
+        writer = Thread.new do
+          # An error is re-raised in the main thread by writer.value below.
+          Thread.current.report_on_exception = false
+          yield(self)
+        ensure
+          # Always end the compressor's input, also when the block raised:
+          # otherwise copy_stream below waits for more output forever.
+          begin
+            lzma.close_write
+          rescue IOError, SystemCallError
+            # The pipe is already closed or broken; the compressor has
+            # nothing more to read either way.
+          end
+        end
         IO.copy_stream(lzma, _of)
+        writer.value
+      ensure
         @of = _of
       end
 

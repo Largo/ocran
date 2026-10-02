@@ -7,18 +7,23 @@ on:
       # never tested until it landed on master, which is where the last two
       # merges turned red.
       - '**'
+  # Pull requests from forks: their branches never reach this repository, so
+  # the push trigger above does not see them. Branches of this repository are
+  # already tested on push; the job conditions below skip their PR runs.
+  pull_request:
   workflow_dispatch:
 jobs:
   run-tests-linux:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     strategy:
       fail-fast: false
       matrix:
         ruby: [ '3.3', '3.4', '4.0' ]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: ruby/setup-ruby-pkgs@v1
+      - uses: ruby/setup-ruby-pkgs@2233d39c1315c667a2970436418b520a6300124e # v1.33.5
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
@@ -54,6 +59,7 @@ jobs:
         run: docker run --rm -e OCRAN_DEBUG=0 -v /tmp:/mnt debian:stable-slim /mnt/zlib_packed
 
   run-tests-macos:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     strategy:
       fail-fast: false
       matrix:
@@ -61,9 +67,9 @@ jobs:
         ruby: ['3.3', '3.4', '4.0']
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: ruby/setup-ruby-pkgs@v1
+      - uses: ruby/setup-ruby-pkgs@2233d39c1315c667a2970436418b520a6300124e # v1.33.5
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
@@ -91,7 +97,7 @@ jobs:
         run: ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output zlib_packed
 
       - name: Upload packed binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: zlib-macos-${{ matrix.os }}-${{ matrix.ruby }}
           path: zlib_packed
@@ -112,7 +118,7 @@ jobs:
           open -a XQuartz
 
       - name: Download packed binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: zlib-macos-${{ matrix.os }}-${{ matrix.ruby }}
 
@@ -128,16 +134,16 @@ jobs:
   test-spinel:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         with:
           ruby-version: '3.4'
           bundler-cache: true
           cache-version: 1
 
       - name: Check out Spinel
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: matz/spinel
           path: spinel-src
@@ -148,7 +154,7 @@ jobs:
 
       - name: Cache the Spinel build
         id: cache-spinel
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.local
           key: spinel-${{ runner.os }}-${{ steps.spinel.outputs.sha }}
@@ -174,20 +180,20 @@ jobs:
   test-wasm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         with:
           ruby-version: '3.4'
           bundler-cache: true
           cache-version: 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
 
       - name: Cache the runtimes from npm
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ocran/npm
           key: ocran-npm-${{ hashFiles('lib/ocran/wasm_builder.rb') }}
@@ -199,6 +205,7 @@ jobs:
         run: bundle exec ruby -Ilib:test test/test_wasm_export.rb --verbose
 
   test-source-gem-install:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     strategy:
       fail-fast: false
       matrix:
@@ -207,9 +214,9 @@ jobs:
           - os: windows-11-arm
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         with:
           ruby-version: '4.0'
 
@@ -235,6 +242,7 @@ jobs:
           .\zlib_from_source_gem.exe
 
   run-tests-windows:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     strategy:
       fail-fast: false
       matrix:
@@ -242,11 +250,11 @@ jobs:
         ruby: [ '3.3', '3.4', '4.0' ]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Cache Inno Setup
         id: cache-innosetup
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: C:\Program Files (x86)\Inno Setup 6
           key: innosetup-6.7.1
@@ -275,7 +283,7 @@ jobs:
         shell: pwsh
         run: echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
 
-      - uses: ruby/setup-ruby-pkgs@v1
+      - uses: ruby/setup-ruby-pkgs@2233d39c1315c667a2970436418b520a6300124e # v1.33.5
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
@@ -305,7 +313,7 @@ jobs:
         run: bundle exec ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output zlib_packed.exe
 
       - name: Upload packed binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: zlib-windows-${{ matrix.ruby }}
           path: zlib_packed.exe
@@ -321,7 +329,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Download packed binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: zlib-windows-${{ matrix.ruby }}
 

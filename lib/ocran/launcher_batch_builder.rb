@@ -27,7 +27,7 @@ module Ocran
     def build
       @build_file.tap do |f|
         f.puts "@echo off"
-        @environments.each { |name, val| f.puts build_set_command(name, val) }
+        @environments.each { |name, val| f.puts build_set_command(name, batch_value(val, BATCH_FILE_DIR)) }
         f.puts build_set_command("OCRAN_EXECUTABLE", BATCH_FILE_PATH)
         f.puts build_start_command(@title, @executable, @script, *@args, chdir_before: @chdir_before)
         f
@@ -47,13 +47,10 @@ module Ocran
       @executable, @script, @args = executable, script, args
     end
 
-    def replace_inst_dir_placeholder(s)
-      s.to_s.gsub(/#{Regexp.escape(EXTRACT_ROOT.to_s)}[\/\\]/, BATCH_FILE_DIR)
-    end
-    private :replace_inst_dir_placeholder
-
+    # +value+ is inserted as is and must already be escaped (see
+    # WindowsCommandEscaping#batch_value).
     def build_set_command(name, value)
-      "set \"#{name}=#{replace_inst_dir_placeholder(value)}\""
+      "set \"#{name}=#{value}\""
     end
     private :build_set_command
 
@@ -61,7 +58,7 @@ module Ocran
       cmd = ["start"]
 
       # Title for Command Prompt window title bar
-      cmd << quote_and_escape(title)
+      cmd << quote_and_escape(escape_percent(title))
 
       # Use /d to set the startup directory for the process,
       # which will be BATCH_FILE_DIR/SRCDIR. This path is where
@@ -71,9 +68,9 @@ module Ocran
         cmd << "/d #{quote_and_escape("#{BATCH_FILE_DIR}#{SRCDIR}")}"
       end
 
-      cmd << quote_and_escape("#{BATCH_FILE_DIR}#{executable}")
-      cmd << quote_and_escape("#{BATCH_FILE_DIR}#{script}")
-      cmd += args.map { |arg| quote_and_escape(replace_inst_dir_placeholder(arg)) }
+      cmd << quote_and_escape("#{BATCH_FILE_DIR}#{escape_percent(executable)}")
+      cmd << quote_and_escape("#{BATCH_FILE_DIR}#{escape_percent(script)}")
+      cmd += args.map { |arg| quote_and_escape(batch_value(arg, BATCH_FILE_DIR)) }
 
       # Forward batch file arguments to the command with `%*`
       cmd << "%*"
