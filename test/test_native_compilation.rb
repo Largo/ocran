@@ -222,13 +222,33 @@ class TestNativeCompilation < Minitest::Test
         if [ "$1" = "-o" ]; then out="$2"; shift; fi
         shift
       done
-      mkdir -p "$out/static/assets" "$out/db" "$out/config"
-      echo "body {}" > "$out/static/assets/app.css"
+      mkdir -p "$out/db" "$out/config"
+      printf 'assets:\\n\\tbundle exec ruby -e 1\\n' > "$out/Makefile"
+      printf '[package]\\nallocator = "jemalloc"\\n' > "$out/spin.toml"
       echo "CREATE TABLE posts (id INTEGER PRIMARY KEY);" > "$out/db/seed.sql"
+    SH
+    # Like the generated Makefile, `make assets` writes static/.
+    write_script(File.join(bin, "make"), <<~SH)
+      [ "$1" = "assets" ] || exit 2
+      [ -n "$FAKE_ASSETS_FAIL" ] && { echo "npx: command not found" >&2; exit 1; }
+      echo "make $* BUNDLE_ONLY=$BUNDLE_ONLY" >> "#{@tmp}/asset-log"
+      mkdir -p static/assets
+      echo "body {}" > static/assets/app.css
+    SH
+    write_script(File.join(bin, "bundle"), <<~SH)
+      echo "bundle $* BUNDLE_ONLY=$BUNDLE_ONLY" >> "#{@tmp}/asset-log"
+    SH
+    write_script(File.join(bin, "pkg-config"), <<~SH)
+      [ "$1 $2" = "--libs-only-L jemalloc" ] && echo "-L/opt/fake/jemalloc/lib"
     SH
     write_script(File.join(bin, "spin"), <<~SH)
       [ "$1" = "build" ] || exit 2
       command -v spinel > /dev/null || { echo "spinel not on PATH" >&2; exit 3; }
+      echo "$LIBRARY_PATH" > "#{@tmp}/spin-library-path"
+      if [ -n "$FAKE_LINK_FAIL" ]; then
+        echo "ld: library 'jemalloc' not found" >&2
+        exit 1
+      fi
       mkdir -p build/bin
       printf '#!/bin/sh\\necho serving\\n' > build/bin/blog
       chmod +x build/bin/blog
@@ -259,6 +279,39 @@ class TestNativeCompilation < Minitest::Test
     assert File.file?(File.join(target, "db", "seed.sql")), out
     assert File.directory?(File.join(target, "storage")), out
     assert_match(/Run it with: cd blog-spinel && \.\/blog/, out)
+    # The assets came from `make assets`, with only the assets group bundled.
+    assert_equal ["bundle install BUNDLE_ONLY=assets", "make assets BUNDLE_ONLY=assets"],
+                 File.readlines(File.join(@tmp, "asset-log"), chomp: true)
+    # spin build saw pkg-config's directory for the allocator spin.toml names.
+    assert_match(%r{\A/opt/fake/jemalloc/lib}, File.read(File.join(@tmp, "spin-library-path")))
+  end
+
+  def test_roundhouse_asset_failure_stops_the_build
+    posix_only
+    bin = fake_roundhouse_tools
+    rails_app
+    env = { "ROUNDHOUSE" => File.join(bin, "roundhouse"), "SPIN" => File.join(bin, "spin"),
+            "SPINEL" => File.join(bin, "spinel"), "FAKE_ASSETS_FAIL" => "1" }
+    out, status = ocran(@tmp, "--roundhouse", "blog", env: env)
+
+    refute status.success?, out
+    assert_match(/Building the static assets failed \(make assets\)/, out)
+    assert_match(/npx: command not found/, out)
+    assert_match(/BUNDLE_ONLY=assets make assets/, out)
+    refute File.exist?(File.join(@tmp, "spin-library-path")), "spin build must not run without assets"
+  end
+
+  def test_roundhouse_link_failure_names_the_library
+    posix_only
+    bin = fake_roundhouse_tools
+    rails_app
+    env = { "ROUNDHOUSE" => File.join(bin, "roundhouse"), "SPIN" => File.join(bin, "spin"),
+            "SPINEL" => File.join(bin, "spinel"), "FAKE_LINK_FAIL" => "1" }
+    out, status = ocran(@tmp, "--roundhouse", "blog", env: env)
+
+    refute status.success?, out
+    assert_match(/the linker could not find libjemalloc/, out)
+    assert_match(/set LIBRARY_PATH/, out)
   end
 
   def test_roundhouse_failure_shows_gem_census

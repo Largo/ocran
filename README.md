@@ -381,7 +381,9 @@ does not, OCRAN tells you why.
 
 * `--roundhouse`: Compile a **Rails application** into a native server
   binary with [Roundhouse](https://github.com/rubys/roundhouse), which
-  lowers the app to the Ruby subset Spinel compiles:
+  lowers the app to the Ruby subset Spinel compiles. OCRAN runs the
+  transpile, the generated project's asset step (`make assets`, with
+  only the Gemfile's assets group bundled) and `spin build`:
 
   ```
   ocran --roundhouse path/to/rails/app   # -> ./app-spinel/
@@ -416,7 +418,11 @@ curl --proto '=https' --tlsv1.2 -LsSf \
 
 Apps compiled with Roundhouse also need the SQLite and jemalloc
 development headers (`libsqlite3-dev libjemalloc-dev`, or
-`brew install sqlite jemalloc`).
+`brew install sqlite jemalloc`). OCRAN puts the directory `pkg-config`
+reports for the allocator on `LIBRARY_PATH` for the build, so a Homebrew
+jemalloc on Apple Silicon (under `/opt/homebrew/lib`, which the linker does
+not search by default) links. The asset step needs Bundler, and Node.js
+with npm when the app builds Tailwind.
 
 **Windows.** Spinel does not build natively on Windows yet, and
 Roundhouse's Windows build is untested. For now, run OCRAN inside WSL,
