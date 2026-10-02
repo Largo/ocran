@@ -175,7 +175,7 @@ class TestWasmExport < Minitest::Test
     version = "4.0" unless %w[4.0 3.4 3.3 3.2].include?(version)
     ruby_wasm = begin
       Gem::Specification.find_by_name("ruby_wasm").version.to_s
-    rescue Gem::Exception
+    rescue Gem::LoadError, Gem::Exception
       "2.10.1"
     end
     cache_npm("@ruby/#{version}-wasm-wasi", ruby_wasm, "dist/ruby+stdlib.wasm" => "prebuilt ruby")

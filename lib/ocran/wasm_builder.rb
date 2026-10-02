@@ -179,7 +179,7 @@ module Ocran
         return [explicit]
       end
       [RbConfig.ruby, Gem.bin_path("ruby_wasm", "rbwasm")]
-    rescue Gem::Exception
+    rescue Gem::LoadError, Gem::Exception
       path = AotToolchain.search_path("rbwasm")
       path && [path]
     end
@@ -188,9 +188,10 @@ module Ocran
       rbwasm.size == 2 ? [rbwasm[0], "-rbundler", rbwasm[1]] : rbwasm
     end
 
+    # Gem::MissingSpecError is a LoadError, not a Gem::Exception.
     def ruby_wasm_version
       Gem::Specification.find_by_name("ruby_wasm").version.to_s
-    rescue Gem::Exception
+    rescue Gem::LoadError, Gem::Exception
       DEFAULT_RUBY_WASM_VERSION
     end
 
