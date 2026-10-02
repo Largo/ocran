@@ -15,18 +15,26 @@ module Ocran
     # under.
     BUNDLER_SETUP_FEATURE = %r{[\\/]bundler[\\/]setup\.rb\z}
 
-    attr_reader :env, :load_path, :loaded_features, :pwd, :activated_gems
+    attr_reader :env, :load_path, :loaded_features, :pwd, :loaded_specs
 
     def initialize
       @env = ENV.to_hash.freeze
       @load_path = $LOAD_PATH.dup.freeze
       @loaded_features = $LOADED_FEATURES.dup.freeze
       @pwd = Dir.pwd.freeze
-      # The gems RubyGems had activated at this point. Under `bundle exec`
-      # that is the entire bundle, activated before OCRAN's first line runs,
-      # so a snapshot taken before the dependency run is what tells the build
-      # environment's gems apart from the application's.
-      @activated_gems = (defined?(Gem) ? Gem.loaded_specs.keys : []).freeze
+      # The specs of the gems RubyGems had activated at this point. Taken
+      # with the loaded features for the same reason: OCRAN goes on to
+      # activate gems of its own while it builds (fiddle for DLL detection,
+      # tempfile for the builder, ...), and those are not the application's.
+      # Under `bundle exec` the snapshot taken before the dependency run is
+      # the entire bundle, activated before OCRAN's first line runs, which is
+      # what tells the build environment's gems apart from the application's.
+      @loaded_specs = (defined?(Gem) ? Gem.loaded_specs.values : []).freeze
+    end
+
+    # The names of the gems in #loaded_specs.
+    def activated_gems
+      @loaded_specs.map(&:name)
     end
 
     # Whether Bundler had already set this process up when the snapshot was

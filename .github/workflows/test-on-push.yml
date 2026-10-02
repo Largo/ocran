@@ -27,7 +27,9 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-          # Bumped to drop caches that still hold the once committed vendor/bundle
+          # Bumped to drop caches saved while a Ruby 3.3 bundle was committed
+          # under vendor/bundle: its binstubs call `ruby3.3`, which the
+          # runners do not have, and every cache hit restored them.
           cache-version: 1
           apt-get: "xz-utils gcc xpra xserver-xorg-video-dummy libxrandr-dev libfox-1.6-dev swig"
 
@@ -71,7 +73,9 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-          # Bumped to drop caches that still hold the once committed vendor/bundle
+          # Bumped to drop caches saved while a Ruby 3.3 bundle was committed
+          # under vendor/bundle: its binstubs call `ruby3.3`, which the
+          # runners do not have, and every cache hit restored them.
           cache-version: 1
           brew: "xz fox swig"
 
@@ -122,6 +126,83 @@ jobs:
         run: |
           chmod +x zlib_packed
           ./zlib_packed
+
+  # --spinel against the real compiler: Spinel is built from source (a few
+  # minutes, cached by its revision) and the end-to-end test compiles the
+  # fixture and runs the binary. The other jobs skip that test because the
+  # runners have no Spinel.
+  test-spinel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          cache-version: 1
+
+      - name: Check out Spinel
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: matz/spinel
+          path: spinel-src
+
+      - name: Spinel revision
+        id: spinel
+        run: echo "sha=$(git -C spinel-src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Spinel build
+        id: cache-spinel
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.local
+          key: spinel-${{ runner.os }}-${{ steps.spinel.outputs.sha }}
+
+      - name: Build and install Spinel
+        if: steps.cache-spinel.outputs.cache-hit != 'true'
+        run: |
+          cd spinel-src
+          make deps
+          make -j"$(nproc)"
+          make install PREFIX="$HOME/.local"
+
+      - name: Run the native compilation tests
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          spinel --version
+          bundle exec ruby -Ilib:test test/test_native_compilation.rb --verbose
+
+  # --wasm against the real runtimes: ruby.wasm and PicoRuby from npm, rbwasm
+  # from the ruby_wasm gem, and the exports run under Node. The other jobs
+  # skip those tests because they have no ruby_wasm.
+  test-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          cache-version: 1
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Cache the runtimes from npm
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ocran/npm
+          key: ocran-npm-${{ hashFiles('lib/ocran/wasm_builder.rb') }}
+
+      - name: Install ruby_wasm
+        run: gem install ruby_wasm --no-document
+
+      - name: Run the WebAssembly export tests
+        run: bundle exec ruby -Ilib:test test/test_wasm_export.rb --verbose
 
   test-source-gem-install:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
@@ -206,7 +287,9 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-          # Bumped to drop caches that still hold the once committed vendor/bundle
+          # Bumped to drop caches saved while a Ruby 3.3 bundle was committed
+          # under vendor/bundle: its binstubs call `ruby3.3`, which the
+          # runners do not have, and every cache hit restored them.
           cache-version: 1
           mingw: "fox swig"
 

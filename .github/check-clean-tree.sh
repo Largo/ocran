@@ -9,7 +9,8 @@
 # that did it nor the fact that a test did it at all.
 #
 # Untracked files are ignored on purpose: the builds leave stubs and packed
-# executables behind.
+# executables behind. vendor/bundle and .bundle, which `bundle install` and
+# ruby/setup-ruby write, are in .gitignore.
 set -eu
 
 dirty=$(git status --porcelain --untracked-files=no)

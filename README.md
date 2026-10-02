@@ -1,5 +1,7 @@
 # OCRAN
 
+![OCRAN: ship your Ruby app as one file, no Ruby needed to run it](docs/social/twitter-card.png)
+
 [OCRAN (One-Click Ruby Application Next)](https://github.com/largo/ocran) packages Ruby applications for
 distribution. It bundles your script, the Ruby interpreter, gems, and native
 libraries into a single self-contained artifact that runs without requiring
@@ -343,6 +345,141 @@ Fine-tuning flags:
     the host platform's Ruby — the APE property then applies to the
     launcher stub, not to the bundled application. See
     `docs/cosmocc-port-plan.md` for status.
+
+#### Native compilation (experimental):
+
+Instead of packaging the interpreter, these options compile the program
+ahead of time with [Spinel](https://github.com/matz/spinel), Matz's Ruby
+AOT compiler. The result is a native executable that needs no Ruby at all.
+Spinel compiles a *subset* of Ruby (no `eval` of strings, no
+`method_missing`, no runtime class building, only the standard library it
+ships itself), so this works for some programs and not others. When it
+does not, OCRAN tells you why.
+
+* `--spinel`: Compile `script.rb` with Spinel:
+
+  ```
+  ocran app.rb --spinel                 # -> ./app (app.exe on Windows)
+  ocran app.rb --spinel --output myapp
+  ```
+
+  The script is not run at build time. OCRAN scans the program statically
+  (the script, the files it requires, and the source of every gem it
+  requires) and passes Spinel the `-I` roots it needs for your `lib/` and
+  for pure-Ruby gems. If Spinel cannot compile the program, OCRAN prints
+  the compiler's error, then a report of what stands in the way, grouped
+  into your code and each gem. Gems with C extensions and standard
+  libraries Spinel does not provide are named as incompatible. If
+  `spinel-doctor` is installed next to the compiler, its report is shown
+  too. If Spinel is not installed, OCRAN explains how to install it and
+  still shows the report, so you can see whether installing it is worth
+  it. Use `--spinel-opt <arg>` (repeatable) to pass flags to the compiler,
+  for example `--spinel-opt --int-overflow=promote` or
+  `--spinel-opt --defer-refusals`. With `--debug` the binary is built
+  with `-g`. Only code is compiled in; data files have to ship next to
+  the executable.
+
+* `--roundhouse`: Compile a **Rails application** into a native server
+  binary with [Roundhouse](https://github.com/rubys/roundhouse), which
+  lowers the app to the Ruby subset Spinel compiles:
+
+  ```
+  ocran --roundhouse path/to/rails/app   # -> ./app-spinel/
+  ```
+
+  The output is a directory (`<app>-spinel` by default, or `--output` /
+  `--output-dir`) that contains the binary plus the `static/`, `public/`,
+  `db/` and `config/` files it reads at run time, and a `storage/` for
+  the SQLite database. On the first build the database is created from
+  `db/seed.sql` when the `sqlite3` command is available. Rebuilding keeps
+  `storage/`. If Roundhouse does not cover the app yet, OCRAN shows the
+  useful parts of `roundhouse check --continue`: the gem census (which of
+  the app's gems Roundhouse does not model), the first errors, and the
+  list of unsupported constructs. Pass flags to Roundhouse with
+  `--roundhouse-opt <arg>`, for example
+  `--roundhouse-opt --survey --roundhouse-opt --allow-unsupported`.
+
+**Installing the compilers.** Neither is a gem. OCRAN looks for `spinel`,
+`spin` and `roundhouse` in the `SPINEL`, `SPIN` and `ROUNDHOUSE`
+environment variables (the command or the directory that contains it), then
+in `PATH`, then in their usual install locations (`~/.local/bin`,
+`/usr/local/bin`, `~/.cargo/bin`). When one is missing, OCRAN prints how to
+install it:
+
+```
+git clone https://github.com/matz/spinel && cd spinel
+make deps && make && make install PREFIX=$HOME/.local
+
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/rubys/roundhouse/releases/latest/download/roundhouse-installer.sh | sh
+```
+
+Apps compiled with Roundhouse also need the SQLite and jemalloc
+development headers (`libsqlite3-dev libjemalloc-dev`, or
+`brew install sqlite jemalloc`).
+
+**Windows.** Spinel does not build natively on Windows yet, and
+Roundhouse's Windows build is untested. For now, run OCRAN inside WSL,
+where both work as they do on Linux; you get a Linux binary. Nothing in
+OCRAN is tied to a platform here: once the compilers run on Windows,
+`--spinel` and `--roundhouse` work there as they are and produce `.exe`
+files.
+
+#### WebAssembly export (experimental):
+
+`--wasm` exports the application as a web page that runs it in the browser.
+The output is a folder (`<scriptname>-wasm` by default, or `--output-dir`)
+or a zip archive (`--output-zip`, or an `--output` name that ends in
+`.zip`). It contains `index.html`, the runtime and your program. The page
+shows the program's standard output and errors. Use the `js` library to
+work with the page itself. Browsers only load WebAssembly over HTTP, so
+serve the folder instead of opening the file:
+
+```
+ocran app.rb --wasm                       # -> app-wasm/
+ocran app.rb --wasm=picoruby --output app.zip
+python3 -m http.server -d app-wasm 8000   # then open http://localhost:8000
+```
+
+There are two runtimes:
+
+* `--wasm` (or `--wasm=ruby`): [ruby.wasm](https://github.com/ruby/ruby.wasm),
+  CRuby compiled to WebAssembly, with its whole standard library (about
+  30 MB). It needs `rbwasm` from the `ruby_wasm` gem (`gem install ruby_wasm`;
+  OCRAN also uses `RBWASM` when it is set).
+  * OCRAN packs your files into the prebuilt interpreter from npm, which
+    takes seconds. Gems must be listed in the application's Gemfile and
+    installed (`bundle install`); pure-Ruby gems are packed in beside your
+    files, at `/gems`, and put on the load path in place of
+    `bundler/setup`, so `require "bundler/setup"` in your program is fine.
+  * Only when a gem has a C extension does OCRAN run `rbwasm build`. Its
+    first run compiles CRuby and the gems for WebAssembly, which takes
+    several minutes, and is cached in `~/.cache/ocran/ruby_wasm`. The
+    extensions are cross-compiled for WASI, and the ones that link system
+    libraries usually fail.
+  * The Ruby version follows the Ruby you run OCRAN with. Use
+    `--wasm-ruby 3.4` to choose another one. Pass extra flags to
+    `rbwasm build` with `--wasm-opt <arg>`.
+* `--wasm=picoruby` (or `--picoruby`): [PicoRuby](https://github.com/picoruby/picoruby),
+  the mruby-based Ruby for microcontrollers.
+  * Its runtime is about 2 MB, and nothing needs to be installed.
+  * PicoRuby has its own small library (`js`, `json`, `yaml`, `base64`, ...)
+    and no RubyGems. In the browser it cannot read your files, so OCRAN
+    bundles the program's files into one script, in the order they are
+    required.
+
+In both cases the script is not run at build time. OCRAN scans the program
+and reports what may not work on the chosen runtime, grouped into your code
+and each gem:
+
+* gems the runtime cannot load;
+* threads, processes, sockets and `gets`;
+* for PicoRuby, also CRuby standard libraries it does not have.
+
+The build goes ahead anyway, since the program only fails if it reaches
+those parts. The runtimes are downloaded from the npm registry once, checked
+against the integrity hash the registry publishes, and cached in
+`~/.cache/ocran/npm`.
 
 ### Compilation:
 

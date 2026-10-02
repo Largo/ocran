@@ -1146,6 +1146,32 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # ruby/setup-ruby's `bundler-cache: true`, which the README's GitHub
+  # Actions example uses, installs the Gemfile's gems into vendor/bundle,
+  # where plain RubyGems never looks. A plain `ocran app.rb` outside Bundler
+  # has to find them all the same, for the dependency run and for packing
+  # (github issue #61).
+  def test_bundle_installed_to_configured_path
+    with_fixture 'bundlepath' do
+      install_dir = File.join("vendor", "bundle", RUBY_ENGINE, RbConfig::CONFIG["ruby_version"])
+      cd "vendoredgem" do
+        assert_system(RbConfig.ruby, "-S", "gem", "build", "vendoredgem.gemspec")
+      end
+      assert_system(RbConfig.ruby, "-S", "gem", "install", "--local", "--no-document",
+                    "--install-dir", install_dir, File.join("vendoredgem", "vendoredgem-0.1.0.gem"))
+      # What `bundle config set --local path vendor/bundle` writes.
+      mkdir_p ".bundle"
+      File.write(File.join(".bundle", "config"), %(---\nBUNDLE_PATH: "vendor/bundle"\n))
+
+      env = { "BUNDLE_PATH" => nil, "BUNDLE_APP_CONFIG" => nil }
+      assert_system(env, "ruby", ocran, "bundlepath.rb", *DefaultArgs)
+      exe = exe_name("bundlepath")
+      pristine_env exe do
+        assert_system(exe)
+      end
+    end
+  end
+
   # `bundle exec ocran app.rb --gemfile Gemfile` from inside a different
   # project's bundle. --gemfile has to decide the dependency run, or the
   # application's own gems - a `path:` gem above all, which exists nowhere
@@ -1264,6 +1290,42 @@ class TestOcran < Minitest::Test
       assert_system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output", "goodbyeworld.exe"]))
       refute File.exist?(exe_name("helloworld"))
       assert File.exist?("goodbyeworld.exe")
+    end
+  end
+
+  # A build script shared between platforms, like the README's GitHub
+  # Actions example, writes `--output myapp`. Windows runs a program only by
+  # its extension, so there the name gets .exe; elsewhere it is used as given.
+  def test_output_option_without_extension
+    with_fixture 'helloworld' do
+      assert_system("ruby", ocran, "helloworld.rb", *(DefaultArgs + ["--output", "goodbyeworld"]))
+      exe = exe_name("goodbyeworld")
+      assert File.exist?(exe), "#{exe} was not built, found: #{Dir["goodbyeworld*"].inspect}"
+      refute File.exist?("goodbyeworld"), "extensionless executable built on Windows" if Gem.win_platform?
+      pristine_env exe do
+        assert_system(exe)
+      end
+    end
+  end
+
+  # OCRAN activates gems of its own while it builds - tempfile with tmpdir
+  # and delegate for the stub builder of an executable build - and from
+  # 1.3.16 on they were packed into every application, because the gem scan
+  # read Gem.loaded_specs after the build had started instead of the
+  # snapshot taken after the dependency run. Read from OCRAN's verbose
+  # report, since an executable's contents cannot be listed. (OCRAN's own
+  # gem and fiddle, activated by the `ocran` command of an installed OCRAN,
+  # are covered by test-readme-actions.yml: this suite runs OCRAN from a
+  # checkout, where it is not a gem.)
+  def test_build_time_gems_are_not_packed
+    with_fixture 'helloworld' do
+      output, status = capture_system("ruby", ocran, "helloworld.rb", "--no-lzma", "--verbose")
+      assert status&.success?, output
+      packed = output.scan(/^=== Detected gem (\S+?)-\d/).flatten
+      assert_includes packed, "did_you_mean", "the gem report this test reads is missing:\n#{output}"
+      %w[tempfile tmpdir delegate].each do |name|
+        refute_includes packed, name, "#{name} is activated by OCRAN's build, not by helloworld.rb"
+      end
     end
   end
 

@@ -29,18 +29,30 @@ module Ocran
         :gem_options => [],
         :gemfile => nil,
         :icon_filename => nil,
+        :inputs => [],
         :inno_setup_script => nil,
         :load_autoload? => true,
         :output_dir => nil,
         :output_override => nil,
         :output_zip => nil,
         :quiet? => false,
+        :roundhouse? => false,
+        :roundhouse_app => nil,
+        :roundhouse_options => [],
+        :roundhouse_output => nil,
         :rubyopt => nil,
         :run_script? => true,
         :script => nil,
         :source_files => [],
+        :spinel? => false,
+        :spinel_options => [],
         :verbose? => false,
         :warning? => true,
+        :wasm_options => [],
+        :wasm_output => nil,
+        :wasm_ruby => nil,
+        :wasm_runtime => nil,
+        :wasm_zip? => false,
         :wrapper_exe? => true,
       }
       @warnings = []
@@ -146,6 +158,50 @@ Experimental options:
                    packages the host Ruby behind an APE stub. Console-only;
                    output defaults to <scriptname>.com.
                    (Alias: --cosmo-toolchain)
+
+Native compilation (experimental):
+
+--spinel           Compile script.rb ahead of time with Spinel
+                   (https://github.com/matz/spinel) into a native executable
+                   that needs no Ruby, instead of packaging the interpreter.
+                   Spinel compiles a subset of Ruby: when the program is
+                   outside it, OCRAN reports what in your code and in which
+                   gems stands in the way. The script is not run at build
+                   time. Requires the spinel command (SPINEL, PATH, or
+                   ~/.local/bin); OCRAN explains how to install it.
+--spinel-opt <arg> Pass <arg> to the spinel compiler (repeatable), e.g.
+                   --spinel-opt --int-overflow=promote
+--roundhouse       Compile a Rails application with Roundhouse
+                   (https://github.com/rubys/roundhouse) and Spinel into a
+                   native server binary. Give the application directory
+                   instead of a script (default: the current directory).
+                   The output is a directory (default <app>-spinel, or
+                   --output/--output-dir) with the binary and the files it
+                   serves. When the app is not covered yet, OCRAN shows
+                   Roundhouse's analysis, including which gems it does not
+                   support. Requires roundhouse, spinel and spin.
+--roundhouse-opt <arg>  Pass <arg> to roundhouse (repeatable), e.g.
+                   --roundhouse-opt --survey
+
+WebAssembly (experimental):
+
+--wasm[=ruby|picoruby]  Export the application as a web page that runs it
+                   in the browser on WebAssembly: a folder (default
+                   <scriptname>-wasm, or --output-dir) or a zip archive
+                   (--output-zip, or an --output name ending in .zip) with
+                   index.html, the runtime and the application.
+                   ruby: ruby.wasm, CRuby with its standard library; needs
+                   rbwasm (gem install ruby_wasm). Gems must be listed in
+                   the application's Gemfile.
+                   picoruby: PicoRuby, a 2 MB mruby-based runtime with its
+                   own small library and no gems; needs nothing installed.
+                   OCRAN reports what in the program and its gems may not
+                   work there. The script is not run at build time.
+--picoruby         Same as --wasm=picoruby.
+--wasm-ruby <x.y>  The CRuby version for --wasm (4.0, 3.4, 3.3 or 3.2;
+                   default: this Ruby's, when ruby.wasm has it).
+--wasm-opt <arg>   Pass <arg> to `rbwasm build` (repeatable), used when the
+                   application has gems.
 EOF
     end
 
@@ -240,6 +296,28 @@ EOF
           # "cosmocc ... is not executable" on a Windows build host, ahead of
           # the clearer "not supported when building on Windows" check.
           @options[:cosmo_cc] = required_argument(argv, arg)
+        when "--spinel"
+          @options[:spinel?] = true
+        when "--spinel-opt"
+          @options[:spinel_options] << required_argument(argv, arg)
+        when "--roundhouse"
+          @options[:roundhouse?] = true
+        when /\A--wasm(?:=(.*))?\z/
+          runtime = $1.nil? || $1.empty? ? "ruby" : $1
+          @options[:wasm_runtime] =
+            case runtime
+            when "ruby", "ruby.wasm", "cruby" then :ruby
+            when "picoruby" then :picoruby
+            else raise "Unknown --wasm runtime #{runtime.inspect} (use --wasm=ruby or --wasm=picoruby)"
+            end
+        when "--picoruby"
+          @options[:wasm_runtime] = :picoruby
+        when "--wasm-ruby"
+          @options[:wasm_ruby] = required_argument(argv, arg)
+        when "--wasm-opt"
+          @options[:wasm_options] << required_argument(argv, arg)
+        when "--roundhouse-opt"
+          @options[:roundhouse_options] << required_argument(argv, arg)
         when "--cosmo-ruby"
           load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
@@ -284,20 +362,31 @@ EOF
         when /\A--./
           raise "Unknown option #{arg} (see ocran --help)"
         else
-          expanded = Dir.glob(arg)
-          if expanded.empty?
-            raise "#{arg} not found!" unless File.exist?(arg)
-            expanded = [arg]
-          end
+          @options[:inputs] << arg
+        end
+      end
 
-          expanded.each do |f|
-            if File.directory?(f)
-              raise "#{f} is empty!" if Dir.empty?(f)
-              # If a directory is passed, we want all files under that directory
-              @options[:source_files] += Pathname.new(f).find.reject(&:directory?).map(&:expand_path)
-            else
-              @options[:source_files] << Pathname.new(f).expand_path
-            end
+      if roundhouse?
+        # A Rails application directory rather than a script: none of the
+        # packaging below applies, and the application is not loaded.
+        parse_roundhouse
+        return
+      end
+
+      @options[:inputs].each do |arg|
+        expanded = Dir.glob(arg)
+        if expanded.empty?
+          raise "#{arg} not found!" unless File.exist?(arg)
+          expanded = [arg]
+        end
+
+        expanded.each do |f|
+          if File.directory?(f)
+            raise "#{f} is empty!" if Dir.empty?(f)
+            # If a directory is passed, we want all files under that directory
+            @options[:source_files] += Pathname.new(f).find.reject(&:directory?).map(&:expand_path)
+          else
+            @options[:source_files] << Pathname.new(f).expand_path
           end
         end
       end
@@ -306,11 +395,30 @@ EOF
 
       @options[:script] = source_files.first
 
+      if wasm_runtime
+        parse_wasm
+      end
+
+      if spinel?
+        reject_with_native_compilation("--spinel", output_dir: "--output-dir")
+        # Spinel compiles the source; it never needs the program to run, and
+        # running it would only pull OCRAN's dependency detection in.
+        @options[:run_script?] = false
+      end
+
       @options[:force_autoload?] = run_script? && load_autoload?
 
       @options[:output_executable] =
         if output_override
-          output_override
+          # Windows runs a program only by its extension, so a name given
+          # without .exe - `--output myapp`, as a build script shared with
+          # Linux and macOS writes it - gets one there. .exe and .com names
+          # are used as given.
+          if Gem.win_platform? && !output_override.extname?(".exe") && !output_override.extname?(".com")
+            Pathname("#{output_override}.exe")
+          else
+            output_override
+          end
         else
           executable = script
           # If debug mode is enabled, append "-debug" to the filename
@@ -422,6 +530,78 @@ EOF
       end
     end
 
+    # Validates --wasm and works out where the site goes: a zip archive for
+    # --output-zip or an --output name ending in .zip, a folder otherwise.
+    def parse_wasm
+      mode = wasm_runtime == :picoruby ? "--wasm=picoruby" : "--wasm"
+      reject_with_native_compilation(mode, output_zip: false)
+      raise "#{mode} cannot be used with --spinel or --roundhouse" if spinel? || roundhouse?
+      raise "--output-dir and --output-zip cannot be used together" if output_dir && output_zip
+
+      suffix = wasm_runtime == :picoruby ? "-picoruby" : "-wasm"
+      if output_zip || output_override&.extname?(".zip")
+        @options[:wasm_zip?] = true
+        @options[:wasm_output] = output_zip || output_override
+      else
+        @options[:wasm_output] = output_dir || output_override ||
+                                 Pathname("#{script.basename(".*")}#{suffix}").expand_path
+      end
+      # Nothing runs at build time: the browser is where the program runs.
+      @options[:run_script?] = false
+    end
+    private :parse_wasm
+
+    # Validates --roundhouse and works out the application and the output
+    # directory.
+    def parse_roundhouse
+      raise "--roundhouse takes one Rails application directory" if @options[:inputs].size > 1
+      reject_with_native_compilation("--roundhouse")
+      raise "--spinel and --roundhouse cannot be used together (--roundhouse compiles with Spinel already)" if spinel?
+
+      input = Pathname(@options[:inputs].first || Dir.pwd).expand_path
+      raise "#{input} not found!" unless input.exist?
+
+      app = rails_root(input.directory? ? input : input.dirname)
+      unless app
+        raise "#{input} is not a Rails application (no config/application.rb in it or above it); " \
+              "--roundhouse compiles a Rails app - use --spinel for a plain script"
+      end
+
+      output = output_dir || output_override || Pathname("#{app.basename}-spinel").expand_path
+      raise "The output directory #{output} would overwrite the application itself" if output == app
+
+      @options[:roundhouse_app] = app
+      @options[:roundhouse_output] = output
+      @options[:run_script?] = false
+      @options[:force_autoload?] = false
+      @options[:verbose?] &&= !quiet?
+    end
+    private :parse_roundhouse
+
+    # The Rails application root at or above the given directory.
+    def rails_root(dir)
+      dir.ascend.find { |d| (d + "config" + "application.rb").file? }
+    end
+    private :rails_root
+
+    # Native compilation produces a program, not a package of one, so the
+    # options that shape a package do not apply to it.
+    def reject_with_native_compilation(mode, output_dir: nil, output_zip: true)
+      conflicts = {
+        "--innosetup" => inno_setup_script,
+        "--macosx-bundle" => @options[:macosx_bundle?],
+        "--cosmo/--cosmo-ruby" => cosmo?,
+        "--windows" => force_windows?,
+        "--icon" => icon_filename,
+      }
+      conflicts[output_dir] = self.output_dir if output_dir
+      conflicts["--output-zip"] = self.output_zip if output_zip
+      conflicts.each do |name, given|
+        raise "#{name} cannot be used with #{mode}" if given
+      end
+    end
+    private :reject_with_native_compilation
+
     def add_all_core? = @options[__method__]
 
     def add_all_encoding? = @options[__method__]
@@ -496,6 +676,32 @@ EOF
     def wrapper_exe? = @options[__method__]
 
     def rubyopt = @options[__method__]
+
+    def roundhouse? = @options[__method__]
+
+    # The root directory of the Rails application --roundhouse compiles.
+    def roundhouse_app = @options[__method__]
+
+    def roundhouse_options = @options[__method__]
+
+    # The directory --roundhouse writes the binary and its files to.
+    def roundhouse_output = @options[__method__]
+
+    def spinel? = @options[__method__]
+
+    def spinel_options = @options[__method__]
+
+    # :ruby (ruby.wasm) or :picoruby with --wasm, else nil.
+    def wasm_runtime = @options[__method__]
+
+    def wasm_options = @options[__method__]
+
+    def wasm_ruby = @options[__method__]
+
+    # The folder or zip archive --wasm writes.
+    def wasm_output = @options[__method__]
+
+    def wasm_zip? = @options[__method__]
 
     def run_script? = @options[__method__]
 
