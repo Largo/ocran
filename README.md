@@ -424,6 +424,59 @@ OCRAN is tied to a platform here: once the compilers run on Windows,
 `--spinel` and `--roundhouse` work there as they are and produce `.exe`
 files.
 
+#### WebAssembly export (experimental):
+
+`--wasm` exports the application as a web page that runs it in the browser.
+The output is a folder (`<scriptname>-wasm` by default, or `--output-dir`)
+or a zip archive (`--output-zip`, or an `--output` name that ends in
+`.zip`). It contains `index.html`, the runtime and your program. The page
+shows the program's standard output and errors. Use the `js` library to
+work with the page itself. Browsers only load WebAssembly over HTTP, so
+serve the folder instead of opening the file:
+
+```
+ocran app.rb --wasm                       # -> app-wasm/
+ocran app.rb --wasm=picoruby --output app.zip
+python3 -m http.server -d app-wasm 8000   # then open http://localhost:8000
+```
+
+There are two runtimes:
+
+* `--wasm` (or `--wasm=ruby`): [ruby.wasm](https://github.com/ruby/ruby.wasm),
+  CRuby compiled to WebAssembly, with its whole standard library (about
+  30 MB). It needs `rbwasm` from the `ruby_wasm` gem (`gem install ruby_wasm`;
+  OCRAN also uses `RBWASM` when it is set).
+  * Without gems, OCRAN packs your files into the prebuilt interpreter from
+    npm, which takes seconds.
+  * Gems must be listed in the application's Gemfile and installed. With
+    gems, OCRAN runs `rbwasm build`. Its first run compiles CRuby and the
+    gems for WebAssembly, which takes several minutes, and is cached in
+    `~/.cache/ocran/ruby_wasm`. Gems with C extensions are cross-compiled
+    for WASI, and the ones that link system libraries usually fail.
+  * The Ruby version follows the Ruby you run OCRAN with. Use
+    `--wasm-ruby 3.4` to choose another one. Pass extra flags to
+    `rbwasm build` with `--wasm-opt <arg>`.
+* `--wasm=picoruby` (or `--picoruby`): [PicoRuby](https://github.com/picoruby/picoruby),
+  the mruby-based Ruby for microcontrollers.
+  * Its runtime is about 2 MB, and nothing needs to be installed.
+  * PicoRuby has its own small library (`js`, `json`, `yaml`, `base64`, ...)
+    and no RubyGems. In the browser it cannot read your files, so OCRAN
+    bundles the program's files into one script, in the order they are
+    required.
+
+In both cases the script is not run at build time. OCRAN scans the program
+and reports what may not work on the chosen runtime, grouped into your code
+and each gem:
+
+* gems the runtime cannot load;
+* threads, processes, sockets and `gets`;
+* for PicoRuby, also CRuby standard libraries it does not have.
+
+The build goes ahead anyway, since the program only fails if it reaches
+those parts. The runtimes are downloaded from the npm registry once, checked
+against the integrity hash the registry publishes, and cached in
+`~/.cache/ocran/npm`.
+
 ### Compilation:
 
 * OCRAN runs your script (using `Kernel#load`) and builds the output when it exits.
