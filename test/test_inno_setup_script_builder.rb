@@ -17,7 +17,12 @@ class TestInnoSetupScriptBuilder < Minitest::Test
         File.write(plain, "")
         builder = Ocran::InnoSetupScriptBuilder.new(nil)
         yield builder, source, plain
-        File.read(builder.build).lines(chomp: true)
+        lines = File.read(builder.build).lines(chomp: true)
+        # The builder's Tempfile is in dir. Remove it now: left to its
+        # finalizer, it may vanish while mktmpdir is deleting the directory,
+        # which then fails with ENOENT (seen on Windows).
+        File.unlink(builder.path)
+        lines
       end
     end
   end
