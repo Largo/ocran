@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-gem "hoe", "~> 4.6"
+gem "rake", "~> 13.0"
 
 gem "minitest", "~> 6.0"
 
