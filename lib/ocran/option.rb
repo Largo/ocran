@@ -29,16 +29,23 @@ module Ocran
         :gem_options => [],
         :gemfile => nil,
         :icon_filename => nil,
+        :inputs => [],
         :inno_setup_script => nil,
         :load_autoload? => true,
         :output_dir => nil,
         :output_override => nil,
         :output_zip => nil,
         :quiet? => false,
+        :roundhouse? => false,
+        :roundhouse_app => nil,
+        :roundhouse_options => [],
+        :roundhouse_output => nil,
         :rubyopt => nil,
         :run_script? => true,
         :script => nil,
         :source_files => [],
+        :spinel? => false,
+        :spinel_options => [],
         :verbose? => false,
         :warning? => true,
         :wrapper_exe? => true,
@@ -144,6 +151,30 @@ Experimental options:
                    packages the host Ruby behind an APE stub. Console-only;
                    output defaults to <scriptname>.com.
                    (Alias: --cosmo-toolchain)
+
+Native compilation (experimental):
+
+--spinel           Compile script.rb ahead of time with Spinel
+                   (https://github.com/matz/spinel) into a native executable
+                   that needs no Ruby, instead of packaging the interpreter.
+                   Spinel compiles a subset of Ruby: when the program is
+                   outside it, OCRAN reports what in your code and in which
+                   gems stands in the way. The script is not run at build
+                   time. Requires the spinel command (SPINEL, PATH, or
+                   ~/.local/bin); OCRAN explains how to install it.
+--spinel-opt <arg> Pass <arg> to the spinel compiler (repeatable), e.g.
+                   --spinel-opt --int-overflow=promote
+--roundhouse       Compile a Rails application with Roundhouse
+                   (https://github.com/rubys/roundhouse) and Spinel into a
+                   native server binary. Give the application directory
+                   instead of a script (default: the current directory).
+                   The output is a directory (default <app>-spinel, or
+                   --output/--output-dir) with the binary and the files it
+                   serves. When the app is not covered yet, OCRAN shows
+                   Roundhouse's analysis, including which gems it does not
+                   support. Requires roundhouse, spinel and spin.
+--roundhouse-opt <arg>  Pass <arg> to roundhouse (repeatable), e.g.
+                   --roundhouse-opt --survey
 EOF
     end
 
@@ -215,6 +246,16 @@ EOF
           # "cosmocc ... is not executable" on a Windows build host, ahead of
           # the clearer "not supported when building on Windows" check.
           @options[:cosmo_cc] = argv.shift
+        when "--spinel"
+          @options[:spinel?] = true
+        when "--spinel-opt"
+          arg = argv.shift or raise "--spinel-opt requires an argument"
+          @options[:spinel_options] << arg
+        when "--roundhouse"
+          @options[:roundhouse?] = true
+        when "--roundhouse-opt"
+          arg = argv.shift or raise "--roundhouse-opt requires an argument"
+          @options[:roundhouse_options] << arg
         when "--cosmo-ruby"
           load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
@@ -251,20 +292,31 @@ EOF
           puts usage
           raise SystemExit
         else
-          expanded = Dir.glob(arg)
-          if expanded.empty?
-            raise "#{arg} not found!" unless File.exist?(arg)
-            expanded = [arg]
-          end
+          @options[:inputs] << arg
+        end
+      end
 
-          expanded.each do |f|
-            if File.directory?(f)
-              raise "#{f} is empty!" if Dir.empty?(f)
-              # If a directory is passed, we want all files under that directory
-              @options[:source_files] += Pathname.new(f).find.reject(&:directory?).map(&:expand_path)
-            else
-              @options[:source_files] << Pathname.new(f).expand_path
-            end
+      if roundhouse?
+        # A Rails application directory rather than a script: none of the
+        # packaging below applies, and the application is not loaded.
+        parse_roundhouse
+        return
+      end
+
+      @options[:inputs].each do |arg|
+        expanded = Dir.glob(arg)
+        if expanded.empty?
+          raise "#{arg} not found!" unless File.exist?(arg)
+          expanded = [arg]
+        end
+
+        expanded.each do |f|
+          if File.directory?(f)
+            raise "#{f} is empty!" if Dir.empty?(f)
+            # If a directory is passed, we want all files under that directory
+            @options[:source_files] += Pathname.new(f).find.reject(&:directory?).map(&:expand_path)
+          else
+            @options[:source_files] << Pathname.new(f).expand_path
           end
         end
       end
@@ -272,6 +324,13 @@ EOF
       raise "No script file specified" if source_files.empty?
 
       @options[:script] = source_files.first
+
+      if spinel?
+        reject_with_native_compilation("--spinel", output_dir: "--output-dir")
+        # Spinel compiles the source; it never needs the program to run, and
+        # running it would only pull OCRAN's dependency detection in.
+        @options[:run_script?] = false
+      end
 
       @options[:force_autoload?] = run_script? && load_autoload?
 
@@ -375,6 +434,57 @@ EOF
       end
     end
 
+    # Validates --roundhouse and works out the application and the output
+    # directory.
+    def parse_roundhouse
+      raise "--roundhouse takes one Rails application directory" if @options[:inputs].size > 1
+      reject_with_native_compilation("--roundhouse")
+      raise "--spinel and --roundhouse cannot be used together (--roundhouse compiles with Spinel already)" if spinel?
+
+      input = Pathname(@options[:inputs].first || Dir.pwd).expand_path
+      raise "#{input} not found!" unless input.exist?
+
+      app = rails_root(input.directory? ? input : input.dirname)
+      unless app
+        raise "#{input} is not a Rails application (no config/application.rb in it or above it); " \
+              "--roundhouse compiles a Rails app - use --spinel for a plain script"
+      end
+
+      output = output_dir || output_override || Pathname("#{app.basename}-spinel").expand_path
+      raise "The output directory #{output} would overwrite the application itself" if output == app
+
+      @options[:roundhouse_app] = app
+      @options[:roundhouse_output] = output
+      @options[:run_script?] = false
+      @options[:force_autoload?] = false
+      @options[:verbose?] &&= !quiet?
+    end
+    private :parse_roundhouse
+
+    # The Rails application root at or above the given directory.
+    def rails_root(dir)
+      dir.ascend.find { |d| (d + "config" + "application.rb").file? }
+    end
+    private :rails_root
+
+    # Native compilation produces a program, not a package of one, so the
+    # options that shape a package do not apply to it.
+    def reject_with_native_compilation(mode, output_dir: nil)
+      conflicts = {
+        "--innosetup" => inno_setup_script,
+        "--macosx-bundle" => @options[:macosx_bundle?],
+        "--output-zip" => output_zip,
+        "--cosmo/--cosmo-ruby" => cosmo?,
+        "--windows" => force_windows?,
+        "--icon" => icon_filename,
+      }
+      conflicts[output_dir] = self.output_dir if output_dir
+      conflicts.each do |name, given|
+        raise "#{name} cannot be used with #{mode}" if given
+      end
+    end
+    private :reject_with_native_compilation
+
     def add_all_core? = @options[__method__]
 
     def add_all_encoding? = @options[__method__]
@@ -449,6 +559,20 @@ EOF
     def wrapper_exe? = @options[__method__]
 
     def rubyopt = @options[__method__]
+
+    def roundhouse? = @options[__method__]
+
+    # The root directory of the Rails application --roundhouse compiles.
+    def roundhouse_app = @options[__method__]
+
+    def roundhouse_options = @options[__method__]
+
+    # The directory --roundhouse writes the binary and its files to.
+    def roundhouse_output = @options[__method__]
+
+    def spinel? = @options[__method__]
+
+    def spinel_options = @options[__method__]
 
     def run_script? = @options[__method__]
 

@@ -206,6 +206,20 @@ module Ocran
     end
 
     def build
+      # Native compilation hands the source to an ahead-of-time compiler;
+      # nothing was loaded, and none of the packaging below applies.
+      if @option.spinel? || @option.roundhouse?
+        Dir.chdir(@pre_env.pwd)
+        if @option.roundhouse?
+          require_relative "roundhouse_builder"
+          RoundhouseBuilder.new(@option).build
+        else
+          require_relative "spinel_builder"
+          SpinelBuilder.new(@option).build
+        end
+        return
+      end
+
       # If the script was run and autoload is enabled, attempt to autoload libraries.
       if @option.force_autoload?
         attempt_load_autoload(@ignore_modules)
