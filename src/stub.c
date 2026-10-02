@@ -47,6 +47,15 @@ static void delete_extraction_dir(void)
     }
 }
 
+
+/* Whether an environment variable asks for something: set, and neither
+   empty nor "0". OCRAN_DEBUG=0 used to switch debug output on. */
+static bool IsEnvFlagSet(const char *name)
+{
+    const char *value = getenv(name);
+    return value != NULL && value[0] != '\0' && strcmp(value, "0") != 0;
+}
+
 int main(int argc, char *argv[])
 {
     int status = EXIT_CODE_FAILURE;
@@ -85,8 +94,9 @@ int main(int argc, char *argv[])
     /* Read header of packed data */
     OpModes = GetOperationModes(unpack_ctx);
 
-    /* Enable debug mode when the flag is set or OCRAN_DEBUG env var is set */
-    if (IsDebugMode(OpModes) || getenv("OCRAN_DEBUG")) {
+    /* Enable debug mode when the flag is set or OCRAN_DEBUG is set to
+       anything but "0" or the empty string. */
+    if (IsDebugMode(OpModes) || IsEnvFlagSet("OCRAN_DEBUG")) {
         EnableDebugMode();
         DEBUG("Ocran stub running in debug mode");
     }
