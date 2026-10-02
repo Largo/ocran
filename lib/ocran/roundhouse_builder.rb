@@ -12,7 +12,8 @@ module Ocran
   # Spinel (https://github.com/matz/spinel).
   #
   # Roundhouse lowers the app to the subset of Ruby Spinel compiles and
-  # writes it out as a spin project; `spin build` compiles that. The binary
+  # writes it out as a spin project; its `make assets` builds static/ and
+  # `spin build` compiles the rest. The binary
   # reads its static assets, configuration and SQLite database from beside
   # it, so the result is a directory: the binary plus those files.
   #
@@ -62,8 +63,10 @@ module Ocran
       output, status = run(command)
       transpile_failed(tools, output, status, work) unless status.success?
 
+      build_assets(project, work)
+
       say "Compiling with Spinel (spin build); the first build of a large app can take a few minutes"
-      output, status = run([tools[:spin], "build"], chdir: project)
+      output, status = run([tools[:spin], "build"], chdir: project, env: library_path_env(project))
       compile_failed(tools, output, status, work) unless status.success?
 
       install(project)
@@ -72,11 +75,70 @@ module Ocran
 
     private
 
-    def run(command, chdir: Dir.pwd)
+    def run(command, chdir: Dir.pwd, env: {})
       verbose command.join(" ")
-      Open3.capture2e(@env, *command, chdir: chdir)
+      Open3.capture2e(@env.merge(env), *command, chdir: chdir)
     rescue SystemCallError => e
       [e.message, nil]
+    end
+
+    # The generated project builds its static assets with `make assets`:
+    # Turbo and Stimulus copied out of their gems, the app's own JavaScript
+    # and stylesheets, and Tailwind when the app uses it (through npx).
+    # Bundler installs only the Gemfile's assets group for it, so no
+    # C-extension gem is compiled for a step that only copies files.
+    # Without static/ the binary still serves pages, with every stylesheet
+    # and script a 404, so a failure here stops the build.
+    def build_assets(project, work)
+      makefile = File.join(project, "Makefile")
+      return unless File.file?(makefile) && File.foreach(makefile).any? { |l| l.start_with?("assets:") }
+
+      retry_command = "cd #{File.join(work, "spinel")} && BUNDLE_ONLY=assets bundle install && BUNDLE_ONLY=assets make assets"
+      make = AotToolchain.search_path("make", @env)
+      bundle = AotToolchain.search_path("bundle", @env)
+      unless make && bundle
+        error "Building the static assets needs `make` and `bundle`, which #{make ? "`bundle` was" : bundle ? "`make` was" : "were"} not found."
+        STDERR.puts "  The generated project is kept; with both installed: #{retry_command}"
+        raise "the static assets could not be built"
+      end
+
+      say "Building static assets (make assets)"
+      env = { "BUNDLE_ONLY" => "assets" }
+      [[bundle, "install"], [make, "assets"]].each do |command|
+        output, status = run(command, chdir: project, env: env)
+        next if status&.success?
+
+        print_failure("Building the static assets failed (#{command.map { |c| File.basename(c) }.join(" ")})", output, status)
+        STDERR.puts "Things to check:"
+        STDERR.puts "  - an app that builds Tailwind needs Node.js and npm for `npx @tailwindcss/cli`"
+        STDERR.puts "  - the generated project is kept; to retry: #{retry_command}"
+        raise "the static assets could not be built"
+      end
+    end
+
+    # spin links the allocator spin.toml names by bare name (-ljemalloc), and
+    # the linker searches only its default directories, which on Apple
+    # Silicon do not include Homebrew's /opt/homebrew/lib. pkg-config knows
+    # where the library is, so its -L directories go on LIBRARY_PATH (which
+    # gcc and clang both read) for the build.
+    def library_path_env(project)
+      manifest = File.join(project, "spin.toml")
+      allocator = File.file?(manifest) && File.read(manifest)[/^\s*allocator\s*=\s*"([^"]+)"/, 1]
+      return {} unless allocator && allocator != "system"
+
+      pkg_config = AotToolchain.search_path("pkg-config", @env)
+      return {} unless pkg_config
+
+      output, status = Open3.capture2(pkg_config, "--libs-only-L", allocator, err: File::NULL)
+      return {} unless status.success?
+
+      dirs = output.split.select { |flag| flag.start_with?("-L") }.map { |flag| flag.delete_prefix("-L") }
+      return {} if dirs.empty?
+
+      verbose "Adding #{dirs.join(", ")} (pkg-config #{allocator}) to LIBRARY_PATH"
+      { "LIBRARY_PATH" => (dirs + [ENV.fetch("LIBRARY_PATH", "")]).reject(&:empty?).join(File::PATH_SEPARATOR) }
+    rescue SystemCallError
+      {}
     end
 
     # spin calls spinel by name, so a spinel found outside PATH (through
@@ -126,6 +188,10 @@ module Ocran
       STDERR.puts "    and a mismatch is the most common cause of a failing build"
       missing_libs.each do |lib, package|
         STDERR.puts "  - the #{lib} development headers seem to be missing (#{package})"
+      end
+      unlinked_libs(output).each do |lib|
+        STDERR.puts "  - the linker could not find lib#{lib}: install it (Debian/Ubuntu: lib#{lib}-dev; macOS: brew install #{lib});"
+        STDERR.puts "    if it is installed outside the linker's default directories, set LIBRARY_PATH to its lib directory"
       end
       STDERR.puts "  - the generated project is kept in #{File.join(work, "spinel")}; run `spin build` there to retry"
       STDERR.puts "  - a compiler error in the generated code is a bug in Roundhouse or Spinel: please report it"
@@ -185,6 +251,12 @@ module Ocran
         "jemalloc" => "libjemalloc-dev / brew install jemalloc" }.reject do |lib, _|
         Kernel.system("pkg-config", "--exists", lib)
       end.to_a
+    end
+
+    # Libraries the link step could not find, from GNU ld's
+    # "cannot find -lfoo" and Apple ld's "library 'foo' not found".
+    def unlinked_libs(output)
+      output.to_s.scan(/cannot find -l([\w.+-]+)|library '([\w.+-]+)' not found/).flatten.compact.uniq
     end
 
     def install(project)
