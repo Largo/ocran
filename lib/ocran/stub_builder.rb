@@ -157,7 +157,12 @@ module Ocran
         # Embed rcedit-style PE resources: version info, manifest, string table
         # (Windows only). This must run before the opcode data is appended below,
         # because BeginUpdateResource/EndUpdateResource rewrites the whole PE file.
-        if WINDOWS
+        # Only loaded when asked for, like ed_icon: it requires fiddle, which
+        # since Ruby 4.0 is a bundled gem that the application's own bundle
+        # (ocran run under its `bundle exec`) need not include.
+        resource_options = [version_strings, file_version, product_version,
+                            resource_strings, execution_level, application_manifest]
+        if WINDOWS && resource_options.any? { |v| v && !(v.respond_to?(:empty?) && v.empty?) }
           manifest_xml = application_manifest ? File.read(application_manifest, encoding: "UTF-8") : nil
           require_relative "ed_resource"
           EdResource.update(stub,
