@@ -11,10 +11,11 @@ module Ocran
   # being packaged together with a Ruby interpreter.
   #
   # Spinel compiles a subset of Ruby, so whether this works depends on the
-  # program. When it does, the result is one small binary that needs
-  # nothing but libc. When it does not - or when Spinel is not installed -
-  # the user gets a report of what in their code and in which gems stands
-  # in the way, from SpinelCompatibility.
+  # program, and Spinel is the one to say: the program is handed to it as
+  # it is, without a verdict of OCRAN's own first. When it compiles, the
+  # result is one small binary that needs nothing but libc. When it does
+  # not, the compiler's error comes with a report from SpinelCompatibility
+  # of what in the code and in which gems may stand in the way.
   class SpinelBuilder
     include CommandOutput
 
@@ -31,17 +32,17 @@ module Ocran
 
     def build
       spinel = AotToolchain.find(:spinel)
-      analysis = SpinelCompatibility.new(@script, packages_dir: packages_dir(spinel),
-                                                  project_dirs: project_dirs).analyze
-
       unless spinel
         error "--spinel needs the Spinel compiler, which was not found."
         STDERR.puts
         STDERR.puts AotToolchain.install_instructions([:spinel])
-        STDERR.puts
-        print_report(analysis, "Meanwhile, a static check of whether #{display(@script)} is likely to compile with Spinel:")
         raise "Spinel is not installed"
       end
+
+      # The walk resolves the program's requires to the -I roots Spinel
+      # needs. What it finds along the way is shown only if Spinel fails.
+      analysis = SpinelCompatibility.new(@script, packages_dir: packages_dir(spinel),
+                                                  project_dirs: project_dirs).analyze
 
       verbose "Using Spinel at #{spinel} (#{AotToolchain.version(spinel) || "version unknown"})"
       warn_about_uncompiled_files(analysis)
@@ -57,7 +58,7 @@ module Ocran
 
       if status.success?
         STDERR.print output if !output.strip.empty? && @option.warning?
-        report_success(analysis)
+        report_success
       else
         report_failure(spinel, flags, output, status, analysis)
       end
@@ -65,12 +66,7 @@ module Ocran
 
     private
 
-    def report_success(analysis)
-      unless analysis.findings.empty?
-        warning "Spinel compiled the program, but the static check flagged #{analysis.findings.size} " \
-                "construct(s) that may behave differently than under CRuby#{@option.verbose? ? ":" : " (--verbose lists them)"}"
-        verbose analysis.report
-      end
+    def report_success
       say "Finished building #{@output} (#{File.size(@output)} bytes)"
       say "This is a native executable for this platform; it does not need Ruby to run."
     end

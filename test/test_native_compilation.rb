@@ -176,8 +176,20 @@ class TestNativeCompilation < Minitest::Test
     refute status.success?, out
     assert_match(/--spinel needs the Spinel compiler, which was not found/, out)
     assert_match(%r{git clone https://github.com/matz/spinel}, out)
-    assert_match(/static check of whether spinel_incompatible\.rb is likely to compile/, out)
-    assert_match(/eval of a string is not supported/, out)
+    # Spinel judges the program, not OCRAN: no verdict without it.
+    refute_match(/eval of a string is not supported/, out)
+  end
+
+  # The program goes to Spinel even where OCRAN's own scan would object,
+  # and a successful compile is not second-guessed.
+  def test_spinel_is_handed_the_program_unchecked
+    posix_only
+    dir = fixture("spinel_incompatible")
+    out, status = ocran(dir, "spinel_incompatible.rb", "--spinel", env: { "SPINEL" => fake_spinel })
+
+    assert status.success?, out
+    assert File.executable?(File.join(dir, "spinel_incompatible")), out
+    refute_match(/static check|not supported|--no-dep-run/, out)
   end
 
   def test_spinel_rejects_packaging_options
@@ -349,9 +361,21 @@ class TestNativeCompilation < Minitest::Test
     assert_match(/1 unknown \(frobnicator\)/, out)
   end
 
-  def test_roundhouse_requires_rails_app
-    out, status = ocran(@tmp, "--roundhouse", ".")
-    refute status.success?
-    assert_match(/is not a Rails application/, out)
+  # Roundhouse decides what it can compile: a directory without
+  # config/application.rb is handed over as it is, and --spinel (which
+  # Roundhouse uses anyway) may be given with --roundhouse.
+  def test_roundhouse_is_handed_any_directory
+    posix_only
+    bin = fake_roundhouse_tools
+    app = File.join(@tmp, "blog")
+    FileUtils.mkdir_p(app)
+    File.write(File.join(app, "blog.rb"), "puts 1\n")
+    env = { "ROUNDHOUSE" => File.join(bin, "roundhouse"), "SPIN" => File.join(bin, "spin"),
+            "SPINEL" => File.join(bin, "spinel") }
+    out, status = ocran(@tmp, "--roundhouse", "--spinel", "blog/blog.rb", env: env)
+
+    assert status.success?, out
+    refute_match(/Rails application|cannot be used together/, out)
+    assert File.executable?(File.join(@tmp, "blog-spinel", "blog")), out
   end
 end

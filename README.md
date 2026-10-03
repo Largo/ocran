@@ -363,17 +363,17 @@ does not, OCRAN tells you why.
   ocran app.rb --spinel --output myapp
   ```
 
-  The script is not run at build time. OCRAN scans the program statically
-  (the script, the files it requires, and the source of every gem it
-  requires) and passes Spinel the `-I` roots it needs for your `lib/` and
-  for pure-Ruby gems. If Spinel cannot compile the program, OCRAN prints
-  the compiler's error, then a report of what stands in the way, grouped
-  into your code and each gem. Gems with C extensions and standard
-  libraries Spinel does not provide are named as incompatible. If
-  `spinel-doctor` is installed next to the compiler, its report is shown
-  too. If Spinel is not installed, OCRAN explains how to install it and
-  still shows the report, so you can see whether installing it is worth
-  it. Use `--spinel-opt <arg>` (repeatable) to pass flags to the compiler,
+  The script is not run at build time, and OCRAN does not judge the
+  program before Spinel sees it: Spinel decides what it can compile.
+  OCRAN resolves the program's requires (the script, the files it
+  requires, and the source of every gem it requires) only to pass Spinel
+  the `-I` roots it needs for your `lib/` and for pure-Ruby gems. If
+  Spinel cannot compile the program, OCRAN prints the compiler's error,
+  then a report of what may stand in the way, grouped into your code and
+  each gem. Gems with C extensions and standard libraries Spinel does not
+  provide are named as incompatible. If `spinel-doctor` is installed next
+  to the compiler, its report is shown too. If Spinel is not installed,
+  OCRAN explains how to install it. Use `--spinel-opt <arg>` (repeatable) to pass flags to the compiler,
   for example `--spinel-opt --int-overflow=promote` or
   `--spinel-opt --defer-refusals`. With `--debug` the binary is built
   with `-g`. Only code is compiled in; data files have to ship next to
@@ -388,6 +388,13 @@ does not, OCRAN tells you why.
   ```
   ocran --roundhouse path/to/rails/app   # -> ./app-spinel/
   ```
+
+  OCRAN does not check the directory first: Roundhouse is handed it as
+  it is and decides whether it can compile it. Given a file or a
+  subdirectory, OCRAN uses the Rails application around it
+  (`config/application.rb`), or the directory itself when there is none.
+  `--spinel` may be given too; it changes nothing, as Roundhouse compiles
+  with Spinel anyway.
 
   The output is a directory (`<app>-spinel` by default, or `--output` /
   `--output-dir`) that contains the binary plus the `static/`, `public/`,

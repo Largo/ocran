@@ -164,17 +164,19 @@ Native compilation (experimental):
 --spinel           Compile script.rb ahead of time with Spinel
                    (https://github.com/matz/spinel) into a native executable
                    that needs no Ruby, instead of packaging the interpreter.
-                   Spinel compiles a subset of Ruby: when the program is
-                   outside it, OCRAN reports what in your code and in which
-                   gems stands in the way. The script is not run at build
-                   time. Requires the spinel command (SPINEL, PATH, or
+                   The program is handed to Spinel as it is; Spinel compiles
+                   a subset of Ruby, and when it refuses the program, OCRAN
+                   adds a report of what in your code and in which gems may
+                   stand in the way. The script is not run at build time. Requires the spinel command (SPINEL, PATH, or
                    ~/.local/bin); OCRAN explains how to install it.
 --spinel-opt <arg> Pass <arg> to the spinel compiler (repeatable), e.g.
                    --spinel-opt --int-overflow=promote
 --roundhouse       Compile a Rails application with Roundhouse
                    (https://github.com/rubys/roundhouse) and Spinel into a
                    native server binary. Give the application directory
-                   instead of a script (default: the current directory).
+                   instead of a script (default: the current directory);
+                   Roundhouse decides whether it can compile it. Implies
+                   --spinel.
                    The output is a directory (default <app>-spinel, or
                    --output/--output-dir) with the binary and the files it
                    serves. When the app is not covered yet, OCRAN shows
@@ -452,7 +454,9 @@ EOF
         raise "--innosetup cannot be combined with --output-dir or --output-zip"
       end
 
-      unless run_script?
+      # Spinel compiles the source and packs nothing, so what the dependency
+      # run would have detected does not matter to it.
+      if !run_script? && !spinel?
         # Without the dependency run nothing the script loads is detected,
         # so the libraries it needs must be named some other way.
         unless add_all_core?
@@ -556,16 +560,15 @@ EOF
     def parse_roundhouse
       raise "--roundhouse takes one Rails application directory" if @options[:inputs].size > 1
       reject_with_native_compilation("--roundhouse")
-      raise "--spinel and --roundhouse cannot be used together (--roundhouse compiles with Spinel already)" if spinel?
+      # --spinel adds nothing: Roundhouse compiles with Spinel already.
 
       input = Pathname(@options[:inputs].first || Dir.pwd).expand_path
       raise "#{input} not found!" unless input.exist?
 
-      app = rails_root(input.directory? ? input : input.dirname)
-      unless app
-        raise "#{input} is not a Rails application (no config/application.rb in it or above it); " \
-              "--roundhouse compiles a Rails app - use --spinel for a plain script"
-      end
+      # Roundhouse decides what it can compile; the application root is
+      # looked for only so a file or subdirectory inside it finds the app.
+      dir = input.directory? ? input : input.dirname
+      app = rails_root(dir) || dir
 
       output = output_dir || output_override || Pathname("#{app.basename}-spinel").expand_path
       raise "The output directory #{output} would overwrite the application itself" if output == app
