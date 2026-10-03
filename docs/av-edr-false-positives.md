@@ -10,8 +10,8 @@ This document explains **why** it happens and **what you can do about it**,
 ordered from highest to lowest impact. None of this is about evading
 detection — it is about making a legitimate program look like the ordinary,
 identifiable product it is, so heuristics and reputation systems stop
-guessing. The PE-resource options below are what the `feat/pe-resources`
-work adds for exactly this purpose.
+guessing. The PE resource options below (`--set-version-string` and the
+others) exist for exactly this purpose.
 
 ## Why an OCRAN exe looks suspicious
 

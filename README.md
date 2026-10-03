@@ -188,6 +188,34 @@ Fine-tuning flags:
 * `--debug`: Enable verbose output when the generated executable runs.
 * `--debug-extract`: Unpack to a local directory and do not delete after execution (useful for troubleshooting).
 
+#### Windows resource options:
+
+These set the PE resources of the generated executable, with the same names
+as [rcedit](https://github.com/electron/rcedit). They apply to the
+self-extracting `.exe` and to the wrapper `.exe` of `--output-dir`,
+`--output-zip` and `--innosetup`. All are opt-in: without them the
+executable is built as before. (Windows only)
+
+* `--set-version-string <key> <value>` (alias `--version-string`): Add a `StringFileInfo` entry such as `CompanyName`, `ProductName`, `FileDescription` or `LegalCopyright`. Repeat for each key.
+* `--set-file-version <x.y.z.w>` (alias `--file-version`): Set the numeric and string file version.
+* `--set-product-version <x.y.z.w>` (alias `--product-version`): Set the numeric and string product version.
+* `--set-resource-string <id> <value>` (alias `--resource-string`): Set an entry of the `RT_STRING` table by its numeric id.
+* `--set-requested-execution-level <level>` (alias `--uac-level`): Set the UAC level in the manifest: `asInvoker` (the default), `highestAvailable` or `requireAdministrator`.
+* `--application-manifest <file>` (alias `--manifest`): Replace the built-in application manifest with the given file. `--set-requested-execution-level` still applies to it.
+
+```
+ocran app.rb --set-version-string CompanyName "Example Ltd" \
+  --set-version-string ProductName "Example App" \
+  --set-version-string FileDescription "Example App" \
+  --set-file-version 1.2.0.0 --set-product-version 1.2.0.0
+```
+
+An unsigned executable with no version information, which extracts files
+to `%TEMP%` and runs them, is what antivirus and EDR heuristics expect of a
+malware packer. Version information, an icon and a code signature give it
+an identity instead. [docs/av-edr-false-positives.md](docs/av-edr-false-positives.md)
+goes through these steps in order of impact.
+
 #### Experimental options:
 
 * `--cosmo-ruby <ruby.com>`: Package a cosmopolitan-built Ruby (an APE)
