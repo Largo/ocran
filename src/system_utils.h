@@ -195,15 +195,46 @@ size_t GetMemoryMapSize(const MemoryMap *map);
  * This function sets up console control and POSIX signal handlers so that
  * the parent process is not prematurely terminated during initialization and
  * cleanup phases. On Windows, a console control handler is registered to ignore
- * control events (e.g., Ctrl+C) in the parent process. On POSIX, relevant
- * signals (SIGINT, SIGTERM, SIGHUP) can be configured to allow cleanup
- * processing before exit.
+ * control events (e.g., Ctrl+C) in the parent process. On POSIX, SIGINT,
+ * SIGTERM, SIGHUP and SIGQUIT are caught and forwarded to the child once it
+ * runs, so the stub outlives it and can clean up.
  *
  * @return
  *   - true  if initialization succeeded  
  *   - false if an error occurred (e.g., SetConsoleCtrlHandler failed)
  */
 bool InitializeSignalHandling(void);
+
+/**
+ * @brief Registers the routine that deletes the extraction directory.
+ *
+ * The routine runs at most once, through RunCleanupRoutine(): at the end of
+ * main(), or on Windows from the console control handler when Windows is
+ * about to terminate the stub (console window closed, system shutdown),
+ * once the child has exited or been ended. It must therefore cope with
+ * being called at any point of main().
+ */
+void SetCleanupRoutine(void (*routine)(void));
+
+/**
+ * @brief Runs the registered cleanup routine unless it has run already.
+ *
+ * If another thread is running it at the time, waits until it is done.
+ */
+void RunCleanupRoutine(void);
+
+/**
+ * @brief Dies of the signal that killed the child, if one did.
+ *
+ * On POSIX, when the child launched by CreateAndWaitForProcess was killed by
+ * a signal, or a termination signal arrived before it could be started, the
+ * stub re-raises that signal with its default action so that its own parent
+ * sees the same kind of death. Call it after cleanup. Returns if there is no
+ * such signal, or if the process survives it (e.g. PID 1 in a container);
+ * the caller then exits with 128 + signal as reported in exit_code.
+ * No-op on Windows.
+ */
+void ReraiseChildSignal(void);
 
 /**
  * @brief Sets or removes an environment variable.

@@ -99,14 +99,17 @@ const char *CreateInstDir(bool is_extract_to_exe_dir)
     }
 
     /* Normalize 8.3 short names (e.g. a TEMP under C:\Users\RUNNER~1) so all
-       paths derived from the extraction dir use one consistent spelling. */
+       paths derived from the extraction dir use one consistent spelling.
+       The directory exists by now: should that fail, keep the spelling at
+       hand, so that the directory is still known and gets deleted. */
     char *long_dir = ToLongPath(inst_dir);
-    free(inst_dir);
-    if (!long_dir) {
-        return NULL;
+    if (long_dir) {
+        free(inst_dir);
+        InstDir = long_dir;
+    } else {
+        APP_ERROR("Failed to normalize the extraction directory path");
+        InstDir = inst_dir;
     }
-
-    InstDir = long_dir;
     return InstDir;
 }
 
@@ -310,6 +313,25 @@ cleanup:
 }
 
 #ifndef _WIN32
+/* Whether a symlink target names a sibling of the link: a single clean
+   path segment. That is all the packer emits (shared library aliases like
+   libruby.so -> libruby.so.3.4.1 in bin), and it keeps every link, and
+   every path running through one, inside the installation directory. An
+   absolute target, or one climbing out with "..", would let the files
+   extracted after it land anywhere. */
+static bool is_sibling_name(const char *name)
+{
+    if (!IsCleanRelativePath(name)) {
+        return false;
+    }
+    for (const char *p = name; *p; p++) {
+        if (is_path_separator(*p)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool CreateSymlinkUnderInstDir(const char *rel_link_path, const char *target)
 {
     if (!IsInstDirSet()) {
@@ -324,6 +346,12 @@ bool CreateSymlinkUnderInstDir(const char *rel_link_path, const char *target)
 
     if (!target || !*target) {
         APP_ERROR("target is NULL or empty");
+        return false;
+    }
+
+    if (!is_sibling_name(target)) {
+        APP_ERROR("symlink target '%s' of '%s' is not a file name in the same "
+                  "directory", target, rel_link_path);
         return false;
     }
 

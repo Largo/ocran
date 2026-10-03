@@ -36,7 +36,7 @@ BINARIES        := $(addsuffix $(EXEEXT), $(PROG_NAMES))
 LZMA_SRCS       := lzma/LzmaDec.c
 LZMA_OBJS       := $(LZMA_SRCS:.c=.o)
 
-COMMON_SRCS     := $(SYSTEM_UTILS_SRC) inst_dir.c script_info.c unpack.c
+COMMON_SRCS     := $(SYSTEM_UTILS_SRC) path_utils.c inst_dir.c script_info.c unpack.c
 COMMON_OBJS     := $(COMMON_SRCS:.c=.o) $(LZMA_OBJS) $(RESOURCE_OBJ)
 
 VARIANT_SRCS    := stub.c error.c
@@ -45,6 +45,18 @@ WINDOW_OBJS     := $(VARIANT_SRCS:.c=_window.o)
 
 .PHONY: all clean install
 all: $(BINARIES)
+
+# Header dependencies: every object depends on every header it could
+# include. Coarse, but it needs no compiler support (gcc, mingw and cosmocc
+# all build from this Makefile), leaves no generated files behind, and
+# cannot go stale as includes change. Rebuilding everything takes seconds.
+HEADERS         := $(wildcard *.h)
+LZMA_HEADERS    := $(wildcard lzma/*.h)
+
+$(filter-out $(LZMA_OBJS) $(RESOURCE_OBJ), $(COMMON_OBJS)) \
+$(CONSOLE_OBJS) $(WINDOW_OBJS): $(HEADERS) $(LZMA_HEADERS)
+
+$(LZMA_OBJS): $(LZMA_HEADERS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

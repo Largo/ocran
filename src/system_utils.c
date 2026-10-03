@@ -6,96 +6,6 @@
 #include "error.h"
 #include "system_utils.h"
 
-/*
- * Returns true if `path` is a “clean” relative path:
- * - not empty
- * - does not start with a path separator
- * - on Windows, no drive-letter spec (e.g. "C:\")
- * - no empty segments ("//")
- * - no "." or ".." segments
- */
-bool IsCleanRelativePath(const char *path)
-{
-    if (!path || !*path) {
-        return false;
-    }  
-
-#ifdef _WIN32
-    /* Forbid Windows drive specification (e.g. "C:\") */
-    if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
-        && path[1] == ':'
-        && is_path_separator(path[2])) {
-        return false;
-    }
-#endif
-
-    /* Forbid absolute path (leading '/' or '\') */
-    if (is_path_separator(*path)) {
-        return false;
-    }
-
-    /* Validate each path segment */
-    const char *p = path;
-    while (*p) {
-        const char *start = p;
-
-        /* Advance until next separator or end-of-string */
-        while (*p && !is_path_separator(*p)) {
-            p++;
-        }
-
-        size_t len = p - start;
-
-        /* Reject empty, "." or ".." segments */
-        if (len == 0
-            || (len == 1 && start[0] == '.')
-            || (len == 2 && start[0] == '.' && start[1] == '.')) {
-            return false;
-        }
-
-        /* Skip over the separator */
-        if (*p) {
-            p++;
-        }
-    }
-
-    return true;
-}
-
-// Combines two file path components into a single path, handling path separators.
-char *JoinPath(const char *p1, const char *p2)
-{
-    if (p1 == NULL || *p1 == '\0') {
-        APP_ERROR("p1 is null or empty");
-        return NULL;
-    }
-
-    if (p2 == NULL || *p2 == '\0') {
-        APP_ERROR("p2 is null or empty");
-        return NULL;
-    }
-
-    size_t p1_len = strlen(p1);
-    if (is_path_separator(p1[p1_len - 1])) { p1_len--; }
-
-    size_t p2_len = strlen(p2);
-    const char *p2_start = p2;
-    if (is_path_separator(*p2_start)) { p2_start++; p2_len--; }
-
-    size_t joined_len = p1_len + 1 + p2_len;
-    char *joined_path = calloc(1, joined_len + 1);
-    if (!joined_path) {
-        APP_ERROR("Failed to allocate buffer for join path");
-        return NULL;
-    }
-    memcpy(joined_path, p1, p1_len);
-    joined_path[p1_len] = PATH_SEPARATOR;
-    memcpy(joined_path + p1_len + 1, p2_start, p2_len);
-    joined_path[joined_len] = '\0';
-
-    return joined_path;
-}
-
 char *ToLongPath(const char *path)
 {
     if (!path) {
@@ -120,43 +30,6 @@ char *ToLongPath(const char *path)
     }
 
     return buf;
-}
-
-char *GetParentPath(const char *path)
-{
-    if (!path) {
-        APP_ERROR("path is NULL");
-        return NULL;
-    }
-
-    size_t root = path_root_length(path);
-    size_t i    = strlen(path);
-
-    /* Skip any trailing separators */
-    while (i > root && is_path_separator(path[i - 1])) {
-        i--;
-    }
-
-    /* Skip the last segment’s characters */
-    while (i > root && !is_path_separator(path[i - 1])) {
-        i--;
-    }
-
-    /* Skip the separators before it, keeping the root ("/" or "C:\") */
-    while (i > root && is_path_separator(path[i - 1])) {
-        i--;
-    }
-
-    /* i==0 ⇒ empty parent (relative path with a single segment) */
-
-    char *out = malloc(i + 1);
-    if (!out) {
-        APP_ERROR("Memory allocation failed for parent path");
-        return NULL;
-    }
-    memcpy(out, path, i);
-    out[i] = '\0';
-    return out;
 }
 
 /**
@@ -271,8 +144,12 @@ bool CreateDirectoriesRecursively(const char *dir)
     memcpy(path, dir, path_len);
     path[path_len] = '\0';
 
+    // Walk up to the deepest existing ancestor, cutting the path at each
+    // separator on the way; p points at the last cut (or the end). The walk
+    // stops at the root ("C:\", "\"), which is never cut off.
+    size_t root = path_root_length(path);
     char *p = path + path_len;
-    do {
+    for (;;) {
         // Convert to UTF-16 for API call
         wpath = utf8_to_utf16(path);
         if (!wpath) {
@@ -283,8 +160,6 @@ bool CreateDirectoriesRecursively(const char *dir)
         DWORD path_attr = GetFileAttributesW(wpath);
         if (path_attr != INVALID_FILE_ATTRIBUTES) {
             if (path_attr & FILE_ATTRIBUTE_DIRECTORY) {
-                free(wpath);
-                wpath = NULL;
                 break;
             } else {
                 APP_ERROR("Directory name conflicts with a file(%s)", path);
@@ -292,22 +167,37 @@ bool CreateDirectoriesRecursively(const char *dir)
             }
         } else {
             DWORD err = GetLastError();
-            if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) {
-                // continue;
-            } else {
+            if (err != ERROR_FILE_NOT_FOUND && err != ERROR_PATH_NOT_FOUND) {
                 APP_ERROR("Cannot access the directory, Error=%lu", err);
                 goto cleanup;
             }
         }
 
+        // Find the separator before the last remaining segment
+        char *q = p;
+        while (q > path + root && !is_path_separator(q[-1])) {
+            q--;
+        }
+        if (q <= path + root) {
+            // No ancestor below the root exists: the remaining first
+            // segment has to be created as well.
+            if (!CreateDirectoryW(wpath, NULL)
+                && GetLastError() != ERROR_ALREADY_EXISTS) {
+                DWORD err = GetLastError();
+                APP_ERROR("Failed to create directory '%s', Error=%lu", path, err);
+                goto cleanup;
+            }
+            break;
+        }
+
         free(wpath);
         wpath = NULL;
 
-        while (p > path && !is_path_separator(*p)) {
-            p--;
-        }
+        p = q - 1;
         *p = '\0';
-    } while (p >= path);
+    }
+    free(wpath);
+    wpath = NULL;
 
     char *end = path + path_len;
     for (; p < end; p++) {
@@ -322,7 +212,10 @@ bool CreateDirectoriesRecursively(const char *dir)
             goto cleanup;
         }
 
-        if (!CreateDirectoryW(wpath, NULL)) {
+        // Already existing: a trailing separator names the directory just
+        // created once more, or another process was quicker.
+        if (!CreateDirectoryW(wpath, NULL)
+            && GetLastError() != ERROR_ALREADY_EXISTS) {
             DWORD err = GetLastError();
             APP_ERROR("Failed to create directory '%s', Error=%lu", path, err);
             goto cleanup;
@@ -344,13 +237,17 @@ cleanup:
     return result;
 }
 
-// Deletes a directory and all its contents recursively.
+// Deletes a directory and all its contents recursively. Keeps going after a
+// failure so that as much as possible gets deleted; returns false if
+// anything could not be.
 bool DeleteRecursively(const char *path)
 {
     if (!path || !*path) {
         APP_ERROR("path is NULL or empty");
         return false;
     }
+
+    bool success = true;
 
     char *findPath = JoinPath(path, "*");
     if (!findPath) {
@@ -380,6 +277,7 @@ bool DeleteRecursively(const char *path)
             char *name = utf16_to_utf8(wname);
             if (!name) {
                 APP_ERROR("Failed to convert filename to UTF-8");
+                success = false;
                 continue;
             }
 
@@ -387,13 +285,15 @@ bool DeleteRecursively(const char *path)
             free(name);
             if (!subPath) {
                 APP_ERROR("Failed to build delete file path");
-                break;
+                success = false;
+                continue;
             }
 
             wchar_t *wsubPath = utf8_to_utf16(subPath);
             if (!wsubPath) {
                 APP_ERROR("Failed to convert subpath to UTF-16");
                 free(subPath);
+                success = false;
                 continue;
             }
 
@@ -406,13 +306,28 @@ bool DeleteRecursively(const char *path)
                 if (!RemoveDirectoryW(wsubPath)) {
                     DWORD err = GetLastError();
                     APP_ERROR("Failed to delete directory link, Error=%lu", err);
+                    success = false;
                 }
             } else if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
-                DeleteRecursively(subPath);
-            } else if (!DeleteFileW(wsubPath)) {
-                DWORD err = GetLastError();
-                APP_ERROR("Failed to delete file, Error=%lu", err);
-                MoveFileExW(wsubPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+                if (!DeleteRecursively(subPath)) {
+                    success = false;
+                }
+            } else {
+                // DeleteFileW refuses read-only files, e.g. ones the
+                // application copied from a read-only source or git's
+                // object files. Links are left as they are: their
+                // attributes may be their target's.
+                if ((attrs & FILE_ATTRIBUTE_READONLY)
+                    && !(attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+                    SetFileAttributesW(wsubPath, FILE_ATTRIBUTE_NORMAL);
+                }
+                if (!DeleteFileW(wsubPath)) {
+                    DWORD err = GetLastError();
+                    APP_ERROR("Failed to delete file, Error=%lu", err);
+                    // Only succeeds with administrator rights; best effort.
+                    MoveFileExW(wsubPath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+                    success = false;
+                }
             }
 
             free(wsubPath);
@@ -427,15 +342,24 @@ bool DeleteRecursively(const char *path)
         return false;
     }
 
+    // RemoveDirectoryW refuses a read-only directory as well.
+    DWORD dir_attrs = GetFileAttributesW(wpath);
+    if (dir_attrs != INVALID_FILE_ATTRIBUTES
+        && (dir_attrs & FILE_ATTRIBUTE_READONLY)
+        && !(dir_attrs & FILE_ATTRIBUTE_REPARSE_POINT)) {
+        SetFileAttributesW(wpath, FILE_ATTRIBUTE_NORMAL);
+    }
+
     if (!RemoveDirectoryW(wpath)) {
         DWORD err = GetLastError();
         APP_ERROR("Failed to delete directory, Error=%lu", err);
+        // Only succeeds with administrator rights; best effort.
         MoveFileExW(wpath, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
         free(wpath);
         return false;
     }
     free(wpath);
-    return true;
+    return success;
 }
 
 static bool generate_unique_name(char *buffer, size_t buffer_size)
@@ -562,13 +486,24 @@ cleanup:
 // Retrieves the path to the temporary directory for the current user.
 char *GetTempDirectoryPath(void)
 {
-    wchar_t *wtemp_dir = calloc(MAX_PATH, sizeof(*wtemp_dir));
+    /* A TEMP longer than the buffer makes GetTempPathW return the size it
+       needs and leave the buffer undefined, so ask for the size first. */
+    DWORD size = GetTempPathW(0, NULL);
+    if (size == 0) {
+        DWORD err = GetLastError();
+        APP_ERROR("Failed to get temp path length, Error=%lu", err);
+        return NULL;
+    }
+
+    wchar_t *wtemp_dir = calloc((size_t)size + 1, sizeof(*wtemp_dir));
     if (!wtemp_dir) {
         APP_ERROR("Memory allocation failed for temp directory");
         return NULL;
     }
 
-    if (!GetTempPathW(MAX_PATH, wtemp_dir)) {
+    /* On success the length without the terminating NUL comes back. */
+    DWORD len = GetTempPathW(size + 1, wtemp_dir);
+    if (len == 0 || len > size) {
         DWORD err = GetLastError();
         APP_ERROR("Failed to get temp path, Error=%lu", err);
         free(wtemp_dir);
@@ -860,30 +795,131 @@ size_t GetMemoryMapSize(const MemoryMap *map)
     return map->size;
 }
 
+/* Guards ChildProcess and TerminationRequested, which the console control
+   handler thread reads while the main thread launches and reaps the child. */
+static CRITICAL_SECTION ChildLock;
+
+/* Process handle of the running child; NULL while there is none. */
+static HANDLE ChildProcess = NULL;
+
+/* Set by the console control handler when Windows is about to terminate
+   the stub; the main thread then no longer starts the child. */
+static bool TerminationRequested = false;
+
+/* State of the cleanup routine, see RunCleanupRoutine(). */
+#define CLEANUP_PENDING 0
+#define CLEANUP_RUNNING 1
+#define CLEANUP_DONE    2
+static void (*CleanupRoutine)(void) = NULL;
+static volatile LONG CleanupState = CLEANUP_PENDING;
+
+void SetCleanupRoutine(void (*routine)(void))
+{
+    CleanupRoutine = routine;
+}
+
+void RunCleanupRoutine(void)
+{
+    if (InterlockedCompareExchange(&CleanupState, CLEANUP_RUNNING,
+                                   CLEANUP_PENDING) == CLEANUP_PENDING) {
+        if (CleanupRoutine) {
+            CleanupRoutine();
+        }
+        InterlockedExchange(&CleanupState, CLEANUP_DONE);
+        return;
+    }
+
+    /* The other thread is running it: wait until it is done, so that
+       neither thread ends the process in the middle of the cleanup. */
+    while (CleanupState != CLEANUP_DONE) {
+        Sleep(10);
+    }
+}
+
+/* Windows terminates the stub about 5 seconds after a close or shutdown
+   event. These split that time between the child and the cleanup. */
+#define CLOSE_CHILD_WAIT_MS     2500
+#define CLOSE_TERMINATE_WAIT_MS 500
+#define CLOSE_EXTRACT_WAIT_MS   2500
+
 /**
  * @brief Handle console control events in the parent process.
  *
- * This handler ignores all console control events (Ctrl+C, Ctrl+Break, etc.)
- * in the parent process so it can complete cleanup without interruption.
- * Child processes (e.g., Ruby) receive these events and exit quickly,
- * allowing the parent to perform final cleanup tasks.
+ * Ctrl+C and Ctrl+Break are ignored in the parent: the child shares the
+ * console, receives the same event and decides whether to exit, and the
+ * parent cleans up after it as usual.
+ *
+ * Closing the console window and system shutdown are different: Windows
+ * terminates the process as soon as this handler returns, whatever it
+ * returns, so the cleanup has to happen here. The handler waits for the
+ * child (which got the same event) for a bounded time, ends it if it is
+ * still running (its open files could not be deleted otherwise), and runs
+ * the cleanup routine before returning. Should the stub still be extracting,
+ * the main thread does not start the child any more and the handler gives
+ * it a moment to reach its own cleanup first.
+ *
+ * CTRL_LOGOFF_EVENT is ignored like Ctrl+C: it reaches only services, and
+ * does so whenever any user logs off, which a service has to survive.
+ *
+ * Runs on a thread of its own that Windows creates for the event.
  *
  * @param dwCtrlType The type of console control event received.
- * @return TRUE to indicate the event was handled and should be ignored.
+ * @return TRUE to indicate the event was handled.
  */
 static BOOL WINAPI ConsoleHandleRoutine(DWORD dwCtrlType)
 {
+    if (dwCtrlType != CTRL_CLOSE_EVENT && dwCtrlType != CTRL_SHUTDOWN_EVENT) {
+        return TRUE;
+    }
+
+    DEBUG("Console control event %lu: cleaning up before Windows ends the stub",
+          (unsigned long)dwCtrlType);
+
+    HANDLE child = NULL;
+    EnterCriticalSection(&ChildLock);
+    TerminationRequested = true;
+    if (ChildProcess
+        && !DuplicateHandle(GetCurrentProcess(), ChildProcess,
+                            GetCurrentProcess(), &child,
+                            0, FALSE, DUPLICATE_SAME_ACCESS)) {
+        child = NULL;
+    }
+    LeaveCriticalSection(&ChildLock);
+
+    if (child) {
+        if (WaitForSingleObject(child, CLOSE_CHILD_WAIT_MS) == WAIT_TIMEOUT) {
+            DEBUG("The application did not exit in time; terminating it");
+            TerminateProcess(child, (UINT)STATUS_CONTROL_C_EXIT);
+            WaitForSingleObject(child, CLOSE_TERMINATE_WAIT_MS);
+        }
+        CloseHandle(child);
+    } else {
+        DWORD start = GetTickCount();
+        while (CleanupState == CLEANUP_PENDING
+               && GetTickCount() - start < CLOSE_EXTRACT_WAIT_MS) {
+            Sleep(10);
+        }
+    }
+
+    RunCleanupRoutine();
     return TRUE;
 }
 
 bool InitializeSignalHandling(void)
 {
+    InitializeCriticalSection(&ChildLock);
+
     if (!SetConsoleCtrlHandler(ConsoleHandleRoutine, TRUE)) {
         DWORD err = GetLastError();
         APP_ERROR("Failed to set console control handler, Error=%lu", err);
         return false;
     }
     return true;
+}
+
+/* Windows has no signal deaths to reproduce: the exit code says it all. */
+void ReraiseChildSignal(void)
+{
 }
 
 bool SetEnvVar(const char *name, const char *value)
@@ -975,10 +1011,41 @@ static size_t quoted_args(char *args, char *argv[])
     return args_len;
 }
 
+/*
+ * Creates a job that kills its processes when its last handle is closed,
+ * i.e. when the stub exits or is killed, so that ending the stub (Task
+ * Manager, taskkill /F, a service manager) does not orphan the application.
+ * Processes in the job may create children outside of it, so only the
+ * direct child is tied to the stub: whatever the application starts is
+ * not affected. The handle is not inheritable, and must stay open for as
+ * long as the child runs. Returns NULL on failure.
+ */
+static HANDLE create_kill_on_close_job(void)
+{
+    HANDLE job = CreateJobObjectW(NULL, NULL);
+    if (!job) {
+        DEBUG("CreateJobObjectW failed (%lu)", GetLastError());
+        return NULL;
+    }
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+    ZeroMemory(&info, sizeof(info));
+    info.BasicLimitInformation.LimitFlags =
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
+    if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                 &info, sizeof(info))) {
+        DEBUG("SetInformationJobObject failed (%lu)", GetLastError());
+        CloseHandle(job);
+        return NULL;
+    }
+    return job;
+}
+
 bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
 {
     PROCESS_INFORMATION pi = { 0 };
     STARTUPINFOW        si = { .cb = sizeof(si) };
+    HANDLE job = NULL;
     bool result = false;
     char    *cmd_line  = NULL;
     wchar_t *wapp_name = NULL;
@@ -1006,8 +1073,39 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
         goto cleanup;
     }
 
-    if (!CreateProcessW(wapp_name, wcmd_line, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
-        APP_ERROR("Failed to create process (%lu)", GetLastError());
+    /* Launch under ChildLock, so that the console control handler either
+       sees the child or keeps it from being started at all. */
+    EnterCriticalSection(&ChildLock);
+    if (TerminationRequested) {
+        LeaveCriticalSection(&ChildLock);
+        APP_ERROR("Windows is terminating the stub; not starting the application");
+        goto cleanup;
+    }
+    /* Suspended, so that the child is in the job before it runs any code. */
+    if (!CreateProcessW(wapp_name, wcmd_line, NULL, NULL, TRUE, CREATE_SUSPENDED,
+                        NULL, NULL, &si, &pi)) {
+        DWORD err = GetLastError();
+        LeaveCriticalSection(&ChildLock);
+        APP_ERROR("Failed to create process (%lu)", err);
+        goto cleanup;
+    }
+    ChildProcess = pi.hProcess;
+    LeaveCriticalSection(&ChildLock);
+
+    /* Tying the child to the stub is best effort: a job the stub itself
+       runs in may forbid it, which must not keep the application from
+       starting. */
+    job = create_kill_on_close_job();
+    if (job && !AssignProcessToJobObject(job, pi.hProcess)) {
+        DEBUG("Could not assign the application to a job (%lu); it will "
+              "outlive the stub if the stub is killed", GetLastError());
+        CloseHandle(job);
+        job = NULL;
+    }
+
+    if (ResumeThread(pi.hThread) == (DWORD)-1) {
+        APP_ERROR("Failed to start the application (%lu)", GetLastError());
+        TerminateProcess(pi.hProcess, 1);
         goto cleanup;
     }
 
@@ -1034,10 +1132,20 @@ cleanup:
         free(wcmd_line);
     }
     if (pi.hProcess && pi.hProcess != INVALID_HANDLE_VALUE) {
+        /* The console control handler duplicates the handle under the
+           lock; unpublish it before closing it. */
+        EnterCriticalSection(&ChildLock);
+        ChildProcess = NULL;
+        LeaveCriticalSection(&ChildLock);
         CloseHandle(pi.hProcess);
     }
     if (pi.hThread && pi.hThread != INVALID_HANDLE_VALUE) {
         CloseHandle(pi.hThread);
+    }
+    if (job) {
+        /* Kills the child if it still runs, which happens only when
+           waiting for it failed. */
+        CloseHandle(job);
     }
     return result;
 }

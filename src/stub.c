@@ -18,11 +18,48 @@
 #include "script_info.h"
 #include "unpack.h"
 
+/* Operation modes from the header of the packed data; 0 until read. */
+static OperationModes OpModes = 0;
+
+/*
+   Deletes the extraction directory when AUTO_CLEAN_INST_DIR is set. Runs
+   once, through RunCleanupRoutine(): at the end of main(), or on Windows
+   from the console control handler when the console window is closed or
+   the system shuts down - possibly on another thread, at any point of
+   main().
+*/
+static void delete_extraction_dir(void)
+{
+    /* Never delete in RUN_IN_EXE_DIR mode: the "installation directory"
+       is the real application directory, not a temporary extraction dir. */
+    if (!IsAutoCleanInstDir(OpModes) || IsRunInExeDir(OpModes)) {
+        return;
+    }
+
+    const char *dir = GetInstDir();
+    if (!dir) {
+        return;
+    }
+
+    DEBUG("Deleting extraction directory: %s", dir);
+    if (!DeleteInstDir()) {
+        DEBUG("Failed to delete extraction directory");
+    }
+}
+
+
+/* Whether an environment variable asks for something: set, and neither
+   empty nor "0". OCRAN_DEBUG=0 used to switch debug output on. */
+static bool IsEnvFlagSet(const char *name)
+{
+    const char *value = getenv(name);
+    return value != NULL && value[0] != '\0' && strcmp(value, "0") != 0;
+}
+
 int main(int argc, char *argv[])
 {
     int status = EXIT_CODE_FAILURE;
     UnpackContext *unpack_ctx = NULL;
-    OperationModes op_modes = 0;
     const char *extract_dir = NULL;
     char *image_path = NULL;
     char *exe_dir = NULL;
@@ -34,6 +71,7 @@ int main(int argc, char *argv[])
        Child processes (e.g., Ruby) handle their own signals independently,
        ensuring the parent can finalize cleanup without premature termination.
     */
+    SetCleanupRoutine(delete_extraction_dir);
     if (!InitializeSignalHandling()) {
         FATAL("Failed to initialize system controls");
         goto cleanup;
@@ -54,17 +92,18 @@ int main(int argc, char *argv[])
     }
 
     /* Read header of packed data */
-    op_modes = GetOperationModes(unpack_ctx);
+    OpModes = GetOperationModes(unpack_ctx);
 
-    /* Enable debug mode when the flag is set or OCRAN_DEBUG env var is set */
-    if (IsDebugMode(op_modes) || getenv("OCRAN_DEBUG")) {
+    /* Enable debug mode when the flag is set or OCRAN_DEBUG is set to
+       anything but "0" or the empty string. */
+    if (IsDebugMode(OpModes) || IsEnvFlagSet("OCRAN_DEBUG")) {
         EnableDebugMode();
         DEBUG("Ocran stub running in debug mode");
     }
 
     /* Create extraction directory, or run in place next to the executable
        (installer/wrapper mode, see RUN_IN_EXE_DIR) */
-    if (IsRunInExeDir(op_modes)) {
+    if (IsRunInExeDir(OpModes)) {
         extract_dir = SetInstDirToExeDir();
         if (!extract_dir) {
             FATAL("Failed to resolve the executable directory");
@@ -72,7 +111,7 @@ int main(int argc, char *argv[])
         }
         DEBUG("Running in executable directory: %s", extract_dir);
     } else {
-        extract_dir = CreateInstDir(IsExtractToExeDir(op_modes));
+        extract_dir = CreateInstDir(IsExtractToExeDir(OpModes));
         if (!extract_dir) {
             FATAL("Failed to create extraction directory");
             goto cleanup;
@@ -103,7 +142,7 @@ int main(int argc, char *argv[])
 
     /* Resolve the executable's directory when the script should start
        with its working directory next to the .exe (--chdir-exe-dir). */
-    if (IsChdirToExeDir(op_modes)) {
+    if (IsChdirToExeDir(OpModes)) {
         exe_dir = GetParentPath(image_path);
         if (!exe_dir) {
             FATAL("Failed to resolve the executable directory");
@@ -135,7 +174,7 @@ int main(int argc, char *argv[])
        and then overwrites it with the external script’s return code.
     */
     DEBUG("Run application script");
-    if (!RunScript(argv, IsChdirBeforeScript(op_modes), exe_dir, &status)) {
+    if (!RunScript(argv, IsChdirBeforeScript(OpModes), exe_dir, &status)) {
         FATAL("Failed to run script");
         goto cleanup;
     }
@@ -164,20 +203,16 @@ cleanup:
 
     FreeScriptInfo();
 
-    /*
-       If AUTO_CLEAN_INST_DIR is set, delete the extraction directory.
-    */
-    /* Never delete in RUN_IN_EXE_DIR mode: the "installation directory"
-       is the real application directory, not a temporary extraction dir. */
-    if (IsAutoCleanInstDir(op_modes) && !IsRunInExeDir(op_modes)) {
-        DEBUG("Deleting extraction directory: %s", extract_dir);
-        if (!DeleteInstDir()) {
-            DEBUG("Failed to delete extraction directory");
-        }
-    }
+    /* Delete the extraction directory (see delete_extraction_dir), unless
+       the console control handler has done so already. */
+    RunCleanupRoutine();
 
     FreeInstDir();
     extract_dir = NULL;
+
+    /* A child killed by a signal kills the stub the same way, now that the
+       extraction directory is gone. Returns if the signal did not. */
+    ReraiseChildSignal();
 
 #ifdef __COSMOPOLITAN__
     /* On Windows, Cosmopolitan Libc's exit path encodes the full wait

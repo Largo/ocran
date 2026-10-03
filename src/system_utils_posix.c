@@ -2,12 +2,14 @@
 #include <mach-o/dyld.h>
 #endif
 #ifdef __COSMOPOLITAN__
-#include <cosmo.h>  /* GetProgramExecutableName() */
+#include <cosmo.h>  /* GetProgramExecutableName(), IsWindows() */
 #endif
 #include <unistd.h>
 #include <fcntl.h>
+#include <termios.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -26,126 +28,6 @@ struct MemoryMap {
     void *base;
     size_t size;
 };
-
-/* ===== Cross-platform path utilities (from system_utils.c) ===== */
-
-bool IsCleanRelativePath(const char *path)
-{
-    if (!path || !*path) {
-        return false;
-    }
-
-#ifdef _WIN32
-    /* Forbid Windows drive specification (e.g. "C:\") */
-    if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
-        && path[1] == ':'
-        && is_path_separator(path[2])) {
-        return false;
-    }
-#endif
-
-    /* Forbid absolute path (leading '/' or '\') */
-    if (is_path_separator(*path)) {
-        return false;
-    }
-
-    /* Validate each path segment */
-    const char *p = path;
-    while (*p) {
-        const char *start = p;
-
-        /* Advance until next separator or end-of-string */
-        while (*p && !is_path_separator(*p)) {
-            p++;
-        }
-
-        size_t len = p - start;
-
-        /* Reject empty, "." or ".." segments */
-        if (len == 0
-            || (len == 1 && start[0] == '.')
-            || (len == 2 && start[0] == '.' && start[1] == '.')) {
-            return false;
-        }
-
-        /* Skip over the separator */
-        if (*p) {
-            p++;
-        }
-    }
-
-    return true;
-}
-
-char *JoinPath(const char *p1, const char *p2)
-{
-    if (p1 == NULL || *p1 == '\0') {
-        APP_ERROR("p1 is null or empty");
-        return NULL;
-    }
-
-    if (p2 == NULL || *p2 == '\0') {
-        APP_ERROR("p2 is null or empty");
-        return NULL;
-    }
-
-    size_t p1_len = strlen(p1);
-    if (is_path_separator(p1[p1_len - 1])) { p1_len--; }
-
-    size_t p2_len = strlen(p2);
-    const char *p2_start = p2;
-    if (is_path_separator(*p2_start)) { p2_start++; p2_len--; }
-
-    size_t joined_len = p1_len + 1 + p2_len;
-    char *joined_path = calloc(1, joined_len + 1);
-    if (!joined_path) {
-        APP_ERROR("Failed to allocate buffer for join path");
-        return NULL;
-    }
-    memcpy(joined_path, p1, p1_len);
-    joined_path[p1_len] = PATH_SEPARATOR;
-    memcpy(joined_path + p1_len + 1, p2_start, p2_len);
-    joined_path[joined_len] = '\0';
-
-    return joined_path;
-}
-
-char *GetParentPath(const char *path)
-{
-    if (!path) {
-        APP_ERROR("path is NULL");
-        return NULL;
-    }
-
-    size_t root = path_root_length(path);
-    size_t i    = strlen(path);
-
-    /* Skip any trailing separators */
-    while (i > root && is_path_separator(path[i - 1])) {
-        i--;
-    }
-
-    /* Skip the last segment's characters */
-    while (i > root && !is_path_separator(path[i - 1])) {
-        i--;
-    }
-
-    /* Skip the separators before it, keeping the root ("/" or "C:\") */
-    while (i > root && is_path_separator(path[i - 1])) {
-        i--;
-    }
-
-    /* i==0 ⇒ empty parent (relative path with a single segment) */
-
-    char *out = malloc(i + 1);
-    if (!out) {
-        APP_ERROR("Memory allocation failed for parent path");
-        return NULL;
-    }
-    memcpy(out, path, i);
-    out[i] = '\0';
-    return out;
-}
 
 /* ===== Memory-mapped file I/O ===== */
 
@@ -253,6 +135,9 @@ bool CreateDirectoriesRecursively(const char *dir) {
     return true;
 }
 
+/* Keeps going after a failure so that as much as possible gets deleted, and
+   returns false if anything could not be. Failures are only reported in
+   debug mode: the application has run, and there is nobody to act on them. */
 bool DeleteRecursively(const char *path) {
     if (!path || !*path) {
         return false;
@@ -260,23 +145,31 @@ bool DeleteRecursively(const char *path) {
 
     struct stat st;
     if (lstat(path, &st) < 0) {
-        FATAL("DeleteRecursively: stat(\"%s\") failed: %s", path, strerror(errno));
+        APP_ERROR("DeleteRecursively: lstat(\"%s\") failed: %s", path, strerror(errno));
         return false;
     }
 
     if (!S_ISDIR(st.st_mode)) {
-        /* It's a file, just delete it */
+        /* A file or a symlink (which is not followed): just delete it */
         if (unlink(path) < 0) {
-            FATAL("DeleteRecursively: unlink(\"%s\") failed: %s", path, strerror(errno));
+            APP_ERROR("DeleteRecursively: unlink(\"%s\") failed: %s", path, strerror(errno));
             return false;
         }
         return true;
     }
 
+    /* Listing a directory and deleting its entries takes read, write and
+       search permission, which the application may have removed (e.g. a
+       read-only copy of a Go module cache). The directory is the user's
+       own, so give them back. */
+    if ((st.st_mode & S_IRWXU) != S_IRWXU) {
+        chmod(path, (st.st_mode & 07777) | S_IRWXU);
+    }
+
     /* It's a directory, delete contents recursively */
     DIR *dir = opendir(path);
     if (!dir) {
-        FATAL("DeleteRecursively: opendir(\"%s\") failed: %s", path, strerror(errno));
+        APP_ERROR("DeleteRecursively: opendir(\"%s\") failed: %s", path, strerror(errno));
         return false;
     }
 
@@ -290,13 +183,11 @@ bool DeleteRecursively(const char *path) {
         char *child_path = JoinPath(path, entry->d_name);
         if (!child_path) {
             success = false;
-            break;
+            continue;
         }
 
         if (!DeleteRecursively(child_path)) {
-            free(child_path);
             success = false;
-            break;
         }
         free(child_path);
     }
@@ -305,7 +196,7 @@ bool DeleteRecursively(const char *path) {
 
     if (success) {
         if (rmdir(path) < 0) {
-            FATAL("DeleteRecursively: rmdir(\"%s\") failed: %s", path, strerror(errno));
+            APP_ERROR("DeleteRecursively: rmdir(\"%s\") failed: %s", path, strerror(errno));
             return false;
         }
     }
@@ -343,8 +234,13 @@ bool ExportFile(const char *path, const void *buffer, size_t buffer_size) {
         free(parent);
     }
 
-    /* Create/overwrite the file */
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+    /* Create/overwrite the file, but never write through a symlink that
+       happens to sit at its path (the file would land at the link's
+       target). O_EXCL would be stricter still, but on a case-insensitive
+       file system (the macOS default) it would turn two packed names that
+       differ only in case, which merely overwrite each other today, into a
+       failed start. */
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0777);
     if (fd < 0) {
         FATAL("ExportFile: open(\"%s\") failed: %s", path, strerror(errno));
         return false;
@@ -454,26 +350,189 @@ char *GetTempDirectoryPath(void) {
 
 /* ===== Process and signal handling ===== */
 
-bool InitializeSignalHandling(void) {
-    /* On POSIX systems, the parent process ignores SIGINT and SIGTERM during
-       initialization and cleanup. The child process will reset these to
-       SIG_DFL before execv-ing the target application. */
+/*
+ * Termination signals the stub handles while it runs. The handler records
+ * the signal and passes it on to the child, so that `kill`, `docker stop`
+ * or a service manager stopping the stub stop the application, and the
+ * stub lives on to delete the extraction directory. Signals that were
+ * ignored when the stub started (e.g. SIGHUP under nohup) stay ignored,
+ * and the child inherits that.
+ */
+static const int TerminationSignals[] = { SIGINT, SIGTERM, SIGHUP, SIGQUIT };
+#define TERMINATION_SIGNAL_COUNT \
+    (sizeof(TerminationSignals) / sizeof(TerminationSignals[0]))
 
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = SIG_IGN;
+/* Which of TerminationSignals were ignored at startup. */
+static bool SignalIgnoredAtStartup[TERMINATION_SIGNAL_COUNT];
 
-    if (sigaction(SIGINT, &sa, NULL) < 0) {
-        FATAL("InitializeSignalHandling: sigaction(SIGINT) failed: %s", strerror(errno));
+/* Child to forward termination signals to; 0 while there is none. */
+static volatile sig_atomic_t ChildPid = 0;
+
+/* Last termination signal the stub received itself. */
+static volatile sig_atomic_t ReceivedSignal = 0;
+
+/* Signal the stub dies of once cleanup is done: the one that killed the
+   child, or one received before the child was started. */
+static int TerminatingSignal = 0;
+
+/* Whether a signal was sent by a process (kill(2), sigqueue(3)) rather than
+   generated by the kernel. Signals the kernel raises for a terminal (Ctrl+C,
+   Ctrl+\, hangup) go to the whole foreground process group, the child
+   included, which must not get them twice. */
+#ifdef __APPLE__
+/* Whether this process is in the foreground process group of its
+   controlling terminal, the only place a terminal-generated signal can
+   reach it. Everything here is async-signal-safe. */
+static bool in_foreground_process_group(void)
+{
+    int fd = open("/dev/tty", O_RDONLY | O_NOCTTY | O_CLOEXEC);
+    if (fd < 0) {
         return false;
     }
+    pid_t foreground = tcgetpgrp(fd);
+    close(fd);
+    return foreground > 0 && foreground == getpgrp();
+}
+#endif
 
-    if (sigaction(SIGTERM, &sa, NULL) < 0) {
-        FATAL("InitializeSignalHandling: sigaction(SIGTERM) failed: %s", strerror(errno));
-        return false;
+static bool is_sent_by_process(const siginfo_t *info)
+{
+    if (!info) {
+        return true;
+    }
+    if (info->si_code == SI_USER) {
+        return true;
+    }
+#ifdef __APPLE__
+    /* XNU never reports SI_USER: every caught signal arrives with si_code 0
+       and si_pid naming the process in whose context it was raised, for
+       kill(2) and for the terminal driver alike (bsd/kern/kern_sig.c), so
+       siginfo cannot tell them apart. A terminal signal only reaches the
+       foreground process group of the controlling terminal; a stub running
+       anywhere else - no terminal, a background job, a service, a CI runner
+       - can only have been signaled by a process. */
+    if (info->si_code == 0) {
+        return !in_foreground_process_group();
+    }
+#endif
+#ifdef SI_QUEUE
+    if (info->si_code == SI_QUEUE) {
+        return true;
+    }
+#endif
+#ifdef SI_TKILL
+    if (info->si_code == SI_TKILL) {
+        return true;
+    }
+#endif
+    return false;
+}
+
+static void termination_signal_handler(int sig, siginfo_t *info, void *context)
+{
+    (void)context;
+    int saved_errno = errno;
+
+    ReceivedSignal = sig;
+    pid_t child = (pid_t)ChildPid;
+    if (child > 0 && is_sent_by_process(info)) {
+        kill(child, sig);
+    }
+
+    errno = saved_errno;
+}
+
+bool InitializeSignalHandling(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = termination_signal_handler;
+    sa.sa_flags = SA_SIGINFO | SA_RESTART;
+    sigemptyset(&sa.sa_mask);
+    for (size_t i = 0; i < TERMINATION_SIGNAL_COUNT; i++) {
+        sigaddset(&sa.sa_mask, TerminationSignals[i]);
+    }
+
+    for (size_t i = 0; i < TERMINATION_SIGNAL_COUNT; i++) {
+        int sig = TerminationSignals[i];
+        struct sigaction old;
+
+        if (sigaction(sig, NULL, &old) < 0) {
+            FATAL("InitializeSignalHandling: sigaction(%d) failed: %s", sig, strerror(errno));
+            return false;
+        }
+        if (!(old.sa_flags & SA_SIGINFO) && old.sa_handler == SIG_IGN) {
+            SignalIgnoredAtStartup[i] = true;
+            continue;
+        }
+        if (sigaction(sig, &sa, NULL) < 0) {
+            FATAL("InitializeSignalHandling: sigaction(%d) failed: %s", sig, strerror(errno));
+            return false;
+        }
     }
 
     return true;
+}
+
+static void (*CleanupRoutine)(void) = NULL;
+static bool CleanupDone = false;
+
+void SetCleanupRoutine(void (*routine)(void))
+{
+    CleanupRoutine = routine;
+}
+
+/* Only ever called from the main thread here: signal handlers merely
+   forward, and the main thread outlives the child to clean up. */
+void RunCleanupRoutine(void)
+{
+    if (CleanupDone) {
+        return;
+    }
+    CleanupDone = true;
+    if (CleanupRoutine) {
+        CleanupRoutine();
+    }
+}
+
+void ReraiseChildSignal(void)
+{
+    int sig = TerminatingSignal;
+    if (sig == 0) {
+        return;
+    }
+
+#ifdef __COSMOPOLITAN__
+    /* A native Windows parent cannot see a signal death; it gets the
+       128 + signal exit code instead (see the end of main()). */
+    if (IsWindows()) {
+        return;
+    }
+#endif
+
+    DEBUG("Terminating with signal %d like the application", sig);
+    fflush(NULL);
+
+    /* The application dumped core already if it was going to. */
+    struct rlimit no_core = { 0, 0 };
+    setrlimit(RLIMIT_CORE, &no_core);
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sigaction(sig, &sa, NULL);
+
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, sig);
+    sigprocmask(SIG_UNBLOCK, &set, NULL);
+
+    raise(sig);
+
+    /* Still alive: e.g. PID 1 of a container, for which the kernel drops
+       signals whose action is the default. The caller exits with
+       128 + signal instead. */
+    DEBUG("Signal %d did not terminate the stub", sig);
 }
 
 bool SetEnvVar(const char *name, const char *value) {
@@ -504,31 +563,60 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
         return false;
     }
 
+    /* Hold termination signals until ChildPid is set, so that none arriving
+       around fork() gets lost. */
+    sigset_t term_set, orig_mask;
+    sigemptyset(&term_set);
+    for (size_t i = 0; i < TERMINATION_SIGNAL_COUNT; i++) {
+        sigaddset(&term_set, TerminationSignals[i]);
+    }
+    sigprocmask(SIG_BLOCK, &term_set, &orig_mask);
+
+    /* Asked to terminate during extraction: do not start the application. */
+    if (ReceivedSignal) {
+        TerminatingSignal = ReceivedSignal;
+        *exit_code = 128 + TerminatingSignal;
+        DEBUG("Received signal %d before the application started", TerminatingSignal);
+        sigprocmask(SIG_SETMASK, &orig_mask, NULL);
+        return true;
+    }
+
     pid_t pid = fork();
     if (pid < 0) {
         FATAL("CreateAndWaitForProcess: fork() failed: %s", strerror(errno));
+        sigprocmask(SIG_SETMASK, &orig_mask, NULL);
         return false;
     }
 
     if (pid == 0) {
-        /* Child process */
+        /* Child process: restore the signal handling the stub was started
+           with, then execute the target application. */
+        for (size_t i = 0; i < TERMINATION_SIGNAL_COUNT; i++) {
+            signal(TerminationSignals[i],
+                   SignalIgnoredAtStartup[i] ? SIG_IGN : SIG_DFL);
+        }
+        sigprocmask(SIG_SETMASK, &orig_mask, NULL);
 
-        /* Reset signal handlers to default before exec */
-        signal(SIGINT, SIG_DFL);
-        signal(SIGTERM, SIG_DFL);
-
-        /* Execute the target application */
         execv(app_name, argv);
 
-        /* If we get here, execv failed */
+        /* If we get here, execv failed. _exit, not exit: atexit handlers
+           and stdio buffers belong to the parent. */
         FATAL("CreateAndWaitForProcess: execv(\"%s\") failed: %s", app_name, strerror(errno));
-        exit(127);
+        _exit(127);
     }
 
     /* Parent process */
+    ChildPid = pid;
+    sigprocmask(SIG_SETMASK, &orig_mask, NULL);
 
     int wstatus;
-    if (waitpid(pid, &wstatus, 0) < 0) {
+    pid_t waited;
+    do {
+        waited = waitpid(pid, &wstatus, 0);
+    } while (waited < 0 && errno == EINTR);
+    ChildPid = 0;
+
+    if (waited < 0) {
         FATAL("CreateAndWaitForProcess: waitpid failed: %s", strerror(errno));
         return false;
     }
@@ -536,7 +624,9 @@ bool CreateAndWaitForProcess(const char *app_name, char *argv[], int *exit_code)
     if (WIFEXITED(wstatus)) {
         *exit_code = WEXITSTATUS(wstatus);
     } else if (WIFSIGNALED(wstatus)) {
-        *exit_code = 128 + WTERMSIG(wstatus);
+        TerminatingSignal = WTERMSIG(wstatus);
+        *exit_code = 128 + TerminatingSignal;
+        DEBUG("The application was terminated by signal %d", TerminatingSignal);
     } else {
         *exit_code = 1;
     }
