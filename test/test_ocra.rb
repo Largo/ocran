@@ -1919,6 +1919,56 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # Platform-independent test of the VS_VERSIONINFO / RT_STRING binary layout
+  # produced by EdResource::Build. The injection into the PE is Windows-only
+  # (and the Windows integration tests below exercise that), but the blob
+  # construction is pure Ruby and lives in a dlload-free file precisely so it
+  # can be verified everywhere - including on CI that never runs on Windows,
+  # and without building an exe that endpoint protection may quarantine.
+  def test_pe_resource_builder_blob
+    require_relative "../lib/ocran/ed_resource_builder"
+    build = Ocran::EdResource::Build
+
+    blob = build.version_info(
+      strings: {
+        "CompanyName" => "Example GmbH",
+        "ProductName" => "My Cool App",
+        "LegalCopyright" => "(C) 2026 Example GmbH",
+      },
+      file_version: "1.2.3.4",
+      product_version: "5.6.7.8"
+    )
+
+    # Root VS_VERSIONINFO wLength (first WORD) spans the whole blob.
+    assert_equal blob.bytesize, blob[0, 2].unpack1("v"),
+                 "root wLength must equal the total resource size"
+
+    # VS_FIXEDFILEINFO, located by its signature, must be 32-bit aligned.
+    sig_off = blob.index([0xFEEF04BD].pack("V"))
+    refute_nil sig_off, "VS_FIXEDFILEINFO signature not found"
+    assert_equal 0, sig_off % 4, "VS_FIXEDFILEINFO must be 32-bit aligned"
+
+    # File/product versions are packed as MS/LS dword pairs.
+    assert_equal (1 << 16) | 2, blob[sig_off + 8, 4].unpack1("V")
+    assert_equal (3 << 16) | 4, blob[sig_off + 12, 4].unpack1("V")
+    assert_equal (5 << 16) | 6, blob[sig_off + 16, 4].unpack1("V")
+    assert_equal (7 << 16) | 8, blob[sig_off + 20, 4].unpack1("V")
+
+    # Keys and values are stored as UTF-16LE.
+    ["StringFileInfo", "VarFileInfo", "Translation",
+     "CompanyName", "Example GmbH", "My Cool App"].each do |needle|
+      assert blob.index(needle.encode("UTF-16LE").b),
+             "version resource should contain #{needle.inspect}"
+    end
+
+    # An RT_STRING bundle is 16 slots; the empty ones are a single 0x0000 WORD,
+    # the populated slot is a WORD length (in UTF-16 code units) then the chars.
+    bundle = build.string_bundle(1 => "Hello")
+    assert_equal 16 * 2 + "Hello".size * 2, bundle.bytesize
+    assert_equal "Hello".size, bundle[2, 2].unpack1("v")
+    assert_equal "Hello", bundle[4, "Hello".size * 2].force_encoding("UTF-16LE").encode("UTF-8")
+  end
+
   # Test that --set-version-string and --set-file/product-version embed an
   # RT_VERSION resource that Windows can read back, and the exe still runs.
   def test_set_version_string
