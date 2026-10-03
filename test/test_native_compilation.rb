@@ -236,7 +236,7 @@ class TestNativeCompilation < Minitest::Test
       done
       mkdir -p "$out/db" "$out/config"
       printf 'assets:\\n\\tbundle exec ruby -e 1\\n' > "$out/Makefile"
-      printf '[package]\\nallocator = "jemalloc"\\n' > "$out/spin.toml"
+      printf '# \\342\\200\\224 generated\\n[package]\\nallocator = "jemalloc"\\n' > "$out/spin.toml"
       echo "CREATE TABLE posts (id INTEGER PRIMARY KEY);" > "$out/db/seed.sql"
     SH
     # Like the generated Makefile, `make assets` writes static/.
@@ -280,8 +280,9 @@ class TestNativeCompilation < Minitest::Test
     posix_only
     bin = fake_roundhouse_tools
     rails_app
+    # No locale, as under cron or CI: spin.toml's UTF-8 must still be read.
     env = { "ROUNDHOUSE" => File.join(bin, "roundhouse"), "SPIN" => File.join(bin, "spin"),
-            "SPINEL" => File.join(bin, "spinel") }
+            "SPINEL" => File.join(bin, "spinel"), "LANG" => nil, "LC_ALL" => nil, "LC_CTYPE" => nil }
     out, status = ocran(@tmp, "--roundhouse", "blog", env: env)
 
     assert status.success?, out

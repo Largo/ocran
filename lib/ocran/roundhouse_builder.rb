@@ -75,9 +75,13 @@ module Ocran
 
     private
 
+    # The tools write UTF-8 whatever the locale says, and their output is
+    # matched with regexps, which raise on bytes invalid in the default
+    # external encoding (US-ASCII when LANG is unset, as under cron or CI).
     def run(command, chdir: Dir.pwd, env: {})
       verbose command.join(" ")
-      Open3.capture2e(@env.merge(env), *command, chdir: chdir)
+      output, status = Open3.capture2e(@env.merge(env), *command, chdir: chdir)
+      [utf8(output), status]
     rescue SystemCallError => e
       [e.message, nil]
     end
@@ -123,7 +127,7 @@ module Ocran
     # gcc and clang both read) for the build.
     def library_path_env(project)
       manifest = File.join(project, "spin.toml")
-      allocator = File.file?(manifest) && File.read(manifest)[/^\s*allocator\s*=\s*"([^"]+)"/, 1]
+      allocator = File.file?(manifest) && utf8(File.binread(manifest))[/^\s*allocator\s*=\s*"([^"]+)"/, 1]
       return {} unless allocator && allocator != "system"
 
       pkg_config = AotToolchain.search_path("pkg-config", @env)
@@ -303,6 +307,10 @@ module Ocran
       unless Kernel.system(sqlite3, database.to_s, in: seed.to_s)
         warning "Could not create the database from #{seed}; run: sqlite3 storage/development.sqlite3 < db/seed.sql"
       end
+    end
+
+    def utf8(text)
+      text.to_s.dup.force_encoding(Encoding::UTF_8).scrub
     end
 
     # Relative to the working directory when inside it, else absolute.
