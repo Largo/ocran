@@ -24,10 +24,6 @@ module Ocran
     CODEPAGE_UNICODE = 0x04B0
     STRING_TABLE_KEY = format("%04X%04X", LANGID_US_ENGLISH, CODEPAGE_UNICODE)
 
-    # Builds the binary blobs (VS_VERSIONINFO, RT_STRING bundles) that Windows
-    # expects. All structures are little-endian.
-    # Shared with the --static-runtime resource writer (pe_resources.rb), which
-    # runs on any build host; ed_resource.rb needs Windows.
     EXECUTION_LEVELS = %w[asInvoker highestAvailable requireAdministrator].freeze
 
     # Baseline manifest, copied verbatim from src/stub.manifest. Inlined as a
@@ -64,8 +60,24 @@ module Ocran
       </assembly>
     MANIFEST
 
+    # Builds the binary blobs (VS_VERSIONINFO, RT_STRING bundles) and the
+    # manifest XML that Windows expects. All structures are little-endian.
+    # Shared with the --static-runtime resource writer (pe_resources.rb), which
+    # runs on any build host; ed_resource.rb needs Windows.
     module Build
       module_function
+
+      # The RT_MANIFEST XML: the given manifest (or the stub's baseline one)
+      # with its requestedExecutionLevel replaced when execution_level is given.
+      def manifest(manifest_xml, execution_level)
+        xml = manifest_xml || MANIFEST_TEMPLATE
+        return xml unless execution_level
+
+        unless EXECUTION_LEVELS.include?(execution_level)
+          raise "Invalid requested execution level: #{execution_level}"
+        end
+        xml.sub(/level="[^"]*"/, %(level="#{execution_level}"))
+      end
 
       NUL16 = [0].pack("v").freeze
 
