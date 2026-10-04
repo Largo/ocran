@@ -2012,22 +2012,50 @@ class TestOcran < Minitest::Test
     end
   end
 
-  # Test that --set-requested-execution-level patches the manifest. The exe is
-  # NOT run, because a requireAdministrator manifest makes CreateProcess (used by
-  # Kernel#system) fail with ERROR_ELEVATION_REQUIRED outside an elevated session.
+  # Platform-independent test of the execution-level patching of the manifest.
+  # The elevating levels are only checked here, as XML: an unsigned exe in
+  # %TEMP% that requests elevation is a pattern endpoint protection flags.
+  def test_pe_resource_builder_manifest
+    require_relative "../lib/ocran/ed_resource_builder"
+    build = Ocran::EdResource::Build
+
+    assert_equal Ocran::EdResource::MANIFEST_TEMPLATE, build.manifest(nil, nil)
+
+    %w[asInvoker highestAvailable requireAdministrator].each do |level|
+      xml = build.manifest(nil, level)
+      assert_includes xml, %(<requestedExecutionLevel level="#{level}"/>)
+      assert_equal 1, xml.scan("requestedExecutionLevel").size
+      # The rest of the baseline manifest is preserved.
+      assert_includes xml, "activeCodePage"
+    end
+
+    custom = File.read(File.join(FixturePath, "manifest", "app.manifest"), encoding: "UTF-8")
+    xml = build.manifest(custom, "highestAvailable")
+    assert_includes xml, "ocran-test-manifest-marker"
+    assert_includes xml, 'level="highestAvailable"'
+
+    assert_raises(RuntimeError) { build.manifest(nil, "root") }
+  end
+
+  # Test that --set-requested-execution-level writes the manifest into the exe.
+  # Uses asInvoker so the exe never requests elevation and can be run; the
+  # other levels are covered by test_pe_resource_builder_manifest.
   def test_requested_execution_level
     skip "Only for windows" unless Gem.win_platform?
     with_fixture 'helloworld' do
       assert system("ruby", ocran,
-                    "--set-requested-execution-level", "requireAdministrator",
+                    "--set-requested-execution-level", "asInvoker",
                     "helloworld.rb", *DefaultArgs)
       exe = exe_name("helloworld")
       assert File.exist?(exe)
       manifest = PEResourceReader.manifest(exe)
       assert manifest, "expected an embedded manifest"
-      assert_includes manifest, 'level="requireAdministrator"'
+      assert_includes manifest, 'level="asInvoker"'
       # The baseline manifest content must be preserved (single manifest, not a duplicate).
       assert_includes manifest, "activeCodePage"
+      pristine_env exe do
+        assert system(exe)
+      end
     end
   end
 
