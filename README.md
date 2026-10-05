@@ -1,6 +1,6 @@
 # OCRAN
 
-![OCRAN: ship your Ruby app as one file, no Ruby needed to run it](docs/social/twitter-card.png)
+![OCRAN: ship your Ruby app as one file, no Ruby needed to run it](https://raw.githubusercontent.com/Largo/ocran/master/docs/social/twitter-card.png)
 
 [OCRAN (One-Click Ruby Application Next)](https://github.com/largo/ocran) packages Ruby applications for
 distribution. It bundles your script, the Ruby interpreter, gems, and native
