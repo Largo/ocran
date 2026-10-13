@@ -338,9 +338,14 @@ jobs:
 
       # Not bundler-cache: the Gemfile leaves fxruby out on mswin and the
       # lockfile has no mswin platform, so the bundle is resolved here
-      # rather than installed from the frozen lockfile.
+      # rather than installed from the frozen lockfile. Into vendor/bundle
+      # like bundler-cache does in the other jobs: with the bundle in the
+      # Ruby's own gem directory, test_glimmer_libui packs glimmer-dsl-libui
+      # without rake, which its gemspec declares and only Bundler activated.
       - name: Install bundle
-        run: bundle install
+        run: |
+          bundle config set --local path vendor/bundle
+          bundle install
 
       - name: Build stub and run tests
         run: |
