@@ -71,6 +71,14 @@ class TestPEImports < Minitest::Test
     assert_equal %w[libffi-8.dll], dll_names(image)
   end
 
+  def test_descriptors_past_the_declared_table_size_are_ignored
+    image = pe_image(%w[first.dll second.dll], [])
+    # Shrink the import directory to one descriptor, with no terminator
+    directories = 0x58 + 112
+    image[directories + 1 * 8 + 4, 4] = [20].pack("V")
+    assert_equal %w[first.dll], dll_names(image)
+  end
+
   def test_files_that_are_not_pe_images_have_no_imports
     assert_equal [], dll_names("#!/bin/sh\n")
     assert_equal [], dll_names("MZ")
