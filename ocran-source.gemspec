@@ -6,7 +6,7 @@ Gem::Specification.new do |spec|
   spec.name = "ocran"
   spec.version = Ocran::VERSION
   spec.authors = ["Andi Idogawa", "shinokaro", "Lars Christensen"]
-  spec.email = ["andi@idogawa.com"]
+  spec.email = ["web@idogawa.com"]
 
   spec.licenses = ["MIT"]
 
