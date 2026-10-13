@@ -62,7 +62,9 @@ module Ocran
         table = offset_of(u32(directory))
         return unless table
 
-        loop do
+        # Never past the table's declared size, in case a malformed image
+        # lacks the terminating all-zero descriptor.
+        (u32(directory + 4) / size).times do
           name_rva = u32(table + name_field)
           break if name_rva.zero?
 
