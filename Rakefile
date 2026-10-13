@@ -9,6 +9,9 @@ Minitest::TestTask.create
 task :default => :test
 
 WINDOWS = Gem.win_platform?
+# mswin Ruby (built with Visual C++) has no MSYS2 devkit: build the stubs
+# with nmake from a Visual Studio developer prompt instead.
+MSWIN = RUBY_PLATFORM.include?("mswin")
 STUB_DIR   = "share/ocran"
 BUILD_DIR  = "src"
 
@@ -24,7 +27,12 @@ desc "Builds all necessary artifacts (currently stubs)"
 task :build => :build_stub
 
 task :build_stub do
-  if WINDOWS
+  if MSWIN
+    Dir.chdir(BUILD_DIR) { sh "nmake -nologo -f Makefile.mswin" }
+    STUB_NAMES.each do |name|
+      cp "#{BUILD_DIR}/#{name}.exe", "#{STUB_DIR}/#{name}.exe"
+    end
+  elsif WINDOWS
     sh "ridk exec make -C #{BUILD_DIR}"
     STUB_NAMES.each do |name|
       cp "#{BUILD_DIR}/#{name}.exe", "#{STUB_DIR}/#{name}.exe"
@@ -43,7 +51,9 @@ end
 
 task :clean do
   rm_f STUB_NAMES.map { |name| "#{STUB_DIR}/#{name}#{STUB_EXE_EXT}" }
-  if WINDOWS
+  if MSWIN
+    Dir.chdir(BUILD_DIR) { sh "nmake -nologo -f Makefile.mswin clean" }
+  elsif WINDOWS
     sh "ridk exec make -C #{BUILD_DIR} clean"
   else
     sh "make -C #{BUILD_DIR} clean"

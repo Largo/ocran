@@ -1,6 +1,4 @@
 #include <windows.h>
-#include <ntstatus.h>
-#include <ntdef.h>
 #include <bcrypt.h>
 #include <stdbool.h>
 #include "error.h"
@@ -371,10 +369,10 @@ static bool generate_unique_name(char *buffer, size_t buffer_size)
     NTSTATUS b = BCryptGenRandom(
         0,
         (PUCHAR)buffer,
-        buffer_size,
+        (ULONG)buffer_size,
         BCRYPT_USE_SYSTEM_PREFERRED_RNG
     );
-    if (!NT_SUCCESS(b)) {
+    if (!BCRYPT_SUCCESS(b)) {
         return false;
     }
 

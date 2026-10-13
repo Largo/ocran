@@ -671,7 +671,7 @@ Notes:
 ## Requirements
 
 * Ruby 3.3+
-* For building Windows `.exe`: Windows with [RubyInstaller DevKit](https://rubyinstaller.org/downloads/) (mingw-w64), or Wine on Linux/macOS
+* For building Windows `.exe`: Windows with [RubyInstaller DevKit](https://rubyinstaller.org/downloads/) (mingw-w64), or Wine on Linux/macOS. An mswin Ruby (built with Visual C++, see [mswin Ruby](#mswin-ruby-visual-c)) works as well.
 * For building Linux and MacOS binaries: the respective build tools
 * For `--output-dir` / `--output-zip`: any platform with Ruby 3.3+
 * For `--output-zip` on Linux/macOS: the `zip` command must be available
@@ -684,6 +684,32 @@ The architecture of the generated executable matches the Ruby interpreter used t
 * **macOS (Intel / Apple Silicon)** — The output binary targets the same CPU as your Ruby installation. If you build with an ARM64 Ruby (Apple Silicon), the result is an ARM64 executable and will not run on Intel Macs. Build on Intel (or with an Intel Ruby under Rosetta) to produce a universally compatible x86-64 binary.
 
 * **Windows on ARM (Windows 11 ARM)** — RubyInstaller recently started shipping ARM64 builds; Installing the ARM64 RubyInstaller on a Windows ARM machine and running OCRAN from it will produce an ARM64 `.exe`. These run on ARM Windows natively. Installing the standard x86-64 RubyInstaller on a Windows ARM machine and running OCRAN from it will (probably?) produce an x86-64 `.exe`. These run on ARM Windows via the built-in x86-64 emulation layer, so the executables work on both ARM and x86-64 Windows targets. If you use `--no-lzma`, note that `lzma.exe` (the bundled compressor) is also x86-64 and relies on the same emulation.
+
+### mswin Ruby (Visual C++)
+
+OCRAN also packages with an mswin Ruby (`x64-mswin64_140`), the Ruby built
+with Microsoft Visual C++ instead of MinGW, e.g. the official builds from
+<https://cache.ruby-lang.org/pub/ruby/binaries/mswin64/> or
+`ruby/setup-ruby` with `ruby-version: mswin`. There is no MSYS2 devkit:
+
+* The source gem (and `rake build` in a checkout) compiles the stubs with
+  `nmake -f src/Makefile.mswin`, so run it from a Visual Studio developer
+  prompt (`vcvars64.bat`, Build Tools with the C++ workload), as for any
+  native gem on mswin. The stubs link the C runtime statically.
+* The Ruby DLL of an mswin Ruby links the Visual C++ runtime
+  (`vcruntime140.dll`), which is not part of Windows: without the
+  [VC++ Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)
+  `ruby.exe` cannot start. OCRAN bundles the VC++ runtime DLLs next to the
+  packed `ruby.exe` (app-local deployment), so the executable runs on a
+  machine without the Redistributable.
+* The libraries an mswin Ruby uses from vcpkg (gmp, libffi, OpenSSL,
+  libyaml, zlib) live next to `ruby.exe`. OCRAN reads the import tables of
+  `ruby.exe`, the Ruby DLL and the packed extensions and bundles the DLLs
+  they need from there, even with `--no-autodll` (as it packs RubyInstaller's
+  `ruby_builtin_dlls`).
+* If the packed interpreter still cannot load a DLL, the executable says so
+  (`The Ruby interpreter could not start: a DLL it needs was not found`)
+  instead of exiting silently with status 0xC0000135.
 
 ## Development
 
@@ -706,7 +732,7 @@ The architecture of the generated executable matches the Ruby interpreter used t
 
 | Task         | Purpose                                                                |
 |--------------|------------------------------------------------------------------------|
-| `rake build` | Compile stub(.exe) (requires MSVC or mingw-w64 + DevKit or Unix build tools)                |
+| `rake build` | Compile stub(.exe) (requires mingw-w64 + DevKit, MSVC with an mswin Ruby, or Unix build tools) |
 | `rake clean` | Remove generated binaries                                              |
 | `rake test`  | Execute all unit & integration tests                                   |
 

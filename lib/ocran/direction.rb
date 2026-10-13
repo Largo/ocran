@@ -16,7 +16,9 @@ module Ocran
     # - /ruby/3.0.0/
     # - /ruby/site_ruby/3.0.0/
     # - /ruby/vendor_ruby/3.0.0/
-    RUBY_LIBRARY_PATH_REGEX = %r{/(ruby/(?:site_ruby/|vendor_ruby/)?\d+\.\d+\.\d+)/?$}i
+    # The version directory is RbConfig's ruby_version, which development
+    # builds suffix with their ABI version (e.g. "4.1.0+5").
+    RUBY_LIBRARY_PATH_REGEX = %r{/(ruby/(?:site_ruby/|vendor_ruby/)?\d+\.\d+\.\d+(?:\+\d+)?)/?$}i
 
     # Core libraries provided by glibc and the dynamic loader. These must
     # never be bundled: they are tightly coupled to the target system's
@@ -34,6 +36,9 @@ module Ocran
     # ship or build. None of them can be loaded by the cosmopolitan Ruby
     # payload, which is statically linked and has no dlopen.
     NATIVE_BINARY_EXTENSIONS = %w[.so .bundle .dll].freeze
+
+    # Visual C++ 2015-2022 runtime DLLs (Microsoft.VC14x.CRT redistributables)
+    VC_RUNTIME_DLL_RE = /\A(?:vcruntime140(?:_\d+)?|msvcp140(?:_\w+)?|concrt140|vccorlib140|vcomp140)\.dll\z/i
 
     # Native binaries a gem ships or has had built for it, i.e. the files
     # that make it unusable under the cosmopolitan Ruby payload.
@@ -176,7 +181,48 @@ module Ocran
       else
         require_relative "library_detector_posix"
       end
-      LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
+      dlls = LibraryDetector.loaded_dlls.map { |path| Pathname.new(path).cleanpath }
+      # A Ruby reached through a junction (the "current" link of rb or
+      # scoop) loads its DLLs by the junction path, while RbConfig reports
+      # the real prefix. Resolve them, or no DLL is recognised as part of
+      # the Ruby installation.
+      dlls.map! { |dll| dll.realpath rescue dll } if Gem.win_platform?
+      dlls
+    end
+
+    # The DLLs that the packed ruby.exe (or rubyw.exe), the Ruby DLL and
+    # the native extensions among +features+ import, directly or through
+    # each other, that are found in the Ruby bin directory, and the Visual
+    # C++ runtime DLLs among them (from the system directory). System DLLs,
+    # and DLLs elsewhere that only the dependency run can find, are not
+    # included.
+    def windows_imported_dlls(features)
+      require_relative "pe_imports"
+
+      bin_dlls = bindir.children.select { |path| path.extname?(".dll") && path.file? }
+                       .to_h { |path| [path.basename.to_s.downcase, path] }
+      system_dir = Pathname((ENV["SystemRoot"] || "C:/Windows").tr("\\", "/")) / "System32"
+      seen = Set.new
+      seen << libruby_so.to_s.downcase if libruby_so
+      found = []
+      queue = [bindir / ruby_executable]
+      queue << bindir / libruby_so if libruby_so
+      queue += features.select { |f| f.extname?(".so") }
+      while (image = queue.shift)
+        next unless image.file?
+
+        PEImports.dll_names(image).each do |name|
+          next unless seen.add?(name.downcase)
+
+          dll = bin_dlls[name.downcase]
+          dll ||= system_dir / name if name.match?(VC_RUNTIME_DLL_RE) && (system_dir / name).file?
+          next unless dll
+
+          found << dll
+          queue << dll
+        end
+      end
+      found
     end
 
     def find_gemspecs(features)
@@ -484,6 +530,15 @@ module Ocran
         end
       end
 
+      # Windows-only: DLLs bundled into bin, next to ruby.exe, by basename
+      dlls_in_bin = Set.new
+      add_dll_to_bin = proc do |dll|
+        next if dll.subpath?(bindir) || !dlls_in_bin.add?(dll.basename.to_s.downcase)
+
+        say "Adding detected DLL #{dll} to bin"
+        builder.copy_to_bin(dll, dll.basename)
+      end
+
       # Windows-only: Add detected DLLs
       if Gem.win_platform? && @option.auto_detect_dlls?
         # The Windows loader resolves the imports of a native extension from
@@ -502,16 +557,17 @@ module Ocran
         # LD_LIBRARY_PATH. DLLs from the Windows directory always come from
         # the target system and are never bundled.
         windows_dir = Pathname(ENV["SystemRoot"] || "C:/Windows")
-        dlls_in_bin = Set.new
-        add_dll_to_bin = proc do |dll|
-          next if dll.subpath?(bindir) || !dlls_in_bin.add?(dll.basename.to_s.downcase)
-
-          say "Adding detected DLL #{dll} to bin"
-          builder.copy_to_bin(dll, dll.basename)
-        end
 
         detect_dlls.each do |dll|
           next unless dll.extname?(".dll") && dll.basename != libruby_so
+          # The Visual C++ runtime is not part of Windows: an mswin Ruby
+          # (and any MSVC-built DLL a gem loads) fails to start with
+          # 0xC0000135 where the VC++ Redistributable is not installed.
+          # Microsoft permits deploying it app-locally, next to ruby.exe.
+          if dll.basename.to_s.match?(VC_RUNTIME_DLL_RE)
+            add_dll_to_bin.call(dll)
+            next
+          end
           next if dll.subpath?(windows_dir)
 
           if dll.subpath?(exec_prefix)
@@ -538,6 +594,25 @@ module Ocran
             say "Adding companion DLL #{path}"
             builder.duplicate_to_exec_prefix(path)
             add_dll_to_bin.call(path)
+          end
+        end
+      end
+
+      # Windows-only: DLLs that ruby.exe, the Ruby DLL and the packed native
+      # extensions import from the Ruby bin directory, plus the Visual C++
+      # runtime. RubyInstaller keeps such DLLs in ruby_builtin_dlls, which is
+      # packed whole below; an mswin Ruby keeps them (gmp, libffi, OpenSSL,
+      # libyaml, zlib from vcpkg) next to ruby.exe, and its interpreter does
+      # not even start without gmp and vcruntime140. They are read from the
+      # PE import tables, so they are packed with --no-autodll too, and for
+      # extensions the dependency run did not exercise.
+      if Gem.win_platform?
+        windows_imported_dlls(features).each do |dll|
+          if dll.subpath?(bindir)
+            verbose "Adding imported DLL #{dll}"
+            builder.duplicate_to_exec_prefix(dll)
+          else
+            add_dll_to_bin.call(dll)
           end
         end
       end
@@ -914,7 +989,8 @@ module Ocran
       end
 
       # Windows-only: Workaround for RubyInstaller MSYS folder detection
-      if Gem.win_platform?
+      # (mswin Ruby, built with Visual C++, has no MSYS2 devkit)
+      if Gem.win_platform? && !RUBY_PLATFORM.include?("mswin")
         # RubyInstaller cannot find the msys folder if ../msys64/usr/bin/msys-2.0.dll is not present
         # (since RubyInstaller-2.4.1 rubyinstaller 2 issue 23)
         builder.touch('msys64/usr/bin/msys-2.0.dll')

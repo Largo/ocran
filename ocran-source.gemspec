@@ -31,7 +31,7 @@ Gem::Specification.new do |spec|
 
   spec.files = Dir.glob("{exe,lib}/**/*") +
                Dir.glob("src/**/*.{c,h,rc,manifest,ico}") +
-               ["src/Makefile"] +
+               ["src/Makefile", "src/Makefile.mswin"] +
                ["ext/extconf.rb"] +
                # lzma.exe is a pre-built x86-64 Windows binary (not compiled from source).
                # Include it so Windows users get compression support out of the box.
