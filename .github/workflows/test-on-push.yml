@@ -347,6 +347,15 @@ jobs:
           bundle config set --local path vendor/bundle
           bundle install
 
+      # The runner image ships Inno Setup; test_innosetup asserts ISCC is on
+      # PATH under GitHub Actions, so do not depend on the image's PATH.
+      - name: Add Inno Setup to PATH
+        shell: pwsh
+        run: |
+          if (-not (where.exe ISCC 2>$null)) {
+            "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+          }
+
       - name: Build stub and run tests
         run: |
           bundle exec rake build
