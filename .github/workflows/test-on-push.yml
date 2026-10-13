@@ -319,6 +319,51 @@ jobs:
           path: zlib_packed.exe
           retention-days: 1
 
+  # mswin: the Ruby built with Visual C++ ("mswin" in ruby/setup-ruby is the
+  # ruby-head build), with vcpkg libraries and no MSYS2 devkit. setup-ruby
+  # sets up the MSVC environment, and `rake build` compiles the stubs with
+  # nmake (src/Makefile.mswin).
+  run-tests-mswin:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: windows-latest
+    env:
+      # fiddle builds against the libffi setup-ruby unpacks from vcpkg
+      BUNDLE_BUILD__FIDDLE: --with-libffi-dir=C:/vcpkg/installed/x64-windows
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: mswin
+
+      # Not bundler-cache: the Gemfile leaves fxruby out on mswin and the
+      # lockfile has no mswin platform, so the bundle is resolved here
+      # rather than installed from the frozen lockfile.
+      - name: Install bundle
+        run: bundle install
+
+      - name: Build stub and run tests
+        run: |
+          bundle exec rake build
+          bundle exec rake test
+
+      - name: Fail if the test run left the working tree dirty
+        shell: bash
+        run: |
+          git checkout -- Gemfile.lock
+          bash .github/check-clean-tree.sh
+
+      - name: Build zlib fixture for portability test
+        run: bundle exec ruby -Ilib exe/ocran test/fixtures/zlib/zlib.rb --output zlib_packed_mswin.exe
+
+      # The runner has the VC++ Redistributable installed, so this only
+      # shows the executable does not need anything on PATH.
+      - name: Run packed executable with a minimal PATH
+        shell: pwsh
+        run: |
+          $env:PATH = "C:\Windows\system32;C:\Windows"
+          .\zlib_packed_mswin.exe
+
   test-windows-portability:
     needs: run-tests-windows
     strategy:

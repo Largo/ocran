@@ -1260,10 +1260,12 @@ class TestOcran < Minitest::Test
   def test_bundle_installed_to_configured_path
     with_fixture 'bundlepath' do
       install_dir = File.join("vendor", "bundle", RUBY_ENGINE, RbConfig::CONFIG["ruby_version"])
+      # Not `ruby -S gem`: an mswin Ruby installs the command as gem.cmd only
+      gem = [RbConfig.ruby, "-rrubygems/gem_runner", "-e", "Gem::GemRunner.new.run(ARGV)"]
       cd "vendoredgem" do
-        assert_system(RbConfig.ruby, "-S", "gem", "build", "vendoredgem.gemspec")
+        assert_system(*gem, "build", "vendoredgem.gemspec")
       end
-      assert_system(RbConfig.ruby, "-S", "gem", "install", "--local", "--no-document",
+      assert_system(*gem, "install", "--local", "--no-document",
                     "--install-dir", install_dir, File.join("vendoredgem", "vendoredgem-0.1.0.gem"))
       # What `bundle config set --local path vendor/bundle` writes.
       mkdir_p ".bundle"
@@ -1428,7 +1430,11 @@ class TestOcran < Minitest::Test
       output, status = capture_system("ruby", ocran, "helloworld.rb", "--no-lzma", "--verbose")
       assert status&.success?, output
       packed = output.scan(/^=== Detected gem (\S+?)-\d/).flatten
-      assert_includes packed, "did_you_mean", "the gem report this test reads is missing:\n#{output}"
+      # Ruby 4.1 autoloads did_you_mean rather than loading it at boot
+      boot_loads_did_you_mean = IO.popen([RbConfig.ruby, "-e", "print $LOADED_FEATURES.grep(/did_you_mean/).any?"], &:read) == "true"
+      if boot_loads_did_you_mean
+        assert_includes packed, "did_you_mean", "the gem report this test reads is missing:\n#{output}"
+      end
       %w[tempfile tmpdir delegate].each do |name|
         refute_includes packed, name, "#{name} is activated by OCRAN's build, not by helloworld.rb"
       end
@@ -2608,7 +2614,10 @@ class TestOcran < Minitest::Test
       assert File.exist?(exe_name("openssl_https"))
       pristine_env exe_name("openssl_https") do
         assert_system(exe_name("openssl_https"))
-        if Gem.win_platform?
+        # The vcpkg OpenSSL of an mswin Ruby has no CA file in the Ruby
+        # prefix to bundle; its RubyGems hook exports the Windows ROOT
+        # store instead, in the packed application as well.
+        if Gem.win_platform? && ruby_prefix_has_cert_file?
           cert_path = File.read("cert_path.txt")
           # OCRAN extracts to a temp directory named ocranXXXXXX; the bundled
           # cert is placed there and SSL_CERT_FILE is set to that path.
@@ -2617,6 +2626,12 @@ class TestOcran < Minitest::Test
         end
       end
     end
+  end
+
+  def ruby_prefix_has_cert_file?
+    require "openssl"
+    cert_file = File.expand_path(OpenSSL::X509::DEFAULT_CERT_FILE)
+    File.file?(cert_file) && cert_file.downcase.start_with?(File.expand_path(RbConfig::CONFIG["exec_prefix"]).downcase + "/")
   end
 
   # Tests that a script can use a custom cacert.pem placed next to the exe.

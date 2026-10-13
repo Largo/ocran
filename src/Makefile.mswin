@@ -1,0 +1,65 @@
+# NMAKE makefile for building the Windows stubs with Microsoft Visual C++
+# (for mswin Ruby, which has no MinGW/MSYS2 toolchain). Run it from a
+# Visual Studio developer prompt (vcvars64.bat), in this directory:
+#
+#   nmake -f Makefile.mswin [install|clean]
+#
+# The stubs link the C runtime statically (/MT): they run before anything
+# is extracted, so they must not depend on vcruntime140.dll themselves.
+
+CC              = cl
+RC              = rc
+CFLAGS          = -nologo -W3 -O2 -MT -DWITH_LZMA -D_CRT_SECURE_NO_WARNINGS -Ilzma
+LDFLAGS         = -nologo -release -manifest:no
+LDLIBS          = bcrypt.lib shell32.lib user32.lib advapi32.lib
+
+BINDIR          = ..\share\ocran
+
+COMMON_OBJS     = system_utils.obj path_utils.obj inst_dir.obj script_info.obj \
+                  unpack.obj lzma\LzmaDec.obj stub.res
+CONSOLE_OBJS    = stub_console.obj error_console.obj
+WINDOW_OBJS     = stub_window.obj error_window.obj
+
+all: stub.exe stubw.exe
+
+# Coarse header dependencies, as in Makefile
+HEADERS         = error.h inst_dir.h script_info.h system_utils.h unpack.h \
+                  lzma\LzmaDec.h lzma\7zTypes.h lzma\Compiler.h
+
+.c.obj:
+	$(CC) $(CFLAGS) -c $< -Fo$@
+
+lzma\LzmaDec.obj: lzma\LzmaDec.c $(HEADERS)
+	$(CC) $(CFLAGS) -c lzma\LzmaDec.c -Fo$@
+
+system_utils.obj path_utils.obj inst_dir.obj script_info.obj unpack.obj: $(HEADERS)
+
+stub_console.obj: stub.c $(HEADERS)
+	$(CC) $(CFLAGS) -D_CONSOLE -c stub.c -Fo$@
+
+error_console.obj: error.c $(HEADERS)
+	$(CC) $(CFLAGS) -D_CONSOLE -c error.c -Fo$@
+
+stub_window.obj: stub.c $(HEADERS)
+	$(CC) $(CFLAGS) -c stub.c -Fo$@
+
+error_window.obj: error.c $(HEADERS)
+	$(CC) $(CFLAGS) -c error.c -Fo$@
+
+stub.res: stub.rc stub.manifest vit-ruby.ico
+	$(RC) -nologo -fo stub.res stub.rc
+
+stub.exe: $(COMMON_OBJS) $(CONSOLE_OBJS)
+	link $(LDFLAGS) -subsystem:console -out:$@ $** $(LDLIBS)
+
+# -mwindows equivalent: GUI subsystem, but keep main() as the entry point
+stubw.exe: $(COMMON_OBJS) $(WINDOW_OBJS)
+	link $(LDFLAGS) -subsystem:windows -entry:mainCRTStartup -out:$@ $** $(LDLIBS)
+
+install: all
+	if not exist $(BINDIR) mkdir $(BINDIR)
+	copy /y stub.exe $(BINDIR)\stub.exe >nul
+	copy /y stubw.exe $(BINDIR)\stubw.exe >nul
+
+clean:
+	-del /q stub.exe stubw.exe *.obj lzma\*.obj stub.res 2>nul

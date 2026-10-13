@@ -8,7 +8,8 @@ gem "minitest", "~> 6.0"
 
 gem "fiddle", "~> 1.0"
 gem "glimmer-dsl-libui"
-gem "fxruby"
+# fxruby needs the FOX toolkit, which has no Visual C++ build
+gem "fxruby" unless RUBY_PLATFORM.include?("mswin")
 
 gem 'logger'
 gem 'csv'

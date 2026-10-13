@@ -178,6 +178,29 @@ int main(int argc, char *argv[])
         FATAL("Failed to run script");
         goto cleanup;
     }
+#ifdef _WIN32
+    /*
+       The loader failed before the interpreter ran a single line, so
+       nothing else would say why the application did nothing. Reported
+       here rather than in system_utils.c: FATAL is a message box in the
+       windowed stub only, and this file is compiled for each variant.
+    */
+    switch ((unsigned long)status) {
+    case 0xC0000135UL: /* STATUS_DLL_NOT_FOUND */
+        FATAL("The Ruby interpreter could not start: a DLL it needs was not "
+              "found (0x%08lX). An mswin Ruby also needs the Visual C++ "
+              "runtime (vcruntime140.dll).", (unsigned long)status);
+        break;
+    case 0xC0000138UL: /* STATUS_ORDINAL_NOT_FOUND */
+    case 0xC0000139UL: /* STATUS_ENTRYPOINT_NOT_FOUND */
+    case 0xC0000142UL: /* STATUS_DLL_INIT_FAILED */
+    case 0xC000007BUL: /* STATUS_INVALID_IMAGE_FORMAT */
+        FATAL("The Ruby interpreter could not start: a DLL it loads is "
+              "incompatible or failed to initialize (0x%08lX)",
+              (unsigned long)status);
+        break;
+    }
+#endif
     /*
        If the script executes successfully, its return code is stored in status.
     */

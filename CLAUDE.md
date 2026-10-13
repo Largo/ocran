@@ -16,6 +16,7 @@ rake build          # Compile the C stub (Windows: stub.exe, stubw.exe; Linux/ma
 
 **Requirements for building stubs:**
 - Windows: RubyInstaller DevKit (mingw-w64), used through `ridk exec make`
+- Windows with an mswin Ruby (Visual C++): `nmake -f src/Makefile.mswin` from a Visual Studio developer prompt (`rake build` does this on mswin)
 - Linux/macOS: gcc/clang and make
 - Run `bin/setup` first to install dependencies and build stubs initially
 
@@ -88,6 +89,7 @@ OCRAN operates in two distinct phases:
   - Appending packed data
 - **`gem_spec_queryable.rb`**: Handles gem dependency resolution and file selection
 - **`inno_setup_script_builder.rb`**: Generates Inno Setup installers
+- **`pe_imports.rb`**: Reads the DLL imports of PE images; on Windows the DLLs ruby.exe, the Ruby DLL and packed extensions import from the Ruby bin directory (mswin keeps its vcpkg DLLs there) and the VC++ runtime are packed from it
 
 #### C Stub Layer (`src/`)
 
