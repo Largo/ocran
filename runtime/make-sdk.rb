@@ -151,6 +151,17 @@ FileUtils.cp_r(File.dirname(File.dirname(arch_include)), File.join(sdk, ".ext/in
 # SDK's copy, wherever the SDK ends up.
 rbconfig = File.read(File.join(build, "rbconfig.rb"))
 rbconfig = rbconfig.gsub(deps, '#{File.expand_path("deps", __dir__)}')
+# So does a header directory of the build host passed with -isystem (the
+# Linux build's kernel headers, which musl-gcc does not see by itself):
+# copied into the SDK, links resolved, so that the SDK works elsewhere.
+rbconfig.scan(/-isystem (\S+)/).flatten.uniq.each do |dir|
+  next unless File.directory?(dir)
+
+  # cp -L: the headers link to each other (and Debian's asm/ to
+  # ../../../lib/...), which a copy of the links would break.
+  system("cp", "-RL", dir, File.join(sdk, File.basename(dir)), exception: true)
+  rbconfig = rbconfig.gsub(dir, "\#{File.expand_path(#{File.basename(dir).inspect}, __dir__)}")
+end
 File.write(File.join(sdk, "rbconfig.rb"), rbconfig)
 # <arch>-fake.rb loads tool/fake.rb from the Ruby source tree.
 FileUtils.mkdir_p(File.join(sdk, "tool"))
