@@ -374,9 +374,13 @@ module Ocran
       add_licenses
       work = Dir.mktmpdir("ocran-runtime")
       begin
-        relink = !@unsupported_native.empty? || !@dlls.empty?
-        executable = relink ? link_extensions(work) : @runtime.executable
-        write(executable)
+        if @runtime.sdk&.section_payload?
+          write_linked(work)
+        else
+          relink = !@unsupported_native.empty? || !@dlls.empty?
+          executable = relink ? link_extensions(work) : @runtime.executable
+          write(executable)
+        end
         ship_dlls
       ensure
         remove_work_dir(work)
@@ -403,7 +407,19 @@ module Ocran
     # The C extensions of the application's gems that the runtime does not
     # have: built from the gems' sources against the runtime's SDK and
     # linked into a runtime of this application's own. Returns its path.
-    def link_extensions(work)
+    # macOS: the archive is written on its own (offsets counted from its
+    # start) and linked into the executable as the section __OCRAN,__zip,
+    # together with any extensions; the linker lays the executable out and
+    # signs it. Appended data would break the code signature.
+    def write_linked(work)
+      archive = File.join(work, "application.zip")
+      File.binwrite(archive, ZipWriter.end_of_central_directory(0, 0, 0))
+      ZipWriter.append(archive, archive_entries)
+      link_extensions(work, archive: archive, output: @path.to_s)
+      File.chmod(0o755, @path.to_s)
+    end
+
+    def link_extensions(work, archive: nil, output: nil)
       sdk = @runtime.sdk
       unless sdk
         list = @unsupported_native.map { |name, source| "  #{name} (#{source})" }.join("\n")
@@ -460,10 +476,11 @@ module Ocran
         built
       end
 
-      executable = File.join(work, "ocran-runtime.exe")
+      executable = output || File.join(work, "ocran-runtime.exe")
       say "Linking #{extensions.map(&:feature).join(", ")} into the static runtime" unless extensions.empty?
       say "Linking against the DLL builds of #{@dlls.join(", ")}" unless @dlls.empty?
-      sdk.link(extensions, executable, dlls: @dlls)
+      say "Linking the application archive into the executable (section __OCRAN,__zip)" if archive
+      sdk.link(extensions, executable, dlls: @dlls, archive: archive)
       @dll_files = sdk.dll_files(@dlls)
       Pathname(executable)
     end
@@ -581,6 +598,16 @@ module Ocran
       set_gui_subsystem if @windowed
       apply_resources
 
+      File.open(@path.to_s, "ab") do |io|
+        # An empty archive at the end of the runtime, so that ZipWriter
+        # writes the entries right after it with offsets counted from the
+        # start of the file - which is what makes `unzip -l app.exe` work.
+        io.write(ZipWriter.end_of_central_directory(0, 0, io.size))
+      end
+      ZipWriter.append(@path.to_s, archive_entries)
+    end
+
+    def archive_entries
       boot = File.binread(BOOT_SCRIPT)
       config = config_source
       entries = [
@@ -597,14 +624,6 @@ module Ocran
         entries << zip_entry(name, **(source == :empty ? { data: "" } : { source: source.to_s }))
       end
       entries << zip_entry("ocran/manifest.sha256", data: manifest(boot, config, files))
-
-      File.open(@path.to_s, "ab") do |io|
-        # An empty archive at the end of the runtime, so that ZipWriter
-        # writes the entries right after it with offsets counted from the
-        # start of the file - which is what makes `unzip -l app.exe` work.
-        io.write(ZipWriter.end_of_central_directory(0, 0, io.size))
-      end
-      ZipWriter.append(@path.to_s, entries)
     end
 
     def parent_dirs(name)
@@ -624,10 +643,15 @@ module Ocran
     # `unzip -p app.exe ocran/manifest.sha256` lists exactly what the
     # executable contains.
     def manifest(boot, config, files)
-      runtime = @executable == @runtime.executable ? "#{@runtime.executable.basename}" : "linked for this application"
-      lines = ["# ocran native application manifest (sha256sum format)",
-               "# runtime: #{runtime}, Ruby #{@runtime.ruby_version} #{@runtime.arch} " \
-               "#{Digest::SHA256.file(@executable.to_s).hexdigest}",
+      runtime =
+        if @executable.nil? # macOS: linked together with this archive
+          "linked together with this archive, Ruby #{@runtime.ruby_version} #{@runtime.arch}"
+        else
+          name = @executable == @runtime.executable ? @runtime.executable.basename.to_s : "linked for this application"
+          "#{name}, Ruby #{@runtime.ruby_version} #{@runtime.arch} #{Digest::SHA256.file(@executable.to_s).hexdigest}"
+        end
+      lines = ["# ocran static runtime application manifest (sha256sum format)",
+               "# runtime: #{runtime}",
                "#{Digest::SHA256.hexdigest(boot)}  ocran/boot.rb",
                "#{Digest::SHA256.hexdigest(config)}  ocran/config.rb"]
       files.sort.each do |name, source|

@@ -62,6 +62,11 @@ module Ocran
 
     def msvc? = @toolchain == "msvc"
 
+    # True when the application archive cannot be appended to the
+    # executable but is linked in as the section __OCRAN,__zip (macOS, where
+    # appended data would break the code signature).
+    def section_payload? = @info["payload"] == "section"
+
     def link_args = (@dir / "link.args").read.lines(chomp: true).map { |a| a.gsub("@SDK@", @dir.to_s) }
 
     # The C compiler driver of the target.
@@ -93,7 +98,11 @@ module Ocran
     end
 
     def toolchain_hint
-      if @info.fetch("target_os", "mingw32").start_with?("mingw")
+      target_os = @info.fetch("target_os", "mingw32")
+      if target_os.start_with?("darwin")
+        return "clang from Xcode or the Command Line Tools (xcode-select --install)"
+      end
+      if target_os.start_with?("mingw")
         "a MinGW-w64 UCRT C compiler (on Linux: gcc-mingw-w64-ucrt64, on Windows: RubyInstaller's " \
           "MSYS2, e.g. ucrt64/bin/gcc.exe)"
       else
@@ -143,7 +152,9 @@ module Ocran
     # Links the runtime with the given extensions registered in addition to
     # those it already has, into +output+. Libraries named in +dlls+ are
     # linked against their DLL instead of statically (see #dll_files).
-    def link(extensions, output, dlls: [])
+    # macOS: the application archive is linked in as a section (see
+    # #section_payload?); +archive+ is that file.
+    def link(extensions, output, dlls: [], archive: nil)
       unknown = dlls - self.dlls.keys
       unless unknown.empty?
         raise "No DLL build of #{unknown.join(", ")} in #{@dir} (available: #{self.dlls.keys.join(", ")})"
@@ -166,9 +177,11 @@ module Ocran
         cmd = args.flat_map { |a| a == "@EXTRA@" ? extra : [a.gsub("@OUTPUT@", output.to_s)] }
         cmd = cmd.map { |a| as_dll.fetch(a, a) }
         cmd += ["-o", output.to_s] unless args.any? { |a| a.include?("@OUTPUT@") }
+        cmd += ["-Wl,-sectcreate,__OCRAN,__zip,#{archive}"] if archive
         run(*cmd)
       end
-      run(@info["strip"] || cc.sub(/gcc(\.exe)?\z/) { "strip#{$1}" }, output.to_s) unless msvc?
+      strip = @info.key?("strip") ? @info["strip"] : cc.sub(/gcc(\.exe)?\z/) { "strip#{$1}" }
+      run(strip, output.to_s) if strip && !msvc?
       output
     end
 

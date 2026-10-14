@@ -485,7 +485,8 @@ EOF
           # without .exe - `--output myapp`, as a build script shared with
           # Linux and macOS writes it - gets one there. .exe and .com names
           # are used as given.
-          if Gem.win_platform? && !output_override.extname?(".exe") && !output_override.extname?(".com")
+          windows_target = static_runtime ? static_runtime_os == "windows" : Gem.win_platform?
+          if windows_target && !output_override.extname?(".exe") && !output_override.extname?(".com")
             Pathname("#{output_override}.exe")
           else
             output_override

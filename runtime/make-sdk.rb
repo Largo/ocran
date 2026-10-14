@@ -27,6 +27,7 @@ rbconfig_src = File.read(File.join(build, "rbconfig.rb"))
 config = ->(key) { rbconfig_src[/^\s*CONFIG\["#{key}"\] = "([^"]*)"/, 1].to_s }
 target_os = config.("target_os")
 windows = target_os.start_with?("mingw")
+macos = target_os.start_with?("darwin")
 program = "ruby#{config.("EXEEXT")}"
 
 cmd = Dir.chdir(build) do
@@ -41,11 +42,19 @@ FileUtils.rm_rf(sdk)
 FileUtils.mkdir_p(sdk)
 result = []
 skip_next = false
+keep_next = false
 args.each_with_index do |arg, i|
   next skip_next = false if skip_next
+  if keep_next # the framework name after -framework (macOS)
+    result << arg
+    next keep_next = false
+  end
   case arg
   when "-o"
     skip_next = true
+  when "-framework"
+    result << arg
+    keep_next = true
   when /\A-L(.*)\z/
     dir = File.expand_path($1, build)
     result << (dir == build ? "-L@SDK@" : dir == File.join(deps, "lib") ? "-L@SDK@/deps/lib" : arg)
@@ -107,6 +116,8 @@ end
 libs = if windows
          %w[-lexslt -lxslt -lxml2 -lsybdb -lz -liconv -lssl -lcrypto -lyaml -lffi
             -lsecur32 -lcrypt32 -lws2_32 -lbcrypt -lgdi32 -luser32 -ladvapi32]
+       elsif macos # iconv is a system library
+         %w[-lexslt -lxslt -lxml2 -lsybdb -lz -lssl -lcrypto -lyaml -lffi -liconv]
        else # musl: iconv, libm, pthreads and dl are part of libc
          %w[-lexslt -lxslt -lxml2 -lsybdb -lz -lssl -lcrypto -lyaml -lffi]
        end
@@ -115,10 +126,17 @@ libs = if windows
 cppflags = %w[-DLIBXML_STATIC -DLIBXSLT_STATIC -DLIBEXSLT_STATIC -DYAML_DECLARE_STATIC]
 # How to check the compiler (`cc -dumpmachine`; musl-gcc reports the host's
 # triplet, so there is nothing to check) and which strip to use.
-strip = windows ? result.first.sub(/gcc\z/, "strip") : "strip"
+# On macOS the linker signs the executable (ad hoc, on arm64), and a
+# separate strip would invalidate that; the application archive goes into a
+# section at link time (payload "section"), since appended data would too.
+strip = if windows then result.first.sub(/gcc\z/, "strip")
+        elsif macos then nil
+        else "strip"
+        end
 File.write(File.join(sdk, "sdk.json"),
            JSON.pretty_generate("toolchain" => "gcc", "target_os" => target_os,
                                 "dumpmachine" => (windows ? "mingw32" : nil), "strip" => strip,
+                                "payload" => (macos ? "section" : "appended"),
                                 "libs" => libs, "cppflags" => cppflags, "dlls" => dlls) + "\n")
 
 FileUtils.cp_r(File.join(src, "include"), File.join(sdk, "include"))

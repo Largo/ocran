@@ -37,13 +37,43 @@ module OcranRuntime
       data
     end
 
+    # [file offset, size] of a section of this Mach-O executable.
+    def macho_section(segment, section)
+      @io.pos = 16
+      ncmds, = @io.read(8).unpack("V")
+      at = 32
+      ncmds.times do
+        @io.pos = at
+        cmd, cmdsize = @io.read(8).unpack("VV")
+        if cmd == 0x19 # LC_SEGMENT_64
+          @io.pos = at + 64
+          nsects = @io.read(4).unpack1("V")
+          nsects.times do |i|
+            @io.pos = at + 72 + i * 80
+            sectname, segname, _addr, size, offset = @io.read(52).unpack("Z16Z16QQV")
+            return [offset, size] if segname == segment && sectname == section
+          end
+        end
+        at += cmdsize
+      end
+      nil
+    end
+
     def index
-      # The archive ends at the end of the file - or, in a signed Windows
-      # executable, where the Authenticode certificate table starts (a
-      # signer appends it after our data).
+      # Where the archive is: appended to the executable, so it ends at the
+      # end of the file - or, in a signed Windows executable, where the
+      # Authenticode certificate table starts (a signer appends it after our
+      # data). On macOS it is the section __OCRAN,__zip (appended data would
+      # break the code signature), and its offsets count from that section.
       stop = @io.size
+      @base = 0
       @io.pos = 0
-      if @io.read(2) == "MZ"
+      magic = @io.read(4)
+      if magic == "\xCF\xFA\xED\xFE".b # Mach-O, 64-bit
+        section = macho_section("__OCRAN", "__zip") or raise "ocran: no __OCRAN,__zip section in #{EXE}"
+        @base, size = section
+        stop = @base + size
+      elsif magic.start_with?("MZ")
         @io.pos = 0x3c
         pe = @io.read(4).unpack1("V")
         @io.pos = pe + 24
@@ -59,7 +89,7 @@ module OcranRuntime
       eocd = tail.rindex("PK\x05\x06".b) or raise "ocran: no application archive in #{EXE}"
       count, cd_size, cd_offset = tail.byteslice(eocd + 10, 10).unpack("vVV")
 
-      @io.pos = cd_offset
+      @io.pos = @base + cd_offset
       cd = @io.read(cd_size)
       @entries = {}
       pos = 0
@@ -69,7 +99,7 @@ module OcranRuntime
         raise "ocran: corrupt central directory" unless sig == 0x02014b50
         raise "ocran: encrypted entries are not supported" if flags & 1 == 1
         name = cd.byteslice(pos + 46, nlen).force_encoding(Encoding::UTF_8)
-        @entries[name] = Entry.new(name, method, crc, csize, size, offset).freeze
+        @entries[name] = Entry.new(name, method, crc, csize, size, @base + offset).freeze
         pos += 46 + nlen + xlen + clen
       end
       @entries.freeze
