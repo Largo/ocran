@@ -31,6 +31,19 @@ class TestZipWriter < Minitest::Test
     end
   end
 
+  # Parent directories the writer adds were dated Time.now, so packing the
+  # same files twice gave different bytes whenever the clock moved on.
+  def test_added_parent_directories_are_dated_like_their_entry
+    mtime = Time.utc(2001, 2, 3, 4, 5, 6)
+    with_archive(archive("MZ")) do |path|
+      Ocran::ZipWriter.append(path, [Ocran::ZipWriter::Entry.new(name: "a/b/c.rb", data: "x", mtime: mtime)])
+      bytes = File.binread(path)
+      stamps = bytes.scan(/PK\x03\x04.{6}(.{4})/mn).map { |(s)| s.unpack("vv") }
+      assert_equal 3, stamps.size
+      assert_equal 1, stamps.uniq.size, "every local header carries the entry's time"
+    end
+  end
+
   # The limits of the format were checked only after the archive had been
   # cut open and the new entries written, which left the file broken.
   def test_too_many_entries_are_refused_before_writing
