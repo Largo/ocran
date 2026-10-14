@@ -311,6 +311,39 @@ class TestStaticRuntimeBuilder < Minitest::Test
     refute File.exist?(output), "a runtime copy without its archive was left behind"
   end
 
+  # A source gem can depend on gems its precompiled platform gem does not
+  # (nokogiri: mini_portile2, for extconf.rb); the missing ones are
+  # installed into a directory used only for building extensions.
+  def test_missing_dependencies_of_a_source_gem_are_installed_for_the_build
+    source_dir = File.join(@dir, "gems", "demo-1.0")
+    FileUtils.mkdir_p(source_dir)
+    spec = Gem::Specification.new do |s|
+      s.name = "demo"
+      s.version = "1.0"
+      s.summary = "demo"
+      s.add_dependency "ocran-test-absent-gem", "~> 2.0"
+      s.add_dependency "minitest" # installed
+    end
+    File.write("#{source_dir}.gemspec", spec.to_ruby)
+    installed = []
+    builder = Ocran::StaticRuntimeBuilder.allocate
+    builder.define_singleton_method(:say) { |_| }
+    require "rubygems/dependency_installer"
+    home = File.join(@dir, "gems", "build-gems")
+    stub = Object.new
+    stub.define_singleton_method(:install) do |name, requirement|
+      installed << [name, requirement.to_s]
+      FileUtils.mkdir_p(File.join(home, "specifications"))
+    end
+    Gem::DependencyInstaller.define_singleton_method(:new) { |**opts| installed << opts[:install_dir]; stub }
+    begin
+      assert_equal [home], builder.send(:build_gem_path, source_dir)
+    ensure
+      Gem::DependencyInstaller.singleton_class.remove_method(:new)
+    end
+    assert_equal [home, ["ocran-test-absent-gem", "~> 2.0"]], installed
+  end
+
   def test_runtime_executable_must_match_runtime_json
     File.binwrite(File.join(@runtime_dir, "ocran-runtime.exe"), "MZ tampered")
     error = assert_raises(RuntimeError) { runtime.verify! }

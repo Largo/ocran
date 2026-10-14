@@ -455,11 +455,13 @@ module Ocran
         end
         extconfs = spec.extensions
         source_dir = spec.full_gem_path
+        gem_path = []
         if extconfs.empty?
           # A precompiled platform gem. Build from the source gem of the same
           # version (a platform gem may leave sources out: nokogiri's lacks
           # its gumbo parser), or else from the sources it carries.
           source_dir = source_gem_dir(spec) || spec.full_gem_path
+          gem_path = build_gem_path(source_dir)
           extconfs = Dir.glob("ext/**/extconf.rb", base: source_dir).sort
           if extconfs.empty?
             raise "#{spec.full_name} is a precompiled gem for #{spec.platform} without its C source: install " \
@@ -474,7 +476,8 @@ module Ocran
           end
           say "Building the C extension #{extconf} of #{spec.full_name} for the static runtime"
           sdk.build_extension(ext_dir, File.join(work, spec.full_name, File.dirname(extconf)),
-                              "--with-opt-dir=#{sdk.dir / "deps"}", *sdk.extconf_args(spec.name))
+                              "--with-opt-dir=#{sdk.dir / "deps"}", *sdk.extconf_args(spec.name),
+                              gem_path: gem_path)
         end
         files.each do |name, _|
           stem = name.sub(/\.(so|bundle)\z/, "")
@@ -507,7 +510,9 @@ module Ocran
     def source_gem_dir(spec)
       cache = File.join(ENV["XDG_CACHE_HOME"] || File.join(Dir.home, ".cache"), "ocran", "gems")
       dir = File.join(cache, "#{spec.name}-#{spec.version}")
-      return dir if File.directory?(dir)
+      return dir if File.directory?(dir) && File.file?("#{dir}.gemspec")
+
+      FileUtils.rm_rf(dir) # fetched by an OCRAN that did not keep the spec
 
       say "Fetching the source gem of #{spec.name} #{spec.version}: the precompiled #{spec.full_name} is " \
           "built for #{spec.platform}"
@@ -520,7 +525,11 @@ module Ocran
       Dir.mktmpdir do |tmp|
         gem_file = source.download(remote, tmp)
         FileUtils.mkdir_p(cache)
-        Gem::Package.new(gem_file).extract_files("#{dir}.tmp")
+        package = Gem::Package.new(gem_file)
+        package.extract_files("#{dir}.tmp")
+        # Its dependencies may differ from the precompiled gem's (see
+        # #build_gem_path).
+        File.write("#{dir}.gemspec", package.spec.to_ruby)
         File.rename("#{dir}.tmp", dir)
       end
       dir
@@ -529,6 +538,33 @@ module Ocran
               "building from the sources #{spec.full_name} includes"
       FileUtils.rm_rf("#{dir}.tmp") if dir
       nil
+    end
+
+    # Where the extension build of a fetched source gem finds the gems it
+    # depends on that the build host lacks: a source gem can depend on more
+    # than its precompiled platform gem (nokogiri's extconf.rb needs
+    # mini_portile2, which nokogiri-*-x86_64-linux-gnu does not depend on).
+    # They are installed, as RubyGems would install them with the source
+    # gem, into a directory used only for building extensions. Returns the
+    # extra GEM_PATH entries.
+    def build_gem_path(source_dir)
+      spec_file = "#{source_dir}.gemspec"
+      return [] unless File.file?(spec_file)
+
+      home = File.join(File.dirname(source_dir), "build-gems")
+      local = Dir[File.join(home, "specifications", "*.gemspec")].filter_map { |f| Gem::Specification.load(f) }
+      missing = Gem::Specification.load(spec_file).runtime_dependencies.reject do |dep|
+        Gem::Specification.any? { |s| dep.match?(s) } || local.any? { |s| dep.match?(s) }
+      end
+      unless missing.empty?
+        require "rubygems/dependency_installer"
+        missing.each do |dep|
+          say "Installing #{dep.name} (#{dep.requirement}) into #{home} for building C extensions"
+          Gem::DependencyInstaller.new(install_dir: home, document: [], domain: :remote,
+                                       wrappers: true, env_shebang: true).install(dep.name, dep.requirement)
+        end
+      end
+      File.directory?(home) ? [home] : []
     end
 
     # The packed copy of a precompiled platform gem (nokogiri-1.19.4-x86_64-
