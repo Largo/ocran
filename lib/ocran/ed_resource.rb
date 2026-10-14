@@ -33,41 +33,7 @@ module Ocran
     # CODEPAGE_UNICODE, STRING_TABLE_KEY) are defined in ed_resource_builder.rb,
     # required above.
 
-    EXECUTION_LEVELS = %w[asInvoker highestAvailable requireAdministrator].freeze
-
-    # Baseline manifest, copied verbatim from src/stub.manifest. Inlined as a
-    # constant so the installed gem has no runtime dependency on the src tree.
-    MANIFEST_TEMPLATE = <<~MANIFEST
-      <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-      <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-        <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
-          <security>
-            <requestedPrivileges>
-              <requestedExecutionLevel level="asInvoker"/>
-            </requestedPrivileges>
-          </security>
-        </trustInfo>
-        <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
-          <application>
-            <!--The ID below indicates application support for Windows Vista -->
-            <supportedOS Id="{e2011457-1546-43c5-a5fe-008deee3d3f0}"/>
-            <!--The ID below indicates application support for Windows 7 -->
-            <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
-            <!--The ID below indicates application support for Windows 8 -->
-            <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
-            <!--The ID below indicates application support for Windows 8.1 -->
-            <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
-            <!--The ID below indicates application support for Windows 10 -->
-            <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
-          </application>
-        </compatibility>
-        <application>
-          <windowsSettings>
-            <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
-          </windowsSettings>
-        </application>
-      </assembly>
-    MANIFEST
+    # EXECUTION_LEVELS and MANIFEST_TEMPLATE: ed_resource_builder.rb
 
     extern "DWORD GetLastError()"
     extern "HANDLE BeginUpdateResourceW(LPCWSTR, BOOL)"

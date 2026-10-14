@@ -114,11 +114,13 @@ module Ocran
     # installed Ruby, which a static runtime has none of.
     RUBYINSTALLER_FILES = %r{\Alib/ruby/(site_ruby/[^/]+/(ruby_installer(/|\.rb\z)|rubygems/defaults/operating_system\.rb\z)|[^/]+/[^/]+/win32/dll_directory\.so\z)}
 
-    attr_reader :data_size, :skipped
+    attr_reader :data_size, :skipped, :shipped_dlls
 
     def initialize(path, runtime:, host_ruby_api_version:, host_arch:, chdir_before: false,
-                   chdir_exe_dir: false, windowed: false, debug_mode: false)
+                   chdir_exe_dir: false, windowed: false, debug_mode: false, dlls: [], resources: nil)
       @path = Pathname(path)
+      @dlls = dlls
+      @resources = resources
       @runtime = runtime
       @host_api = host_ruby_api_version
       @host_arch = host_arch
@@ -132,6 +134,7 @@ module Ocran
       @unsupported_native = []
       @skipped = Hash.new { |h, k| h[k] = [] }
       @data_size = 0
+      @shipped_dlls = []
 
       yield(self) if block_given?
 
@@ -335,14 +338,29 @@ module Ocran
       end
     end
 
+    # The license texts of what the runtime links in (LICENSES/ of the
+    # runtime directory), so that they travel with every executable:
+    # `unzip -l app.exe ocran/licenses/*`.
+    def add_licenses
+      dir = @runtime.dir / "LICENSES"
+      return unless dir.directory?
+
+      dir.find do |path|
+        add("ocran/licenses/#{path.relative_path_from(dir)}", path) if path.file?
+      end
+    end
+
     def finalize
       raise "No script to run was recorded" unless @exec
 
       add_windows_stdlib
+      add_licenses
       work = Dir.mktmpdir("ocran-native")
       begin
-        executable = @unsupported_native.empty? ? @runtime.executable : link_extensions(work)
+        relink = !@unsupported_native.empty? || !@dlls.empty?
+        executable = relink ? link_extensions(work) : @runtime.executable
         write(executable)
+        ship_dlls
       ensure
         remove_work_dir(work)
       end
@@ -377,6 +395,7 @@ module Ocran
       end
       sdk.check_toolchain!
 
+      @renamed_gems = {}
       by_gem = @unsupported_native.group_by { |_, source| gem_spec_for(source) }
       if (loose = by_gem.delete(nil))
         raise "These C extensions belong to no installed gem, so there is no source to build them " \
@@ -388,21 +407,34 @@ module Ocran
           raise "#{spec.full_name} has a C extension the native runtime's own #{spec.name} does not link in " \
                 "(#{files.map(&:first).join(", ")})"
         end
-        if spec.extensions.empty?
-          raise "#{spec.full_name} is a precompiled gem for #{spec.platform}: it has no C source to build " \
-                "for the native runtime. Install the source gem (gem install #{spec.name} --platform ruby)."
+        extconfs = spec.extensions
+        source_dir = spec.full_gem_path
+        if extconfs.empty?
+          # A precompiled platform gem. Build from the source gem of the same
+          # version (a platform gem may leave sources out: nokogiri's lacks
+          # its gumbo parser), or else from the sources it carries.
+          source_dir = source_gem_dir(spec) || spec.full_gem_path
+          extconfs = Dir.glob("ext/**/extconf.rb", base: source_dir).sort
+          if extconfs.empty?
+            raise "#{spec.full_name} is a precompiled gem for #{spec.platform} without its C source: install " \
+                  "the source gem (gem install #{spec.name} --platform ruby)"
+          end
+          use_as_ruby_platform_gem(spec, work)
         end
-        built = spec.extensions.map do |extconf|
-          ext_dir = File.join(spec.full_gem_path, File.dirname(extconf))
-          unless File.file?(File.join(spec.full_gem_path, extconf))
+        built = extconfs.map do |extconf|
+          ext_dir = File.join(source_dir, File.dirname(extconf))
+          unless File.file?(File.join(source_dir, extconf))
             raise "#{spec.full_name}: #{extconf} is not installed, so its C extension cannot be built"
           end
           say "Building the C extension #{extconf} of #{spec.full_name} for the native runtime"
           sdk.build_extension(ext_dir, File.join(work, spec.full_name, File.dirname(extconf)),
-                              "--with-opt-dir=#{sdk.dir / "deps"}")
+                              "--with-opt-dir=#{sdk.dir / "deps"}", *sdk.extconf_args(spec.name))
         end
         files.each do |name, _|
-          next if built.any? { |ext| name.sub(/\.(so|bundle)\z/, "").end_with?("/#{ext.feature}") }
+          stem = name.sub(/\.(so|bundle)\z/, "")
+          # A precompiled gem keeps it in a Ruby-version directory
+          # (lib/nokogiri/4.0/nokogiri.so for the feature nokogiri/nokogiri).
+          next if built.any? { |ext| stem.end_with?("/#{ext.feature}") || File.basename(stem) == File.basename(ext.feature) }
 
           raise "Building #{spec.full_name} for the native runtime did not provide #{name} " \
                 "(it built #{built.map(&:feature).join(", ")})"
@@ -412,9 +444,94 @@ module Ocran
       end
 
       executable = File.join(work, "ocran-runtime.exe")
-      say "Linking #{extensions.map(&:feature).join(", ")} into the native runtime"
-      sdk.link(extensions, executable)
+      say "Linking #{extensions.map(&:feature).join(", ")} into the native runtime" unless extensions.empty?
+      say "Linking against the DLL builds of #{@dlls.join(", ")}" unless @dlls.empty?
+      sdk.link(extensions, executable, dlls: @dlls)
+      @dll_files = sdk.dll_files(@dlls)
       Pathname(executable)
+    end
+
+    # The unpacked source gem (platform "ruby") of the version of a
+    # precompiled +spec+, fetched from the configured gem sources into
+    # ~/.cache/ocran/gems; nil when it cannot be fetched.
+    def source_gem_dir(spec)
+      cache = File.join(ENV["XDG_CACHE_HOME"] || File.join(Dir.home, ".cache"), "ocran", "gems")
+      dir = File.join(cache, "#{spec.name}-#{spec.version}")
+      return dir if File.directory?(dir)
+
+      say "Fetching the source gem of #{spec.name} #{spec.version}: the precompiled #{spec.full_name} is " \
+          "built for #{spec.platform}"
+      require "rubygems/spec_fetcher"
+      require "rubygems/package"
+      tuples, = Gem::SpecFetcher.fetcher.spec_for_dependency(Gem::Dependency.new(spec.name, spec.version.to_s))
+      remote, source = tuples.find { |s, _| s.platform.to_s == Gem::Platform::RUBY }
+      raise "no source gem of #{spec.name} #{spec.version}" unless remote
+
+      Dir.mktmpdir do |tmp|
+        gem_file = source.download(remote, tmp)
+        FileUtils.mkdir_p(cache)
+        Gem::Package.new(gem_file).extract_files("#{dir}.tmp")
+        File.rename("#{dir}.tmp", dir)
+      end
+      dir
+    rescue StandardError => e
+      warning "Could not fetch the source gem of #{spec.name} #{spec.version} (#{e.message}); " \
+              "building from the sources #{spec.full_name} includes"
+      FileUtils.rm_rf("#{dir}.tmp") if dir
+      nil
+    end
+
+    # The packed copy of a precompiled platform gem (nokogiri-1.19.4-x86_64-
+    # linux-gnu) becomes a platform "ruby" gem (nokogiri-1.19.4): RubyGems
+    # on Windows ignores a spec for another platform. Its spec is rewritten
+    # and its files are moved to the directory the new name implies.
+    def use_as_ruby_platform_gem(spec, work)
+      ruby_spec = spec.dup
+      ruby_spec.platform = Gem::Platform::RUBY
+      return if ruby_spec.full_name == spec.full_name
+
+      spec_file = File.join(work, "#{ruby_spec.full_name}.gemspec")
+      File.write(spec_file, ruby_spec.to_ruby)
+      old, new = spec.full_name, ruby_spec.full_name
+      @entries = @entries.to_h do |name, source|
+        if name.match?(%r{(\A|/)specifications/#{Regexp.escape(old)}\.gemspec\z})
+          [name.sub("#{old}.gemspec", "#{new}.gemspec"), Pathname(spec_file)]
+        else
+          [name.sub(%r{(\A|/)(gems|extensions/[^/]+/[^/]+)/#{Regexp.escape(old)}(/|\z)}) { "#{$1}#{$2}/#{new}#{$3}" }, source]
+        end
+      end
+      @renamed_gems[old] = new
+      drop_foreign_binaries(new)
+    end
+
+    NATIVE_MAGIC = ["\x7FELF".b, "MZ".b, "\xCF\xFA\xED\xFE".b, "\xCE\xFA\xED\xFE".b, "\xCA\xFE\xBA\xBE".b].freeze
+
+    # A precompiled gem carries binaries for its platform - libraries and
+    # programs (tiny_tds: ports/x86_64-linux-gnu/lib/libsybdb.so.5,
+    # bin/tsql) - that are of no use on Windows; dropped by content, since
+    # their names say little.
+    def drop_foreign_binaries(full_name)
+      @entries.reject! do |name, source|
+        next false unless name.match?(%r{(\A|/)gems/#{Regexp.escape(full_name)}/}) && source.is_a?(Pathname)
+
+        head = File.binread(source.to_s, 4) || ""
+        native = NATIVE_MAGIC.any? { |magic| head.start_with?(magic) }
+        if native
+          skip(:foreign_binary, name)
+          @data_size -= File.size(source.to_s)
+        end
+        native
+      end
+    end
+
+    # --native-dll: the DLLs go next to the executable, where Windows looks
+    # for them first.
+    def ship_dlls
+      (@dll_files || []).each do |dll|
+        target = @path.dirname / dll.basename
+        FileUtils.cp(dll.to_s, target.to_s)
+        @shipped_dlls << target
+      end
     end
 
     # The installed gem a C extension file of the build host belongs to.
@@ -431,6 +548,8 @@ module Ocran
     # gem.build_complete marker exists for the platform it runs on - the
     # runtime's, not the build host's.
     def mark_extensions_built(spec, files)
+      return if @renamed_gems.key?(spec.full_name) # a platform-"ruby" copy declares no extensions
+
       files.each do |name, _|
         base = name[%r{\A(.*?)/?(?:gems|extensions/[^/]+/[^/]+)/#{Regexp.escape(spec.full_name)}/}, 1] or next
         prefix = base.empty? ? "" : "#{base}/"
@@ -443,6 +562,7 @@ module Ocran
       FileUtils.cp(@executable.to_s, @path.to_s)
       File.chmod(0o755, @path.to_s)
       set_gui_subsystem if @windowed
+      apply_resources
 
       boot = File.binread(BOOT_SCRIPT)
       config = config_source
@@ -553,6 +673,43 @@ module Ocran
 
     def root_path(value)
       value.to_s.gsub(/#{Regexp.escape(EXTRACT_ROOT.to_s)}(?=\/|\z)/, ROOT)
+    end
+
+    # --icon and the version-resource options, written into the copy of the
+    # runtime before the archive is appended (pure Ruby, any build host).
+    def apply_resources
+      r = (@resources || {}).reject { |_, v| v.nil? || (v.respond_to?(:empty?) && v.empty?) }
+      return if r.empty?
+
+      require_relative "pe_resources"
+      PeResources.update(@path.to_s) do |pe|
+        if r[:icon_path]
+          raise "Icon file #{r[:icon_path]} not found" unless File.file?(r[:icon_path])
+
+          pe.set_icon(File.binread(r[:icon_path]))
+        end
+        if r[:version_strings] || r[:file_version] || r[:product_version]
+          strings = (r[:version_strings] || {}).to_h { |k, v| [k.to_s, v] }
+          strings["FileVersion"] = r[:file_version] if r[:file_version]
+          strings["ProductVersion"] = r[:product_version] if r[:product_version]
+          pe.set_version_info(EdResource::Build.version_info(
+            strings: strings,
+            file_version: r[:file_version] || strings["FileVersion"] || "0.0.0.0",
+            product_version: r[:product_version] || strings["ProductVersion"] || "0.0.0.0"
+          ))
+        end
+        if r[:application_manifest] || r[:execution_level]
+          xml = r[:application_manifest] ? File.read(r[:application_manifest], encoding: "UTF-8") : nil
+          xml ||= pe.manifest&.dup&.force_encoding(Encoding::UTF_8) || EdResource::MANIFEST_TEMPLATE
+          if (level = r[:execution_level])
+            raise "Invalid requested execution level: #{level}" unless EdResource::EXECUTION_LEVELS.include?(level)
+
+            xml = xml.sub(/level="[^"]*"/, %(level="#{level}"))
+          end
+          pe.set_manifest(xml)
+        end
+        pe.set_strings(r[:resource_strings]) if r[:resource_strings]
+      end
     end
 
     # --windows: the runtime is a console program; switching the PE

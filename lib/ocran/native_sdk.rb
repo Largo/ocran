@@ -5,6 +5,7 @@ require "open3"
 require "rbconfig"
 require "tmpdir"
 require "json"
+require_relative "pe_imports"
 
 module Ocran
   # The SDK part of a native runtime (<runtime>/sdk, written by
@@ -40,8 +41,23 @@ module Ocran
       @arch = arch
       raise "#{@dir} is not a native runtime SDK (no link.args)" unless (@dir / "link.args").file?
 
-      info = (@dir / "sdk.json").file? ? JSON.parse((@dir / "sdk.json").read) : {}
-      @toolchain = info.fetch("toolchain", "gcc")
+      @info = (@dir / "sdk.json").file? ? JSON.parse((@dir / "sdk.json").read) : {}
+      @toolchain = @info.fetch("toolchain", "gcc")
+    end
+
+    # Libraries available as DLLs instead of linked in (--native-dll):
+    # name ("sybdb") => { "dll" => ..., "import" => ... }, relative to the SDK.
+    def dlls = @info.fetch("dlls", {})
+
+    # extconf.rb options for gems whose C library the SDK provides, so that
+    # extconf.rb uses it instead of downloading and building its own.
+    GEM_EXTCONF_ARGS = {
+      "nokogiri" => ["--use-system-libraries"],
+      "tiny_tds" => ["--with-freetds-dir=@SDK_DEPS@"],
+    }.freeze
+
+    def extconf_args(gem_name)
+      (GEM_EXTCONF_ARGS[gem_name] || []).map { |a| a.gsub("@SDK_DEPS@", (@dir / "deps").to_s) }
     end
 
     def msvc? = @toolchain == "msvc"
@@ -89,12 +105,23 @@ module Ocran
     # Compiles the C extension in +ext_dir+ (a gem's ext/<name>/, with its
     # extconf.rb) to a static library under +work_dir+.
     def build_extension(ext_dir, work_dir, *extconf_args)
+      pkgconfig = File.join(work_dir.to_s + ".pkgconfig")
+      FileUtils.mkdir_p(pkgconfig)
+      Dir[(@dir / "deps/lib/pkgconfig/*.pc").to_s].each do |pc|
+        File.write(File.join(pkgconfig, File.basename(pc)), File.read(pc).gsub("@SDK_DEPS@", (@dir / "deps").to_s))
+      end
       # The SDK's rbconfig.rb is found first on the load path; a MinGW SDK
       # also has Ruby's <arch>-fake.rb, which makes any Ruby pose as the
       # runtime's (an mswin build host runs the runtime's own revision).
       fake = Dir[(@dir / "*-fake.rb").to_s].first
       env = { "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil, "BUNDLER_SETUP" => nil,
-              "OCRAN_NATIVE_CC" => msvc? ? nil : ENV["OCRAN_NATIVE_CC"] || (cc == link_args.first ? nil : cc) }
+              "OCRAN_NATIVE_CC" => msvc? ? nil : ENV["OCRAN_NATIVE_CC"] || (cc == link_args.first ? nil : cc),
+              "OCRAN_NATIVE_LIBS" => @info.fetch("libs", []).join(" "),
+              "OCRAN_NATIVE_CPPFLAGS" => @info.fetch("cppflags", []).join(" "),
+              "PKG_CONFIG_LIBDIR" => pkgconfig, "PKG_CONFIG_PATH" => "",
+              # Build-time gems extconf.rb uses (nokogiri: mini_portile2):
+              # the build host's, which the target's RbConfig would hide.
+              "GEM_HOME" => Gem.dir, "GEM_PATH" => Gem.path.join(File::PATH_SEPARATOR) }
       cmd = [RbConfig.ruby, "--disable=gems", "-I", @dir.to_s, *(fake ? ["-r", fake] : []), BUILD_STATIC_EXT,
              (@dir / "include").to_s, (@dir / "include" / @arch).to_s, ext_dir.to_s, work_dir.to_s, *extconf_args]
       out, status = Open3.capture2e(env, *cmd)
@@ -106,8 +133,14 @@ module Ocran
     end
 
     # Links the runtime with the given extensions registered in addition to
-    # those it already has, into +output+.
-    def link(extensions, output)
+    # those it already has, into +output+. Libraries named in +dlls+ are
+    # linked against their DLL instead of statically (see #dll_files).
+    def link(extensions, output, dlls: [])
+      unknown = dlls - self.dlls.keys
+      unless unknown.empty?
+        raise "No DLL build of #{unknown.join(", ")} in #{@dir} (available: #{self.dlls.keys.join(", ")})"
+      end
+      as_dll = dlls.to_h { |name| ["-l#{name}", (@dir / self.dlls[name]["import"]).to_s] }
       all = base_extensions + extensions
       Dir.mktmpdir do |tmp|
         src = File.join(tmp, "ocran_exts.c")
@@ -119,15 +152,33 @@ module Ocran
           run(cc, "-O2", "-c", src, "-o", obj)
         end
 
-        extra = [obj] + all.flat_map { |ext| [ext.archive, *ext.libs] }
+        extra = [obj] + all.flat_map { |ext| [ext.archive, *ext.libs] } + @info.fetch("libs", [])
         args = link_args
         args[0] = cc
         cmd = args.flat_map { |a| a == "@EXTRA@" ? extra : [a.gsub("@OUTPUT@", output.to_s)] }
+        cmd = cmd.map { |a| as_dll.fetch(a, a) }
         cmd += ["-o", output.to_s] unless args.any? { |a| a.include?("@OUTPUT@") }
         run(*cmd)
       end
       run(cc.sub(/gcc(\.exe)?\z/) { "strip#{$1}" }, output.to_s) unless msvc?
       output
+    end
+
+    # The DLL files to ship next to the executable for +dlls+: each named
+    # library's DLL and the SDK DLLs it imports in turn (libsybdb-5.dll
+    # needs libiconv-2.dll).
+    def dll_files(dlls)
+      by_file = self.dlls.values.to_h { |d| [File.basename(d["dll"]).downcase, @dir / d["dll"]] }
+      queue = dlls.map { |name| @dir / self.dlls.fetch(name)["dll"] }
+      found = {}
+      until queue.empty?
+        dll = queue.shift
+        next if found[dll.basename.to_s.downcase]
+
+        found[dll.basename.to_s.downcase] = dll
+        PEImports.dll_names(dll.to_s).each { |name| queue << by_file[name.downcase] if by_file[name.downcase] }
+      end
+      found.values
     end
 
     private

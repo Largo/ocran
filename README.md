@@ -250,9 +250,19 @@ goes through these steps in order of impact.
   runtime `x86_64-w64-mingw32ucrt-gcc` on Linux, or on Windows
   RubyInstaller's MSYS2 GCC named with `OCRAN_NATIVE_CC=gcc` (with
   `ucrt64\bin` and `usr\bin` on PATH); for an mswin runtime `cl` and
-  `nmake` of Visual Studio Build Tools, from a developer prompt. A
-  precompiled platform gem ships no source; install the source gem
-  (`gem install <gem> --platform ruby`).
+  `nmake` of Visual Studio Build Tools, from a developer prompt. Gems that
+  need a C library get the one the SDK provides: nokogiri uses its
+  libxml2/libxslt, tiny_tds its FreeTDS. A precompiled platform gem is
+  built from the C sources it carries (nokogiri's and tiny_tds' do); one
+  without them needs the source gem (`gem install <gem> --platform ruby`).
+
+  **Licenses:** the executable is statically linked - Ruby, OpenSSL and
+  the other libraries are inside it, and their license texts are packed
+  into it as `ocran/licenses/`. Two optional libraries are under the LGPL
+  (GNU libiconv, FreeTDS: used by nokogiri and tiny_tds), which asks that
+  users can replace them; `--native-dll iconv,sybdb` ships them as DLLs
+  next to the executable instead. Read
+  [native/LICENSES.md](native/LICENSES.md) before distributing.
 
   OpenSSL verifies certificates against the Windows certificate store, as
   Windows itself does - no CA file is packed or needed. The application reads its own files as
@@ -260,8 +270,15 @@ goes through these steps in order of impact.
   `Dir.glob`, `__dir__`, `DATA`); their paths lie inside the executable
   (`C:/app/tool.exe/src/tool.rb`) and cannot be written. Files next to the
   executable are found through `ENV["OCRAN_EXECUTABLE"]`. `--windows` makes
-  a GUI-subsystem executable; `--icon`, `--dll` and the output-directory
-  formats do not apply. Experimental.
+  a GUI-subsystem executable; `--icon` and the version-resource options
+  work as for the stub, on any build host (OCRAN writes the resources in
+  Ruby). `--dll` and the output-directory formats do not apply.
+  Experimental.
+
+* `--native-dll <lib,...>`: With `--native`, link these C libraries of the
+  runtime's SDK as DLLs shipped next to the executable rather than into it
+  (the SDK has DLL builds of `iconv` and `sybdb`, the LGPL libraries).
+  OCRAN copies them, and the DLLs they need, next to the executable.
 
 * `--cosmo-ruby <ruby.com>`: Package a cosmopolitan-built Ruby (an APE)
   as the bundled interpreter instead of the host Ruby. The produced

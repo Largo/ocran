@@ -1582,6 +1582,8 @@ module Ocran
                            chdir_exe_dir: @option.chdir_exe_dir?,
                            windowed: @option.windowed?,
                            debug_mode: @option.enable_debug_mode?,
+                           dlls: @option.native_dlls,
+                           resources: { icon_path: @option.icon_filename&.to_s, **pe_resource_options },
                            &to_proc) => builder
 
       builder.skipped.each do |reason, names|
@@ -1593,6 +1595,9 @@ module Ocran
             "in the runtime's and were left out (--verbose lists them)"
       end
       say "Finished building #{output} (#{output.size} bytes, #{builder.data_size} bytes of application data)"
+      unless builder.shipped_dlls.empty?
+        say "Ship these DLLs next to #{output.basename}: #{builder.shipped_dlls.map { |d| d.basename.to_s }.join(", ")}"
+      end
     end
 
     def build_stab_exe

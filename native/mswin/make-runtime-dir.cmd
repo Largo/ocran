@@ -19,4 +19,14 @@ if exist "%ROOT%\sdk" robocopy "%ROOT%\sdk" "%OUT%\sdk" /e /nfl /ndl /njh /njs /
 if errorlevel 8 exit /b 1
 robocopy "%ROOT%\stage\lib" "%OUT%\lib" /e /nfl /ndl /njh /njs /nc /ns >nul
 if errorlevel 8 exit /b 1
+rem License texts of what is linked in (vcpkg keeps each port's in
+rem share\<port>\copyright); ocran packs them into every executable.
+mkdir "%OUT%\LICENSES\ruby"
+for %%f in (BSDL COPYING LEGAL) do copy /y "%ROOT%\src\%%f" "%OUT%\LICENSES\ruby\" >nul
+for /d %%p in ("%ROOT%\deps\installed\x64-windows-static\share\*") do (
+  if exist "%%p\copyright" (
+    mkdir "%OUT%\LICENSES\%%~nxp" 2>nul
+    copy /y "%%p\copyright" "%OUT%\LICENSES\%%~nxp\" >nul
+  )
+)
 "%ROOT%\stage\bin\ruby.exe" "%~dp0..\write-runtime-info.rb" "%ROOT%\build" "%OUT%" "%ROOT%\exts\fiddle.line" "%ROOT%\exts\bigdecimal.line" "%ROOT%\exts\racc_cparse.line" "%ROOT%\exts\win32ole.line"
