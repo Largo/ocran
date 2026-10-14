@@ -110,16 +110,18 @@ build_ruby() {
 
 STATIC_GEM_EXTS="fiddle bigdecimal racc/cparse"
 
-# A native build: the Ruby just built runs here, and its rbconfig.rb (in
-# the build directory) describes the runtime.
+# As in the cross builds, the host Ruby poses as the runtime through Ruby's
+# <arch>-fake.rb, which also points mkmf at the build directory's static
+# libruby (the SDK does the same at packaging time).
 build_gemexts() {
   cd "$WORK/ruby-build"
   arch=$(basename "$(dirname "$(dirname .ext/include/*/ruby/config.h)")")
+  make "$arch-fake.rb"
   rm -rf "$OUT/exts" && mkdir -p "$OUT/exts"
   for ext in $STATIC_GEM_EXTS; do
     gem=${ext%%/*}
     dir=$(ls -d "$WORK"/ruby/.bundle/gems/"$gem"-*/ext/"$ext")
-    ./ruby --disable=gems -I. -I"$WORK/ruby/lib" -I.ext/common -I".ext/$arch" \
+    ruby --disable=gems -I. -r"./$arch-fake" -I"$WORK/ruby/lib" \
       "$HERE/../lib/ocran/static_runtime/build_static_ext.rb" "$WORK/ruby/include" ".ext/include/$arch" \
       "$dir" "$WORK/gemext/$ext" --with-libffi-dir="$DEPS" > "$WORK/gemext.log" 2>&1 ||
       { tail -30 "$WORK/gemext.log"; exit 1; }
