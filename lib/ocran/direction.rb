@@ -540,7 +540,7 @@ module Ocran
       end
 
       # Windows-only: Add detected DLLs
-      if Gem.win_platform? && @option.auto_detect_dlls?
+      if Gem.win_platform? && @option.auto_detect_dlls? && !@option.native?
         # The Windows loader resolves the imports of a native extension from
         # the extension's own directory, the application directory of the
         # packed ruby.exe (bin) plus its SxS assembly (ruby_builtin_dlls),
@@ -624,7 +624,7 @@ module Ocran
       # libraries and the loader are never bundled - they must come from the
       # target system. Ruby native extensions are packed as features, not
       # here. Not needed with --cosmo-ruby: the APE payload is static.
-      if RUBY_PLATFORM.include?("linux") && @option.auto_detect_dlls? && !@option.cosmo_ruby
+      if RUBY_PLATFORM.include?("linux") && @option.auto_detect_dlls? && !@option.cosmo_ruby && !@option.native?
         feature_set = features.to_set
         feature_realpaths = features.filter_map { |f| f.realpath rescue nil }.to_set
         # Ruby native extensions live in these directories and are packed as
@@ -1547,6 +1547,51 @@ module Ocran
         warning "RUBYOPT #{unsupported.join(" ")} cannot be applied when the application is packed into the interpreter's ZIP store (the interpreter is already running); only -I and -r are replayed"
       end
 
+      say "Finished building #{output} (#{output.size} bytes, #{builder.data_size} bytes of application data)"
+    end
+
+    # --native: the application appended as a ZIP archive to a statically
+    # linked Windows Ruby (see NativeZipBuilder).
+    def build_native_exe
+      require_relative "native_zip_builder"
+
+      runtime = NativeRuntime.load(@option.native_runtime)
+      runtime.verify!
+      host_api = RbConfig::CONFIG["ruby_version"]
+      # Gems, default gem specs and the host files the runtime does not
+      # replace were resolved for the build host's Ruby; they only fit a
+      # runtime with the same API version.
+      unless host_api == runtime.ruby_api_version
+        raise "The native runtime in #{runtime.dir} is Ruby #{runtime.ruby_version} (API #{runtime.ruby_api_version}), " \
+              "but this is Ruby #{RUBY_VERSION} (API #{host_api}): package with a Ruby #{runtime.ruby_api_version.sub(/\.0\z/, "")}"
+      end
+      if RUBY_VERSION != runtime.ruby_version
+        warning "Dependency detection ran under Ruby #{RUBY_VERSION}; the native runtime is Ruby #{runtime.ruby_version}"
+      end
+      say "Packaging for the native runtime #{runtime.executable} (Ruby #{runtime.ruby_version} #{runtime.arch})"
+      if @option.extra_dlls.any?
+        warning "--dll has no effect with --native: a DLL cannot be loaded from inside the executable"
+      end
+
+      output = @option.output_executable
+      NativeZipBuilder.new(output,
+                           runtime: runtime,
+                           host_ruby_api_version: host_api,
+                           host_arch: RbConfig::CONFIG["arch"],
+                           chdir_before: @option.chdir_before?,
+                           chdir_exe_dir: @option.chdir_exe_dir?,
+                           windowed: @option.windowed?,
+                           debug_mode: @option.enable_debug_mode?,
+                           &to_proc) => builder
+
+      builder.skipped.each do |reason, names|
+        verbose "Not packed (#{reason.to_s.tr("_", " ")}): #{names.size} file(s)"
+        names.each { |name| verbose "\t#{name}" }
+      end
+      unless builder.skipped[:not_in_runtime_stdlib].empty?
+        say "#{builder.skipped[:not_in_runtime_stdlib].size} file(s) of this Ruby's standard library are not " \
+            "in the runtime's and were left out (--verbose lists them)"
+      end
       say "Finished building #{output} (#{output.size} bytes, #{builder.data_size} bytes of application data)"
     end
 

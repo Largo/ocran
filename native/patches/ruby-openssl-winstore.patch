@@ -1,0 +1,19 @@
+--- a/ext/openssl/ossl_x509store.c
++++ b/ext/openssl/ossl_x509store.c
+@@ -408,6 +408,16 @@
+     GetX509Store(self, store);
+     if (X509_STORE_set_default_paths(store) != 1)
+         ossl_raise(eX509StoreError, "X509_STORE_set_default_paths");
++#if defined(_WIN32) && OPENSSL_VERSION_NUMBER >= 0x30200000L && !defined(OPENSSL_NO_WINSTORE)
++    /*
++     * ocran: also trust what Windows trusts. OpenSSL's own winstore loader
++     * looks certificates up in the system ROOT store as they are needed;
++     * the compiled-in default file and directory do not exist on Windows.
++     * Failing to open the store leaves the defaults as they were.
++     */
++    if (X509_STORE_load_store(store, "org.openssl.winstore://") != 1)
++        ossl_clear_error();
++#endif
+ 
+     return Qnil;
+ }

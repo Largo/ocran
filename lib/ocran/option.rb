@@ -19,6 +19,7 @@ module Ocran
         :bundle_identifier => nil,
         :macosx_bundle => nil,
         :macosx_bundle? => false,
+        :native_runtime => nil,
         :chdir_before? => false,
         :chdir_exe_dir? => false,
         :cosmo_cc => nil,
@@ -155,6 +156,15 @@ PE resource options (Windows, rcedit-compatible):
 
 Experimental options:
 
+--native <runtime-dir>  Build a single Windows executable that runs the
+                   application without extracting anything: a statically
+                   linked Ruby (the native runtime in <runtime-dir>, built
+                   by native/build-runtime.sh or native/mswin/) with the
+                   application appended as a ZIP archive, readable with
+                   unzip or 7-Zip. The runtime's own standard library and
+                   bundled gems are packed; C extensions must be linked
+                   into the runtime. The build host's Ruby must have the
+                   runtime's API version (e.g. 4.0.0).
 --cosmo-ruby <ruby.com>  Package the given cosmopolitan-built Ruby (an APE,
                    e.g. ruby.com) as the interpreter instead of the host
                    Ruby: the result is a single <scriptname>.com that runs
@@ -369,6 +379,8 @@ EOF
           @options[:wasm_options] << required_argument(argv, arg)
         when "--roundhouse-opt"
           @options[:roundhouse_options] << required_argument(argv, arg)
+        when "--native"
+          @options[:native_runtime] = Pathname.new(required_argument(argv, arg)).expand_path
         when "--cosmo-ruby"
           load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
@@ -478,7 +490,7 @@ EOF
           # APE binaries built with cosmocc conventionally use .com.
           ext = if cosmo?
                   ".com"
-                elsif Gem.win_platform?
+                elsif Gem.win_platform? || native_runtime
                   ".exe"
                 else
                   ""
@@ -579,7 +591,32 @@ EOF
       if macosx_bundle && (output_dir || output_zip || inno_setup_script)
         raise "--macosx-bundle cannot be combined with --output-dir, --output-zip, or --innosetup"
       end
+
+      if native_runtime
+        reject_with_native_runtime
+        raise "#{native_runtime} is not a directory" unless native_runtime.directory?
+      end
     end
+
+    # --native produces one executable from a prebuilt runtime, so neither
+    # the other output formats nor what only the C stub implements apply.
+    def reject_with_native_runtime
+      conflicts = {
+        "--output-dir" => output_dir,
+        "--output-zip" => output_zip,
+        "--innosetup" => inno_setup_script,
+        "--macosx-bundle" => @options[:macosx_bundle?],
+        "--cosmo/--cosmo-ruby" => cosmo?,
+        "--spinel/--roundhouse" => spinel? || roundhouse?,
+        "--wasm" => wasm_runtime,
+        "--icon" => icon_filename,
+        "--debug-extract" => enable_debug_extract?,
+      }
+      conflicts.each do |name, given|
+        raise "#{name} cannot be used with --native" if given
+      end
+    end
+    private :reject_with_native_runtime
 
     # Validates --wasm and works out where the site goes: a zip archive for
     # --output-zip or an --output name ending in .zip, a folder otherwise.
@@ -673,6 +710,11 @@ EOF
     def cosmo_cc = @options[__method__]
 
     def cosmo_ruby = @options[__method__]
+
+    # Directory of the native runtime given with --native, or nil.
+    def native_runtime = @options[__method__]
+
+    def native? = !!native_runtime
 
     # True when the application is packaged by injecting it into the ZIP
     # store of the cosmopolitan Ruby itself: no cosmocc, no launcher stub,

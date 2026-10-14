@@ -9,7 +9,9 @@
 #
 #   native/build-runtime.sh [build-dir]
 #
-# Output: <build-dir>/out/ruby.exe and <build-dir>/out/lib/ruby (stdlib).
+# Output: a runtime directory for `ocran --native`, <build-dir>/out:
+# ocran-runtime.exe, lib/ruby (stdlib and bundled gems), sdk/ (to link in
+# more C extensions at packaging time) and runtime.json.
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -81,12 +83,20 @@ build_openssl() {
   ./Configure mingw64 no-shared no-tests no-docs no-module \
     --cross-compile-prefix=$HOST- --prefix="$DEPS" --libdir=lib \
     $CFLAGS_COMMON
-  make -j"$JOBS" build_libs && make install_dev
+  # The directories OpenSSL reads certificates, its configuration and
+  # engines from are compiled in. Left at the build prefix they would be
+  # C:\root\... on the user's machine - a path any user can create. Use
+  # OpenSSL's own defaults for Windows, writable only by administrators.
+  make -j"$JOBS" build_libs \
+    OPENSSLDIR="C:/Program Files/Common Files/SSL" \
+    ENGINESDIR="C:/Program Files/OpenSSL/lib/engines-3" \
+    MODULESDIR="C:/Program Files/OpenSSL/lib/ossl-modules"
+  make install_dev
 }
 
 # Bundled gems' extensions are linked as DLLs even in a static build; they
 # are added back through the static gem-extension linking step instead.
-EXCLUDED_EXTS=readline,pty,syslog,etc,nkf,bigdecimal,bigdecimal-*,debug,debug-*,fiddle,fiddle-*,racc,racc-*,rbs,rbs-*,win32ole,win32ole-*
+EXCLUDED_EXTS=readline,pty,syslog,nkf,bigdecimal,bigdecimal-*,debug,debug-*,fiddle,fiddle-*,racc,racc-*,rbs,rbs-*,win32ole,win32ole-*
 
 # Extensions are compiled as if libruby were a DLL: they reach Ruby's
 # globals (rb_cObject, rb_eArgError, ...), and some functions, through
@@ -154,8 +164,8 @@ build_gemexts() {
     gem=${ext%%/*}
     dir=$(ls -d "$WORK"/ruby/.bundle/gems/"$gem"-*/ext/"$ext")
     ruby --disable=gems -I. -r"./$arch-fake" -I"$WORK/ruby/lib" \
-      "$HERE/build-static-ext.rb" "$PWD" "$WORK/ruby" "$dir" \
-      "$WORK/gemext/$ext" --with-libffi-dir="$DEPS" > "$WORK/gemext.log" 2>&1 ||
+      "$HERE/../lib/ocran/native/build_static_ext.rb" "$WORK/ruby/include" ".ext/include/$arch" \
+      "$dir" "$WORK/gemext/$ext" --with-libffi-dir="$DEPS" > "$WORK/gemext.log" 2>&1 ||
       { tail -20 "$WORK/gemext.log"; exit 1; }
     tail -1 "$WORK/gemext.log" > "$OUT/exts/$(echo "$ext" | tr / _).line"
     cat "$OUT/exts/$(echo "$ext" | tr / _).line"
@@ -166,7 +176,7 @@ build_gemexts() {
     gemsroot=$(ls -d "$OUT"/stage/lib/ruby/gems/*)
     rm -rf "$gemsroot/gems/$name" && mkdir -p "$gemsroot/gems/$name"
     cp -a "$gemdir/lib" "$gemsroot/gems/$name/lib"
-    cp "$WORK/ruby/.bundle/specifications/$name.gemspec" "$gemsroot/specifications/" 2>/dev/null || true
+    cp "$gemdir/$name.gemspec" "$gemsroot/specifications/"
   done
 }
 
@@ -185,9 +195,11 @@ build_runtime() {
   make -j"$JOBS" RUBY_EXP= "$librubya"
   add_import_shim "$librubya"
   make RUBY_EXP= MAINOBJ=ocran_main.o ocran_main.o
-  ruby "$HERE/make-kit.rb" . "$DEPS" "$OUT/kit"
-  ruby "$HERE/link-runtime.rb" "$OUT/kit" "$OUT/ocran-runtime.exe" "$OUT"/exts/*.line
+  ruby "$HERE/make-sdk.rb" . "$WORK/ruby" "$DEPS" "$OUT/sdk" "$OUT"/exts/*.line
+  arch=$(basename "$(dirname "$(dirname .ext/include/*/ruby/config.h)")")
+  ruby "$HERE/link-runtime.rb" "$OUT/sdk" "$arch" "$OUT/ocran-runtime.exe"
   rm -rf "$OUT/lib" && cp -a "$OUT/stage/lib" "$OUT/lib"
+  ruby "$HERE/write-runtime-info.rb" . "$OUT" "$OUT"/exts/*.line
   sha256sum "$OUT/ocran-runtime.exe"
 }
 

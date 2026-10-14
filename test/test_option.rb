@@ -35,6 +35,22 @@ class TestOption < Minitest::Test
     assert_rejected(/--innosetup cannot be combined/, "app.rb", *inno, "--output-zip", "out.zip")
   end
 
+  def test_native_runtime_produces_an_exe_on_any_host
+    Dir.mkdir("rt")
+    option = parse("app.rb", "--native", "rt")
+    assert option.native?
+    assert_equal File.expand_path("rt"), option.native_runtime.to_s
+    assert_equal File.expand_path("app.exe"), option.output_executable.to_s
+  end
+
+  def test_native_runtime_rejects_other_outputs_and_stub_only_options
+    Dir.mkdir("rt")
+    assert_rejected(/--output-dir cannot be used with --native/, "app.rb", "--native", "rt", "--output-dir", "out")
+    assert_rejected(/--output-zip cannot be used with --native/, "app.rb", "--native", "rt", "--output-zip", "o.zip")
+    assert_rejected(/--debug-extract cannot be used with --native/, "app.rb", "--native", "rt", "--debug-extract")
+    assert_rejected(/is not a directory/, "app.rb", "--native", "missing")
+  end
+
   def test_unknown_gem_group_is_rejected_at_parse_time
     assert_rejected(/Invalid gem content detection option --gem-foo/, "app.rb", "--gem-foo")
     assert_rejected(/Invalid gem content detection option --gem-fulll=x/, "app.rb", "--gem-fulll=x")

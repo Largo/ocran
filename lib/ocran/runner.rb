@@ -268,6 +268,8 @@ module Ocran
         direction.build_output_dir(@option.output_dir)
       elsif @option.output_zip
         direction.build_zip(@option.output_zip)
+      elsif @option.native?
+        direction.build_native_exe
       elsif @option.cosmo_zip?
         direction.build_cosmo_zip_exe
       else

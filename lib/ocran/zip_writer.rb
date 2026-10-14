@@ -312,9 +312,11 @@ module Ocran
     end
 
     # MS-DOS packed time and date. The format has two-second resolution and
-    # starts in 1980, so earlier timestamps are clamped.
+    # starts in 1980, so earlier timestamps are clamped. It has no time zone:
+    # file times are written as local time, as zip tools do, and a UTC time
+    # as given, so that a fixed time packs to the same bytes everywhere.
     def dos_timestamp(time)
-      time = time.getlocal
+      time = time.getlocal unless time.utc?
       year = [time.year, 1980].max
       [(time.hour << 11) | (time.min << 5) | (time.sec / 2),
        ((year - 1980) << 9) | (time.month << 5) | time.day]
