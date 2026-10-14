@@ -1,4 +1,4 @@
-# Pinned sources for the static Windows runtime (native/build-runtime.sh).
+# Pinned sources for the static Windows runtime (runtime/build-runtime.sh).
 # name  version  sha256  url
 # Upstream publishes a checksum for ruby (cache.ruby-lang.org/pub/ruby/index.txt),
 # openssl (<tarball>.sha256), libxml2 and libxslt (<tarball>.sha256sum on

@@ -8,8 +8,8 @@ require "json"
 require_relative "pe_imports"
 
 module Ocran
-  # The SDK part of a native runtime (<runtime>/sdk, written by
-  # native/make-sdk.rb): what is needed to link the runtime again with more
+  # The SDK part of a static runtime (<runtime>/sdk, written by
+  # runtime/make-sdk.rb): what is needed to link the runtime again with more
   # C extensions statically linked in - its link inputs and link command
   # (link.args), Ruby's headers, the runtime's rbconfig.rb with the
   # <arch>-fake.rb Ruby's cross builds use to describe the target, and the
@@ -17,11 +17,11 @@ module Ocran
   #
   # Linking needs a compiler for the runtime's target on the build host. For
   # a MinGW runtime (toolchain "gcc" in sdk.json): the one link.args names
-  # (e.g. x86_64-w64-mingw32ucrt-gcc on Linux), or OCRAN_NATIVE_CC (e.g. gcc
+  # (e.g. x86_64-w64-mingw32ucrt-gcc on Linux), or OCRAN_RUNTIME_CC (e.g. gcc
   # from RubyInstaller's MSYS2 on Windows). For an mswin runtime ("msvc"):
   # cl and nmake of Visual Studio (Build Tools), from a developer prompt.
-  class NativeSdk
-    BUILD_STATIC_EXT = File.expand_path("native/build_static_ext.rb", __dir__)
+  class RuntimeSdk
+    BUILD_STATIC_EXT = File.expand_path("static_runtime/build_static_ext.rb", __dir__)
 
     # One statically built extension: the feature it provides ("bcrypt_ext"),
     # its Init function, the static library and the libraries it links with.
@@ -39,13 +39,13 @@ module Ocran
     def initialize(dir, arch:)
       @dir = Pathname(dir)
       @arch = arch
-      raise "#{@dir} is not a native runtime SDK (no link.args)" unless (@dir / "link.args").file?
+      raise "#{@dir} is not a static runtime SDK (no link.args)" unless (@dir / "link.args").file?
 
       @info = (@dir / "sdk.json").file? ? JSON.parse((@dir / "sdk.json").read) : {}
       @toolchain = @info.fetch("toolchain", "gcc")
     end
 
-    # Libraries available as DLLs instead of linked in (--native-dll):
+    # Libraries available as DLLs instead of linked in (--runtime-dll):
     # name ("sybdb") => { "dll" => ..., "import" => ... }, relative to the SDK.
     def dlls = @info.fetch("dlls", {})
 
@@ -68,7 +68,7 @@ module Ocran
     def cc
       return "cl" if msvc?
 
-      env = ENV["OCRAN_NATIVE_CC"]
+      env = ENV["OCRAN_RUNTIME_CC"]
       env && !env.empty? ? env : link_args.first
     end
 
@@ -83,14 +83,22 @@ module Ocran
       return check_msvc! if msvc?
 
       out, status = Open3.capture2e(cc, "-dumpmachine")
-      return if status.success? && out.include?("mingw32")
+      expected = @info["dumpmachine"]
+      return if status.success? && (expected.nil? || out.include?(expected))
 
-      raise "#{cc} #{status.success? ? "does not target Windows (#{out.strip})" : "did not run"}; " \
-            "set OCRAN_NATIVE_CC to a MinGW-w64 UCRT C compiler (on Linux: gcc-mingw-w64-ucrt64, " \
-            "on Windows: RubyInstaller's MSYS2, e.g. `ridk exec` or ucrt64/bin/gcc.exe)"
+      raise "#{cc} #{status.success? ? "does not target #{expected} (#{out.strip})" : "did not run"}; " \
+            "set OCRAN_RUNTIME_CC to #{toolchain_hint}"
     rescue SystemCallError
-      raise "#{cc} not found; set OCRAN_NATIVE_CC to a MinGW-w64 UCRT C compiler " \
-            "(on Linux: gcc-mingw-w64-ucrt64, on Windows: RubyInstaller's MSYS2)"
+      raise "#{cc} not found; set OCRAN_RUNTIME_CC to #{toolchain_hint}"
+    end
+
+    def toolchain_hint
+      if @info.fetch("target_os", "mingw32").start_with?("mingw")
+        "a MinGW-w64 UCRT C compiler (on Linux: gcc-mingw-w64-ucrt64, on Windows: RubyInstaller's " \
+          "MSYS2, e.g. ucrt64/bin/gcc.exe)"
+      else
+        "a musl C compiler (musl-gcc from musl-tools)"
+      end
     end
 
     def check_msvc!
@@ -115,9 +123,9 @@ module Ocran
       # runtime's (an mswin build host runs the runtime's own revision).
       fake = Dir[(@dir / "*-fake.rb").to_s].first
       env = { "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil, "BUNDLER_SETUP" => nil,
-              "OCRAN_NATIVE_CC" => msvc? ? nil : ENV["OCRAN_NATIVE_CC"] || (cc == link_args.first ? nil : cc),
-              "OCRAN_NATIVE_LIBS" => @info.fetch("libs", []).join(" "),
-              "OCRAN_NATIVE_CPPFLAGS" => @info.fetch("cppflags", []).join(" "),
+              "OCRAN_RUNTIME_CC" => msvc? ? nil : ENV["OCRAN_RUNTIME_CC"] || (cc == link_args.first ? nil : cc),
+              "OCRAN_RUNTIME_LIBS" => @info.fetch("libs", []).join(" "),
+              "OCRAN_RUNTIME_CPPFLAGS" => @info.fetch("cppflags", []).join(" "),
               "PKG_CONFIG_LIBDIR" => pkgconfig, "PKG_CONFIG_PATH" => "",
               # Build-time gems extconf.rb uses (nokogiri: mini_portile2):
               # the build host's, which the target's RbConfig would hide.
@@ -126,7 +134,7 @@ module Ocran
              (@dir / "include").to_s, (@dir / "include" / @arch).to_s, ext_dir.to_s, work_dir.to_s, *extconf_args]
       out, status = Open3.capture2e(env, *cmd)
       unless status.success?
-        raise "Building the C extension in #{ext_dir} for the native runtime failed:\n#{out.lines.last(25).join}"
+        raise "Building the C extension in #{ext_dir} for the static runtime failed:\n#{out.lines.last(25).join}"
       end
 
       Extension.parse(out.lines.last, @dir)
@@ -160,7 +168,7 @@ module Ocran
         cmd += ["-o", output.to_s] unless args.any? { |a| a.include?("@OUTPUT@") }
         run(*cmd)
       end
-      run(cc.sub(/gcc(\.exe)?\z/) { "strip#{$1}" }, output.to_s) unless msvc?
+      run(@info["strip"] || cc.sub(/gcc(\.exe)?\z/) { "strip#{$1}" }, output.to_s) unless msvc?
       output
     end
 
@@ -185,7 +193,7 @@ module Ocran
 
     def exts_source(extensions)
       <<~C
-        /* generated by ocran (Ocran::NativeSdk) */
+        /* generated by ocran (Ocran::RuntimeSdk) */
         void ruby_init_ext(const char *name, void (*init)(void));
         #{extensions.map { |e| "extern void #{e.init}(void);" }.join("\n")}
         void ocran_init_extra_exts(void)

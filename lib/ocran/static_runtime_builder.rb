@@ -10,17 +10,17 @@ require_relative "zip_payload_builder"
 require "tmpdir"
 
 module Ocran
-  # A native runtime for --native: a statically linked Windows Ruby
+  # A static runtime for --static-runtime: a statically linked Windows Ruby
   # (ocran-runtime.exe), its own standard library and bundled gems
   # (lib/ruby/), and runtime.json describing both. Built by
-  # native/build-runtime.sh (MinGW) or native/mswin/ (MSVC).
-  class NativeRuntime
+  # runtime/build-runtime.sh (MinGW) or runtime/mswin/ (MSVC).
+  class StaticRuntime
     attr_reader :dir, :info
 
     def self.load(dir)
       dir = Pathname(dir).expand_path
       json = dir / "runtime.json"
-      raise "#{dir} is not an ocran native runtime (no runtime.json)" unless json.file?
+      raise "#{dir} is not an ocran static runtime (no runtime.json)" unless json.file?
 
       new(dir, JSON.parse(json.read))
     end
@@ -33,6 +33,8 @@ module Ocran
 
     def executable = @dir / @info.fetch("executable")
     def ruby_version = @info.fetch("ruby_version")
+    def os = @info.fetch("os", "windows")
+    def windows? = os == "windows"
     def ruby_api_version = @info.fetch("ruby_api_version")
     def arch = @info.fetch("arch")
     def load_path = @info.fetch("load_path")
@@ -74,12 +76,12 @@ module Ocran
     def sdk
       return @sdk if defined?(@sdk)
 
-      require_relative "native_sdk"
-      @sdk = (@dir / "sdk" / "link.args").file? ? NativeSdk.new(@dir / "sdk", arch: arch) : nil
+      require_relative "runtime_sdk"
+      @sdk = (@dir / "sdk" / "link.args").file? ? RuntimeSdk.new(@dir / "sdk", arch: arch) : nil
     end
   end
 
-  # Builder for --native: the output is a copy of the native runtime with
+  # Builder for --static-runtime: the output is a copy of the static runtime with
   # the application appended as a ZIP archive. Nothing is extracted at run
   # time; the runtime's stage 0 reads ocran/boot.rb from the archive, and
   # boot.rb serves the archive as a read-only directory tree rooted at the
@@ -99,13 +101,13 @@ module Ocran
   #   runtime, other gems from the host;
   # * C extensions must be linked into the runtime: those it has are
   #   skipped, any other one fails the build.
-  class NativeZipBuilder
+  class StaticRuntimeBuilder
     include BuildConstants
     include CommandOutput
 
     # Where boot.rb finds the application root; replaced at run time.
     ROOT = "<ROOT>"
-    BOOT_SCRIPT = File.expand_path("native/boot.rb", __dir__)
+    BOOT_SCRIPT = File.expand_path("static_runtime/boot.rb", __dir__)
     NATIVE_EXTENSIONS = %w[.so .bundle].freeze
     # Files only the build host's interpreter needs.
     HOST_ONLY = %w[.dll .exe .manifest].freeze
@@ -265,7 +267,7 @@ module Ocran
       runtime_full_name = File.basename(spec, ".gemspec")
       if host_full_name != runtime_full_name && (@version_notes ||= {}).fetch(name, true)
         @version_notes[name] = false
-        warning "#{host_full_name} is replaced by the native runtime's #{runtime_full_name}"
+        warning "#{host_full_name} is replaced by the static runtime's #{runtime_full_name}"
       end
       if spec.start_with?("specifications/default/")
         # A default gem's files are part of the standard library.
@@ -305,7 +307,7 @@ module Ocran
         marker = "#{gem_dir}/extensions/#{@runtime.gem_platform}/#{@runtime.extension_api_version}/#{full_name}/gem.build_complete"
         @entries[marker] ||= :empty
       end
-      verbose "Packing gem #{full_name} from the native runtime"
+      verbose "Packing gem #{full_name} from the static runtime"
 
       # Activating a gem activates its runtime dependencies, so their specs
       # have to be there too (psych needs stringio's, for instance), even
@@ -338,6 +340,20 @@ module Ocran
       end
     end
 
+    # What only a Windows executable has: a subsystem, resources, DLLs.
+    def check_options_for_os
+      return if @runtime.windows?
+
+      runtime = "the #{@runtime.os} runtime #{@runtime.dir}"
+      raise "--windows applies to Windows runtimes, not to #{runtime}" if @windowed
+      if (@resources || {}).any? { |_, v| v && !(v.respond_to?(:empty?) && v.empty?) }
+        raise "--icon and the version-resource options apply to Windows runtimes, not to #{runtime}"
+      end
+      unless @dlls.empty?
+        raise "--runtime-dll: #{runtime} is fully static and cannot load shared libraries"
+      end
+    end
+
     # The license texts of what the runtime links in (LICENSES/ of the
     # runtime directory), so that they travel with every executable:
     # `unzip -l app.exe ocran/licenses/*`.
@@ -353,9 +369,10 @@ module Ocran
     def finalize
       raise "No script to run was recorded" unless @exec
 
-      add_windows_stdlib
+      check_options_for_os
+      add_windows_stdlib if @runtime.windows?
       add_licenses
-      work = Dir.mktmpdir("ocran-native")
+      work = Dir.mktmpdir("ocran-runtime")
       begin
         relink = !@unsupported_native.empty? || !@dlls.empty?
         executable = relink ? link_extensions(work) : @runtime.executable
@@ -390,7 +407,7 @@ module Ocran
       sdk = @runtime.sdk
       unless sdk
         list = @unsupported_native.map { |name, source| "  #{name} (#{source})" }.join("\n")
-        raise "These C extensions are not linked into the native runtime #{@runtime.dir}, which has no SDK " \
+        raise "These C extensions are not linked into the static runtime #{@runtime.dir}, which has no SDK " \
               "to link them in, and a C extension cannot be loaded from inside the executable:\n#{list}"
       end
       sdk.check_toolchain!
@@ -399,12 +416,12 @@ module Ocran
       by_gem = @unsupported_native.group_by { |_, source| gem_spec_for(source) }
       if (loose = by_gem.delete(nil))
         raise "These C extensions belong to no installed gem, so there is no source to build them " \
-              "from for the native runtime:\n#{loose.map { |name, source| "  #{name} (#{source})" }.join("\n")}"
+              "from for the static runtime:\n#{loose.map { |name, source| "  #{name} (#{source})" }.join("\n")}"
       end
 
       extensions = by_gem.flat_map do |spec, files|
         if @runtime.gems.key?(spec.name)
-          raise "#{spec.full_name} has a C extension the native runtime's own #{spec.name} does not link in " \
+          raise "#{spec.full_name} has a C extension the static runtime's own #{spec.name} does not link in " \
                 "(#{files.map(&:first).join(", ")})"
         end
         extconfs = spec.extensions
@@ -426,7 +443,7 @@ module Ocran
           unless File.file?(File.join(source_dir, extconf))
             raise "#{spec.full_name}: #{extconf} is not installed, so its C extension cannot be built"
           end
-          say "Building the C extension #{extconf} of #{spec.full_name} for the native runtime"
+          say "Building the C extension #{extconf} of #{spec.full_name} for the static runtime"
           sdk.build_extension(ext_dir, File.join(work, spec.full_name, File.dirname(extconf)),
                               "--with-opt-dir=#{sdk.dir / "deps"}", *sdk.extconf_args(spec.name))
         end
@@ -436,7 +453,7 @@ module Ocran
           # (lib/nokogiri/4.0/nokogiri.so for the feature nokogiri/nokogiri).
           next if built.any? { |ext| stem.end_with?("/#{ext.feature}") || File.basename(stem) == File.basename(ext.feature) }
 
-          raise "Building #{spec.full_name} for the native runtime did not provide #{name} " \
+          raise "Building #{spec.full_name} for the static runtime did not provide #{name} " \
                 "(it built #{built.map(&:feature).join(", ")})"
         end
         mark_extensions_built(spec, files)
@@ -444,7 +461,7 @@ module Ocran
       end
 
       executable = File.join(work, "ocran-runtime.exe")
-      say "Linking #{extensions.map(&:feature).join(", ")} into the native runtime" unless extensions.empty?
+      say "Linking #{extensions.map(&:feature).join(", ")} into the static runtime" unless extensions.empty?
       say "Linking against the DLL builds of #{@dlls.join(", ")}" unless @dlls.empty?
       sdk.link(extensions, executable, dlls: @dlls)
       @dll_files = sdk.dll_files(@dlls)
@@ -524,7 +541,7 @@ module Ocran
       end
     end
 
-    # --native-dll: the DLLs go next to the executable, where Windows looks
+    # --runtime-dll: the DLLs go next to the executable, where Windows looks
     # for them first.
     def ship_dlls
       (@dll_files || []).each do |dll|
@@ -622,21 +639,21 @@ module Ocran
 
     # ocran/config.rb: what boot.rb needs to start the application. Paths
     # that Direction gives relative to the extraction root (|/...) become
-    # <ROOT>/..., and lists are joined with ";" - the separator of the
-    # target, whatever the build host uses.
+    # <ROOT>/..., and lists are joined with the separator of the target
+    # (";" on Windows, ":" elsewhere), whatever the build host uses.
     def config_source
       env = @env.dup
       rubylib = split_paths(env.delete("RUBYLIB"))
       rubyopt = env["RUBYOPT"].to_s
       includes, requires, unsupported = ZipPayloadBuilder.parse_rubyopt(rubyopt)
-      unsupported.each { |flag| warning "RUBYOPT #{flag} cannot be applied by the native runtime; only -I and -r are" }
+      unsupported.each { |flag| warning "RUBYOPT #{flag} cannot be applied by the static runtime; only -I and -r are" }
 
       load_path = rubylib.filter_map { |dir| relative_to_root(dir) }
                          .reject { |dir| dir.start_with?("lib/ruby/") } # the runtime's own, below
       load_path += @runtime.load_path
       env = env.to_h do |name, value|
         if %w[GEM_HOME GEM_PATH].include?(name)
-          [name, split_paths(value).map { |dir| root_path(dir) }.join(";")]
+          [name, split_paths(value).map { |dir| root_path(dir) }.join(@runtime.windows? ? ";" : ":")]
         else
           [name, root_path(value)]
         end

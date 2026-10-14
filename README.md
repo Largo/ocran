@@ -218,23 +218,30 @@ goes through these steps in order of impact.
 
 #### Experimental options:
 
-* `--native <runtime-dir>`: Build a single Windows executable that runs the
-  application **without extracting anything**: no temporary directory, no
-  DLLs written to disk. The executable is a statically linked Ruby (the
-  *native runtime*) with the application appended as a plain ZIP archive.
+* `--static-runtime <runtime-dir>`: Build a single executable for Windows
+  or Linux that runs the application **without extracting anything**: no
+  temporary directory, no DLLs or shared libraries written to disk. The
+  executable is a statically linked Ruby (the *static runtime*) with the
+  application appended as a plain ZIP archive. The Linux runtime is linked
+  against musl and fully static, so it runs on any x86_64 distribution.
 
   ```
-  ocran app.rb --native path/to/runtime     # -> app.exe
+  ocran app.rb --static-runtime path/to/runtime     # -> app.exe
   unzip -l app.exe                          # lists exactly what will run
   unzip -p app.exe ocran/manifest.sha256    # SHA-256 of the runtime and every file
   ```
 
-  The runtime directory holds `ocran-runtime.exe`, its own standard
+  The runtime directory holds `ocran-runtime(.exe)`, its own standard
   library and bundled gems (`lib/ruby/`) and `runtime.json`; build one with
-  `native/build-runtime.sh` (MinGW, on Linux) or the scripts in
-  `native/mswin/` (Visual Studio Build Tools). Either imports only DLLs
-  that ship with Windows and needs no VC++ redistributable. See
-  [native/README.md](native/README.md) for how it works and how it is
+  `runtime/build-runtime.sh` (Windows, MinGW, on Linux), the scripts in
+  `runtime/mswin/` (Windows, Visual Studio Build Tools) or
+  `runtime/linux/build-runtime.sh` (Linux x86_64, musl). The Windows
+  runtimes import only DLLs that ship with Windows and need no VC++
+  redistributable; the Linux runtime imports nothing at all. Which system
+  the executable is for follows from the runtime, not from the build host:
+  a Linux build host can package for Windows and the other way round, as
+  long as the application does not depend on platform-specific gems. See
+  [runtime/README.md](runtime/README.md) for how it works and how it is
   built.
 
   Dependency detection runs as usual, under the build host's Ruby, which
@@ -248,7 +255,7 @@ goes through these steps in order of impact.
   SDK (`sdk/` in the runtime directory) and linked into a runtime of the
   application's own. That needs a compiler for the runtime: for a MinGW
   runtime `x86_64-w64-mingw32ucrt-gcc` on Linux, or on Windows
-  RubyInstaller's MSYS2 GCC named with `OCRAN_NATIVE_CC=gcc` (with
+  RubyInstaller's MSYS2 GCC named with `OCRAN_RUNTIME_CC=gcc` (with
   `ucrt64\bin` and `usr\bin` on PATH); for an mswin runtime `cl` and
   `nmake` of Visual Studio Build Tools, from a developer prompt. Gems that
   need a C library get the one the SDK provides: nokogiri uses its
@@ -260,9 +267,9 @@ goes through these steps in order of impact.
   the other libraries are inside it, and their license texts are packed
   into it as `ocran/licenses/`. Two optional libraries are under the LGPL
   (GNU libiconv, FreeTDS: used by nokogiri and tiny_tds), which asks that
-  users can replace them; `--native-dll iconv,sybdb` ships them as DLLs
+  users can replace them; `--runtime-dll iconv,sybdb` ships them as DLLs
   next to the executable instead. Read
-  [native/LICENSES.md](native/LICENSES.md) before distributing.
+  [runtime/LICENSES.md](runtime/LICENSES.md) before distributing.
 
   OpenSSL verifies certificates against the Windows certificate store, as
   Windows itself does - no CA file is packed or needed. The application reads its own files as
@@ -275,7 +282,7 @@ goes through these steps in order of impact.
   Ruby). `--dll` and the output-directory formats do not apply.
   Experimental.
 
-* `--native-dll <lib,...>`: With `--native`, link these C libraries of the
+* `--runtime-dll <lib,...>`: With `--static-runtime`, link these C libraries of the
   runtime's SDK as DLLs shipped next to the executable rather than into it
   (the SDK has DLL builds of `iconv` and `sybdb`, the LGPL libraries).
   OCRAN copies them, and the DLLs they need, next to the executable.

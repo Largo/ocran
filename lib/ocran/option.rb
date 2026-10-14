@@ -19,8 +19,8 @@ module Ocran
         :bundle_identifier => nil,
         :macosx_bundle => nil,
         :macosx_bundle? => false,
-        :native_dlls => [],
-        :native_runtime => nil,
+        :runtime_dlls => [],
+        :static_runtime => nil,
         :chdir_before? => false,
         :chdir_exe_dir? => false,
         :cosmo_cc => nil,
@@ -157,19 +157,19 @@ PE resource options (Windows, rcedit-compatible):
 
 Experimental options:
 
---native <runtime-dir>  Build a single Windows executable that runs the
+--static-runtime <runtime-dir>  Build a single Windows executable that runs the
                    application without extracting anything: a statically
-                   linked Ruby (the native runtime in <runtime-dir>, built
-                   by native/build-runtime.sh or native/mswin/) with the
+                   linked Ruby (the static runtime in <runtime-dir>, built
+                   by runtime/build-runtime.sh or runtime/mswin/) with the
                    application appended as a ZIP archive, readable with
                    unzip or 7-Zip. The runtime's own standard library and
                    bundled gems are packed; C extensions must be linked
                    into the runtime. The build host's Ruby must have the
                    runtime's API version (e.g. 4.0.0).
---native-dll <lib,...>  With --native: link these C libraries of the
+--runtime-dll <lib,...>  With --static-runtime: link these C libraries of the
                    runtime's SDK as DLLs shipped next to the executable
                    instead of into it (e.g. iconv,sybdb - the LGPL ones;
-                   see native/LICENSES.md). Their DLL dependencies come
+                   see runtime/LICENSES.md). Their DLL dependencies come
                    along.
 --cosmo-ruby <ruby.com>  Package the given cosmopolitan-built Ruby (an APE,
                    e.g. ruby.com) as the interpreter instead of the host
@@ -385,10 +385,10 @@ EOF
           @options[:wasm_options] << required_argument(argv, arg)
         when "--roundhouse-opt"
           @options[:roundhouse_options] << required_argument(argv, arg)
-        when "--native"
-          @options[:native_runtime] = Pathname.new(required_argument(argv, arg)).expand_path
-        when "--native-dll"
-          @options[:native_dlls] |= required_argument(argv, arg).split(",").map(&:strip).reject(&:empty?)
+        when "--static-runtime"
+          @options[:static_runtime] = Pathname.new(required_argument(argv, arg)).expand_path
+        when "--runtime-dll"
+          @options[:runtime_dlls] |= required_argument(argv, arg).split(",").map(&:strip).reject(&:empty?)
         when "--cosmo-ruby"
           load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
@@ -498,7 +498,9 @@ EOF
           # APE binaries built with cosmocc conventionally use .com.
           ext = if cosmo?
                   ".com"
-                elsif Gem.win_platform? || native_runtime
+                elsif static_runtime
+                  static_runtime_os == "windows" ? ".exe" : ""
+                elsif Gem.win_platform?
                   ".exe"
                 else
                   ""
@@ -600,16 +602,16 @@ EOF
         raise "--macosx-bundle cannot be combined with --output-dir, --output-zip, or --innosetup"
       end
 
-      if native_runtime
-        reject_with_native_runtime
-        raise "#{native_runtime} is not a directory" unless native_runtime.directory?
+      if static_runtime
+        reject_with_static_runtime
+        raise "#{static_runtime} is not a directory" unless static_runtime.directory?
       end
-      raise "--native-dll needs --native" if native_dlls.any? && !native_runtime
+      raise "--runtime-dll needs --static-runtime" if runtime_dlls.any? && !static_runtime
     end
 
-    # --native produces one executable from a prebuilt runtime, so neither
+    # --static-runtime produces one executable from a prebuilt runtime, so neither
     # the other output formats nor what only the C stub implements apply.
-    def reject_with_native_runtime
+    def reject_with_static_runtime
       conflicts = {
         "--output-dir" => output_dir,
         "--output-zip" => output_zip,
@@ -621,10 +623,10 @@ EOF
         "--debug-extract" => enable_debug_extract?,
       }
       conflicts.each do |name, given|
-        raise "#{name} cannot be used with --native" if given
+        raise "#{name} cannot be used with --static-runtime" if given
       end
     end
-    private :reject_with_native_runtime
+    private :reject_with_static_runtime
 
     # Validates --wasm and works out where the site goes: a zip archive for
     # --output-zip or an --output name ending in .zip, a folder otherwise.
@@ -719,13 +721,22 @@ EOF
 
     def cosmo_ruby = @options[__method__]
 
-    # Directory of the native runtime given with --native, or nil.
-    def native_runtime = @options[__method__]
+    # Directory of the static runtime given with --static-runtime, or nil.
+    def static_runtime = @options[__method__]
 
-    def native? = !!native_runtime
+    def static_runtime? = !!static_runtime
 
-    # C libraries --native-dll ships as DLLs next to the executable.
-    def native_dlls = @options[__method__]
+    # The operating system the --static-runtime runtime is for, from its
+    # runtime.json ("windows" when that cannot be read yet).
+    def static_runtime_os
+      require "json"
+      JSON.parse(File.read(File.join(static_runtime, "runtime.json"))).fetch("os", "windows")
+    rescue SystemCallError, JSON::ParserError
+      "windows"
+    end
+
+    # C libraries --runtime-dll ships as DLLs next to the executable.
+    def runtime_dlls = @options[__method__]
 
     # True when the application is packaged by injecting it into the ZIP
     # store of the cosmopolitan Ruby itself: no cosmocc, no launcher stub,

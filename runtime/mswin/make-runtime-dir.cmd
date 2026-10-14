@@ -1,5 +1,5 @@
 @echo off
-rem Assembles the runtime directory `ocran --native` takes, from the pieces
+rem Assembles the runtime directory `ocran --static-runtime` takes, from the pieces
 rem built by build-ruby.cmd, build-gemexts.rb, make-sdk.rb (ROOT\sdk) and
 rem link-runtime.rb:
 rem

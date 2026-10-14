@@ -35,20 +35,26 @@ class TestOption < Minitest::Test
     assert_rejected(/--innosetup cannot be combined/, "app.rb", *inno, "--output-zip", "out.zip")
   end
 
-  def test_native_runtime_produces_an_exe_on_any_host
+  def test_static_runtime_produces_an_exe_on_any_host
     Dir.mkdir("rt")
-    option = parse("app.rb", "--native", "rt")
-    assert option.native?
-    assert_equal File.expand_path("rt"), option.native_runtime.to_s
+    option = parse("app.rb", "--static-runtime", "rt")
+    assert option.static_runtime?
+    assert_equal File.expand_path("rt"), option.static_runtime.to_s
     assert_equal File.expand_path("app.exe"), option.output_executable.to_s
   end
 
-  def test_native_runtime_rejects_other_outputs_and_stub_only_options
+  def test_static_runtime_output_name_follows_the_runtime_os
     Dir.mkdir("rt")
-    assert_rejected(/--output-dir cannot be used with --native/, "app.rb", "--native", "rt", "--output-dir", "out")
-    assert_rejected(/--output-zip cannot be used with --native/, "app.rb", "--native", "rt", "--output-zip", "o.zip")
-    assert_rejected(/--debug-extract cannot be used with --native/, "app.rb", "--native", "rt", "--debug-extract")
-    assert_rejected(/is not a directory/, "app.rb", "--native", "missing")
+    File.write("rt/runtime.json", '{"format": 1, "os": "linux"}')
+    assert_equal File.expand_path("app"), parse("app.rb", "--static-runtime", "rt").output_executable.to_s
+  end
+
+  def test_static_runtime_rejects_other_outputs_and_stub_only_options
+    Dir.mkdir("rt")
+    assert_rejected(/--output-dir cannot be used with --static-runtime/, "app.rb", "--static-runtime", "rt", "--output-dir", "out")
+    assert_rejected(/--output-zip cannot be used with --static-runtime/, "app.rb", "--static-runtime", "rt", "--output-zip", "o.zip")
+    assert_rejected(/--debug-extract cannot be used with --static-runtime/, "app.rb", "--static-runtime", "rt", "--debug-extract")
+    assert_rejected(/is not a directory/, "app.rb", "--static-runtime", "missing")
   end
 
   def test_unknown_gem_group_is_rejected_at_parse_time

@@ -1,7 +1,7 @@
-# Writes runtime.json, the description of a native runtime that ocran
-# --native reads at packaging time:
+# Writes runtime.json, the description of a static runtime that ocran
+# --static-runtime reads at packaging time:
 #
-#   ruby native/write-runtime-info.rb RUBY_BUILD_DIR RUNTIME_DIR [EXT_LINE_FILE...]
+#   ruby runtime/write-runtime-info.rb RUBY_BUILD_DIR RUNTIME_DIR [EXT_LINE_FILE...]
 #
 # RUNTIME_DIR holds ocran-runtime.exe and lib/ruby/ (the runtime's own
 # standard library and bundled gems). The C extensions linked into the
@@ -32,8 +32,13 @@ features << "prism/prism" if Dir[File.join(build, "prism_init.{o,obj}")].any?
 ext_files.each { |f| features << File.read(f).split(" ", 2).first }
 abort "no statically linked extensions found in #{build}" if features.empty?
 
-exe = File.join(dir, "ocran-runtime.exe")
-abort "#{exe} not found" unless File.file?(exe)
+exe = ["ocran-runtime.exe", "ocran-runtime"].map { |n| File.join(dir, n) }.find { |f| File.file?(f) } or
+  abort "no ocran-runtime(.exe) in #{dir}"
+target_os = config.("target_os")
+os = if target_os.start_with?("mingw", "mswin") then "windows"
+     elsif target_os.start_with?("darwin") then "macos"
+     else "linux"
+     end
 gems_dir = File.join(dir, "lib/ruby/gems", ruby_version)
 
 lib = "lib/ruby"
@@ -42,7 +47,8 @@ info = {
   "ruby_version" => version,
   "ruby_api_version" => ruby_version,
   "arch" => arch,
-  "executable" => "ocran-runtime.exe",
+  "os" => os,
+  "executable" => File.basename(exe),
   "executable_sha256" => Digest::SHA256.file(exe).hexdigest,
   # The runtime's default load path, in Ruby's own order.
   "load_path" => [

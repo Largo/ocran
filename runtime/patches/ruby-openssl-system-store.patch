@@ -1,0 +1,54 @@
+--- a/ext/openssl/ossl_x509store.c
++++ b/ext/openssl/ossl_x509store.c
+@@ -400,6 +400,43 @@
+  *
+  * See also the man page X509_STORE_set_default_paths(3).
+  */
++/*
++ * ocran: trust what the operating system trusts. A statically linked
++ * OpenSSL (the ocran runtime) only knows the directories compiled into it,
++ * which need not be where the system keeps its certificates.
++ *
++ * Windows: OpenSSL's own winstore loader looks certificates up in the
++ * system ROOT store as they are needed. Elsewhere: the CA bundle of
++ * whichever system this runs on, from the places distributions (and
++ * macOS) keep it. Loading failures leave the defaults as they were.
++ */
++static void
++ocran_load_system_store(X509_STORE *store)
++{
++#if defined(_WIN32)
++# if OPENSSL_VERSION_NUMBER >= 0x30200000L && !defined(OPENSSL_NO_WINSTORE)
++    if (X509_STORE_load_store(store, "org.openssl.winstore://") != 1)
++        ossl_clear_error();
++# endif
++#elif OPENSSL_VERSION_NUMBER >= 0x30000000L
++    static const char *const bundles[] = {
++        "/etc/ssl/certs/ca-certificates.crt",                /* Debian, Ubuntu, Arch, Alpine */
++        "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", /* Fedora, RHEL */
++        "/etc/pki/tls/certs/ca-bundle.crt",                  /* older RHEL, CentOS */
++        "/etc/ssl/ca-bundle.pem",                            /* openSUSE */
++        "/etc/ssl/cert.pem",                                 /* Alpine, macOS, BSDs */
++        NULL,
++    };
++    const char *const *bundle;
++
++    for (bundle = bundles; *bundle; bundle++) {
++        if (X509_STORE_load_file(store, *bundle) == 1)
++            break;
++        ossl_clear_error();
++    }
++#endif
++}
++
+ static VALUE
+ ossl_x509store_set_default_paths(VALUE self)
+ {
+@@ -408,6 +445,7 @@
+     GetX509Store(self, store);
+     if (X509_STORE_set_default_paths(store) != 1)
+         ossl_raise(eX509StoreError, "X509_STORE_set_default_paths");
++    ocran_load_system_store(store);
+ 
+     return Qnil;
+ }

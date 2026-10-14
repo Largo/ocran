@@ -2,14 +2,14 @@
 # runtime (Ruby's own build links them only as DLLs). Run by the Ruby that
 # build-ruby.cmd installed, inside a vcvars64 environment:
 #
-#   ROOT\stage\bin\ruby.exe native\mswin\build-gemexts.rb ROOT
+#   ROOT\stage\bin\ruby.exe runtime\mswin\build-gemexts.rb ROOT
 #
 # Writes ROOT\exts\<name>.line for link-runtime.rb.
 require "fileutils"
 
 root = (ARGV[0] or abort "usage: build-gemexts.rb ROOT").tr("\\", "/")
 deps = "#{root}/deps/installed/x64-windows-static"
-helper = File.expand_path("../../lib/ocran/native/build_static_ext.rb", __dir__)
+helper = File.expand_path("../../lib/ocran/static_runtime/build_static_ext.rb", __dir__)
 arch_include = File.dirname(File.dirname(Dir["#{root}/build/.ext/include/*/ruby/config.h"].first || abort("no ruby/config.h")))
 FileUtils.rm_rf("#{root}/exts")
 FileUtils.mkdir_p("#{root}/exts")

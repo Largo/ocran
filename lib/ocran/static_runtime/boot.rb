@@ -1,4 +1,4 @@
-# ocran native runtime, stage 1 (ocran/boot.rb inside the archive).
+# ocran static runtime, stage 1 (ocran/boot.rb inside the archive).
 #
 # Serves the archive appended to the executable as a read-only directory
 # tree rooted at the executable's own path, e.g. C:/apps/tool.exe/src/app.rb.
@@ -374,7 +374,7 @@ module OcranRuntime
   end
 
   # ---- start ------------------------------------------------------------
-  # ocran/config.rb, written by ocran (NativeZipBuilder): a Hash literal.
+  # ocran/config.rb, written by ocran (StaticRuntimeBuilder): a Hash literal.
   @config = TOPLEVEL_BINDING.eval(read("ocran/config.rb").force_encoding(Encoding::UTF_8),
                                   "#{PREFIX}ocran/config.rb", 1).freeze
   in_root = ->(value) { value.gsub("<ROOT>", ROOT) }

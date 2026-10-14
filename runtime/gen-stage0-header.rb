@@ -1,7 +1,7 @@
 # Writes stage0.rb as a C string literal header (static const char
 # ocran_stage0[]) for ocran_main.c:
 #
-#   ruby native/gen-stage0-header.rb native/stage0.rb OUT.h
+#   ruby runtime/gen-stage0-header.rb runtime/stage0.rb OUT.h
 #
 # Only printable ASCII is emitted as is; everything else (and '?', so no
 # trigraph can form) is an octal escape.
@@ -16,5 +16,5 @@ lines = File.binread(src).each_line.map do |line|
   end.join
   "  \"#{body}\""
 end
-File.write(out, "/* generated from native/stage0.rb */\n" \
+File.write(out, "/* generated from runtime/stage0.rb */\n" \
                 "static const char ocran_stage0[] =\n#{lines.join("\n")};\n")

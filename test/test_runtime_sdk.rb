@@ -2,11 +2,11 @@
 require "minitest/autorun"
 require "tmpdir"
 require "json"
-require_relative "../lib/ocran/native_sdk"
+require_relative "../lib/ocran/runtime_sdk"
 
-# Unit tests for Ocran::NativeSdk#link with a stand-in compiler that
+# Unit tests for Ocran::RuntimeSdk#link with a stand-in compiler that
 # records its command lines, so they run without a Windows toolchain.
-class TestNativeSdk < Minitest::Test
+class TestRuntimeSdk < Minitest::Test
   def setup
     @dir = Dir.mktmpdir
     @sdk = File.join(@dir, "sdk")
@@ -38,7 +38,7 @@ class TestNativeSdk < Minitest::Test
   def write_sdk(toolchain, args)
     File.write(File.join(@sdk, "link.args"), args.join("\n") + "\n")
     File.write(File.join(@sdk, "sdk.json"), JSON.generate("toolchain" => toolchain))
-    Ocran::NativeSdk.new(@sdk, arch: "x64-mingw-ucrt")
+    Ocran::RuntimeSdk.new(@sdk, arch: "x64-mingw-ucrt")
   end
 
   def commands = File.readlines(@log, chomp: true)
@@ -46,7 +46,7 @@ class TestNativeSdk < Minitest::Test
   def test_gcc_link_registers_every_extension_and_appends_extra_inputs
     skip "the stand-in compiler is a shell script" if Gem.win_platform?
     sdk = write_sdk("gcc", [@cc, "-static", "@SDK@/ocran_main.o", "@EXTRA@", "@SDK@/libruby-static.a", "-L@SDK@/deps/lib"])
-    ext = Ocran::NativeSdk::Extension.new("bcrypt_ext", "Init_bcrypt_ext", "/tmp/bcrypt_ext.a", [])
+    ext = Ocran::RuntimeSdk::Extension.new("bcrypt_ext", "Init_bcrypt_ext", "/tmp/bcrypt_ext.a", [])
     out = File.join(@dir, "app-runtime.exe")
     sdk.link([ext], out)
 
@@ -64,7 +64,7 @@ class TestNativeSdk < Minitest::Test
       "toolchain" => "gcc", "libs" => ["-lsybdb", "-liconv", "-lws2_32"],
       "dlls" => { "sybdb" => { "dll" => "deps/bin/libsybdb-5.dll", "import" => "deps/lib/libsybdb.dll.a" } }))
     File.write(File.join(@sdk, "link.args"), [@cc, "@EXTRA@", "-L@SDK@/deps/lib"].join("\n") + "\n")
-    sdk = Ocran::NativeSdk.new(@sdk, arch: "x64-mingw-ucrt")
+    sdk = Ocran::RuntimeSdk.new(@sdk, arch: "x64-mingw-ucrt")
     sdk.link([], File.join(@dir, "out.exe"), dlls: ["sybdb"])
     link = commands[1]
     assert_includes link, " #{@sdk}/deps/lib/libsybdb.dll.a -liconv -lws2_32 "
@@ -76,7 +76,7 @@ class TestNativeSdk < Minitest::Test
   def test_extension_registration_source
     sdk = write_sdk("gcc", [@cc, "@EXTRA@"])
     source = sdk.send(:exts_source, sdk.base_extensions +
-                      [Ocran::NativeSdk::Extension.new("jaro_winkler/jaro_winkler_ext", "Init_jaro_winkler_ext", "x", [])])
+                      [Ocran::RuntimeSdk::Extension.new("jaro_winkler/jaro_winkler_ext", "Init_jaro_winkler_ext", "x", [])])
     assert_includes source, 'ruby_init_ext("fiddle.so", Init_fiddle);'
     assert_includes source, 'ruby_init_ext("jaro_winkler/jaro_winkler_ext.so", Init_jaro_winkler_ext);'
     assert_includes source, "extern void Init_jaro_winkler_ext(void);"
@@ -89,9 +89,9 @@ class TestNativeSdk < Minitest::Test
   end
 
   def test_extension_lines_reject_unsafe_names
-    assert_raises(RuntimeError) { Ocran::NativeSdk::Extension.parse("x;rm Init_x a.a", @sdk) }
-    assert_raises(RuntimeError) { Ocran::NativeSdk::Extension.parse("x Init_x() a.a", @sdk) }
-    ext = Ocran::NativeSdk::Extension.parse("racc/cparse Init_cparse @SDK@/exts/racc_cparse.a ", @sdk)
+    assert_raises(RuntimeError) { Ocran::RuntimeSdk::Extension.parse("x;rm Init_x a.a", @sdk) }
+    assert_raises(RuntimeError) { Ocran::RuntimeSdk::Extension.parse("x Init_x() a.a", @sdk) }
+    ext = Ocran::RuntimeSdk::Extension.parse("racc/cparse Init_cparse @SDK@/exts/racc_cparse.a ", @sdk)
     assert_equal File.join(@sdk, "exts/racc_cparse.a"), ext.archive
     assert_empty ext.libs
   end

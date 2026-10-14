@@ -2,7 +2,7 @@
 require "minitest/autorun"
 require_relative "../lib/ocran/pe_resources"
 
-# Unit tests for Ocran::PeResources, the pure-Ruby resource writer --native
+# Unit tests for Ocran::PeResources, the pure-Ruby resource writer --static-runtime
 # uses, on a minimal PE32+ image built here.
 class TestPeResources < Minitest::Test
   # DOS header, PE header, PE32+ optional header with 16 data directories,

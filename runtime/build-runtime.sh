@@ -1,21 +1,21 @@
 #!/bin/sh
-# Builds the static Windows (x64, UCRT) Ruby runtime used by --native-zip:
+# Builds the static Windows (x64, UCRT) Ruby runtime used by --static-runtime:
 # one ruby.exe with every extension and its C library linked in, so a
 # packed application loads no DLL other than those that ship with Windows.
 #
 # Runs on Linux with Debian's gcc-mingw-w64-ucrt64 cross compiler and a host
 # Ruby of the same version as the one being built (the cross build needs it
-# as baseruby). Every source tarball is checked against native/sources.lock.
+# as baseruby). Every source tarball is checked against runtime/sources.lock.
 #
-#   native/build-runtime.sh [build-dir]
+#   runtime/build-runtime.sh [build-dir]
 #
-# Output: a runtime directory for `ocran --native`, <build-dir>/out:
+# Output: a runtime directory for `ocran --static-runtime`, <build-dir>/out:
 # ocran-runtime.exe, lib/ruby (stdlib and bundled gems), sdk/ (to link in
 # more C extensions at packaging time) and runtime.json.
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-BUILD=${1:-$HERE/../../ocran-native-build}
+BUILD=${1:-$HERE/../../ocran-runtime-build}
 mkdir -p "$BUILD"
 BUILD=$(cd "$BUILD" && pwd)
 HOST=x86_64-w64-mingw32ucrt
@@ -114,7 +114,7 @@ add_import_shim() {
 
 # GNU libiconv (LGPL-2.1) and FreeTDS (LGPL-2.0) are built both static and
 # as DLLs: linked in by default, or shipped next to the executable with
-# `ocran --native-dll iconv,sybdb` (see LICENSES.md).
+# `ocran --runtime-dll iconv,sybdb` (see LICENSES.md).
 build_libiconv() {
   fetch libiconv
   cd "$WORK/libiconv"
@@ -215,7 +215,7 @@ build_gemexts() {
     gem=${ext%%/*}
     dir=$(ls -d "$WORK"/ruby/.bundle/gems/"$gem"-*/ext/"$ext")
     ruby --disable=gems -I. -r"./$arch-fake" -I"$WORK/ruby/lib" \
-      "$HERE/../lib/ocran/native/build_static_ext.rb" "$WORK/ruby/include" ".ext/include/$arch" \
+      "$HERE/../lib/ocran/static_runtime/build_static_ext.rb" "$WORK/ruby/include" ".ext/include/$arch" \
       "$dir" "$WORK/gemext/$ext" --with-libffi-dir="$DEPS" > "$WORK/gemext.log" 2>&1 ||
       { tail -20 "$WORK/gemext.log"; exit 1; }
     tail -1 "$WORK/gemext.log" > "$OUT/exts/$(echo "$ext" | tr / _).line"
@@ -274,7 +274,7 @@ build_licenses() {
   copy mingw-w64 /usr/share/doc/mingw-w64-common/copyright
   copy libgcc /usr/share/doc/gcc-mingw-w64-base/copyright
   cat > "$L/README.txt" <<'TXT'
-Third-party software in this executable (ocran native runtime, MinGW-w64)
+Third-party software in this executable (ocran static runtime, MinGW-w64)
 
 ruby       Ruby (BSD-2-Clause or the Ruby license; LEGAL lists the code
            Ruby itself includes). Bundled and default gems carry their
@@ -292,7 +292,7 @@ libgcc     GCC runtime (GPL-3.0 with the GCC Runtime Library Exception)
 
 GNU libiconv and FreeTDS are under the LGPL. They are linked into the
 executable only when an extension uses them (nokogiri: libiconv;
-tiny_tds: FreeTDS and libiconv). See ocran's native/LICENSES.md.
+tiny_tds: FreeTDS and libiconv). See ocran's runtime/LICENSES.md.
 TXT
 }
 
