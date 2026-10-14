@@ -1,0 +1,91 @@
+name: Static runtime (macOS)
+
+# Builds the macOS static Ruby runtime from the pinned sources
+# (runtime/macos/build-runtime.sh), packages the smoke-test applications
+# with it and runs them.
+
+on:
+  push:
+    paths:
+      - 'runtime/**'
+      - 'lib/ocran/static_runtime/**'
+      - 'lib/ocran/static_runtime_builder.rb'
+      - 'lib/ocran/runtime_sdk.rb'
+      - '.github/workflows/static-runtime-macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # baseruby: the same minor version as the runtime.
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: '4.0'
+
+      - name: Cache source tarballs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/rt/src
+          key: static-runtime-sources-${{ hashFiles('runtime/sources.lock') }}
+
+      - name: Build the runtime
+        run: runtime/macos/build-runtime.sh "$RUNNER_TEMP/rt" 2>&1 | tee "$RUNNER_TEMP/build.log"; exit ${PIPESTATUS[0]}
+        shell: bash
+
+      - name: Inspect the runtime
+        run: |
+          rt="$RUNNER_TEMP/rt/out"
+          ls -la "$rt" "$rt/sdk"
+          cat "$rt/runtime.json"
+          otool -L "$rt/ocran-runtime"
+          # Only system libraries may be linked dynamically.
+          if otool -L "$rt/ocran-runtime" | tail -n +2 | grep -v -E '^\s+/(usr/lib|System/Library)/'; then
+            echo "non-system library linked" >&2; exit 1
+          fi
+          codesign -dv "$rt/ocran-runtime"
+          codesign --verify --strict "$rt/ocran-runtime"
+
+      - name: Smoke tests
+        env:
+          OCRAN_SMOKE_NETWORK: '1'
+        run: ruby runtime/smoke/run.rb "$RUNNER_TEMP/rt/out" "$RUNNER_TEMP/smoke"
+
+      - name: Check the packaged executables
+        run: |
+          for exe in "$RUNNER_TEMP"/smoke/smoke-app "$RUNNER_TEMP"/smoke/smoke-https; do
+            codesign --verify --strict "$exe"
+            size "$exe" -m | grep -A2 __OCRAN
+            # The archive is a plain ZIP: extract the section and list it.
+            segedit "$exe" -extract __OCRAN __zip "$exe.zip"
+            unzip -l "$exe.zip" | tail -3
+          done
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-runtime-macos-logs
+          path: |
+            ${{ runner.temp }}/build.log
+            ${{ runner.temp }}/rt/work/gemext.log
+            ${{ runner.temp }}/rt/work/ruby-build/config.log
+            ${{ runner.temp }}/smoke/*.build.log
+          if-no-files-found: ignore
+
+      - name: Upload the runtime
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-runtime-macos
+          path: |
+            ${{ runner.temp }}/rt/out
+            !${{ runner.temp }}/rt/out/stage
+            !${{ runner.temp }}/rt/out/exts
