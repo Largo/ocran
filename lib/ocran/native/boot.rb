@@ -7,8 +7,9 @@
 # handle fails loudly (ENOTDIR) instead of silently reading something else.
 #
 # Intercepted, and nothing else:
-#   Kernel:  require, require_relative, load, open (autoload goes through require)
-#   IO/File: read, binread, readlines, foreach, open
+#   Kernel:  require, require_relative, load, open (autoload goes through
+#            require), and gem_original_require for RubyGems
+#   IO/File: read, binread, readlines, foreach, open, File.new
 #   File:    exist? file? directory? readable? size size? zero? empty?
 #            mtime ftype stat lstat realpath realdirpath symlink? executable?
 #   Dir:     exist? glob [] children entries each_child foreach empty?
@@ -119,11 +120,8 @@ module OcranRuntime
 
     def open_io(path, mode, opts)
       raise Errno::EROFS, path.to_s if writing?(mode, opts)
-      io = StringIO.new(contents(path, mode, opts))
-      v = vpath(path)
-      io.define_singleton_method(:path) { v }
-      io.define_singleton_method(:to_path) { v }
-      io
+
+      ArchivedFile.new(contents(path, mode, opts), vpath(path))
     end
   end
 
@@ -193,36 +191,53 @@ module OcranRuntime
     end
   end
 
-  module KernelPatch
-    private
+  # Kernel's loading methods, defined in Kernel itself the way RubyGems
+  # defines its require - not prepended: a later redefinition (RubyGems,
+  # Zeitwerk) must see these as Kernel's own methods to chain to them, and
+  # Ruby does not invalidate a prepended module's cached super target when
+  # the method it overrides is redefined.
+  RUBY_REQUIRE = ::Kernel.instance_method(:require)
+  RUBY_LOAD = ::Kernel.instance_method(:load)
+  RUBY_OPEN = ::Kernel.instance_method(:open)
 
-    def require(feature)
-      path = OcranRuntime.resolve(feature)
-      path ? OcranRuntime.require_virtual(path) : super
+  def self.install_kernel_methods
+    ::Kernel.module_eval do
+      # Ruby's require, able to read the archive. RubyGems' Kernel#require
+      # ends in gem_original_require and keeps one that already exists.
+      def gem_original_require(feature)
+        archived = OcranRuntime.resolve(feature)
+        archived ? OcranRuntime.require_virtual(archived) : OcranRuntime::RUBY_REQUIRE.bind_call(self, feature)
+      end
+
+      def require(feature) = gem_original_require(feature)
+
+      # Ruby's own require_relative resolves against its caller, which
+      # here would be this file; it is a require of the absolute path.
+      def require_relative(feature)
+        base = caller_locations(1, 1).first&.absolute_path
+        raise LoadError, "cannot infer basepath" unless base
+
+        require(File.expand_path(feature, File.dirname(base)))
+      end
+
+      def load(file, wrap = false)
+        return OcranRuntime::RUBY_LOAD.bind_call(self, file, wrap) unless VirtualFS.file?(file)
+
+        OcranRuntime.load_file(VirtualFS.vpath(file), wrap)
+        true
+      end
+
+      def open(path, *args, **opts, &block)
+        return OcranRuntime::RUBY_OPEN.bind_call(self, path, *args, **opts, &block) unless VirtualFS.vpath(path)
+
+        File.open(path, *args, **opts, &block)
+      end
+
+      private :gem_original_require, :require, :require_relative, :load, :open
     end
-
-    def require_relative(feature)
-      base = caller_locations(1, 1).first&.absolute_path
-      return super unless base && VirtualFS.vpath(base)
-      require(File.expand_path(feature, File.dirname(base)))
-    end
-
-    def load(file, wrap = false)
-      return super unless VirtualFS.file?(file)
-      OcranRuntime.load_file(VirtualFS.vpath(file), wrap)
-      true
-    end
-
-    def open(path, *args, **opts, &block)
-      return super unless VirtualFS.vpath(path)
-      File.open(path, *args, **opts, &block)
-    end
-  end
-
-  # Kernel.require and friends, called with an explicit receiver.
-  module KernelSingletonPatch
-    %i[require require_relative load].each do |m|
-      define_method(m) { |*args, **kw| Object.new.__send__(m, *args, **kw) }
+    # Kernel.require and friends, called with an explicit receiver.
+    %i[require require_relative load open].each do |name|
+      ::Kernel.define_singleton_method(name) { |*args, **kw, &block| Object.new.__send__(name, *args, **kw, &block) }
     end
   end
 
@@ -263,6 +278,12 @@ module OcranRuntime
   end
 
   module FilePatch
+    def new(path, *args, **opts)
+      return super unless VirtualFS.vpath(path)
+
+      VirtualFS.open_io(path, args.first, opts)
+    end
+
     %i[exist? file? directory?].each do |m|
       define_method(m) { |path| VirtualFS.vpath(path) ? VirtualFS.__send__(m, path) : super(path) }
     end
@@ -326,31 +347,67 @@ module OcranRuntime
   end
 
   # ---- start ------------------------------------------------------------
+  # ocran/config.rb, written by ocran (NativeZipBuilder): a Hash literal.
   @config = TOPLEVEL_BINDING.eval(read("ocran/config.rb").force_encoding(Encoding::UTF_8),
                                   "#{PREFIX}ocran/config.rb", 1).freeze
+  in_root = ->(value) { value.gsub("<ROOT>", ROOT) }
+  $stderr.puts "ocran: starting #{EXE}" if @config[:debug]
 
-  $LOAD_PATH.replace(@config.fetch(:load_path).map { |dir| "#{PREFIX}#{dir}" })
-  Kernel.prepend(KernelPatch)
-  Kernel.singleton_class.prepend(KernelSingletonPatch)
+  $LOAD_PATH.replace(@config.fetch(:load_path).map { |dir| dir.empty? ? ROOT : "#{PREFIX}#{dir}" })
+  install_kernel_methods
   require "stringio" # statically linked
+
+  # What File.open returns for an archive path: its contents in memory,
+  # with the File methods that make sense for them. There is no operating
+  # system file behind it, so asking for one is an IOError, as for a
+  # closed file (logger, for one, probes File.new(io.fileno) this way).
+  class ArchivedFile < StringIO
+    attr_reader :path
+    alias_method :to_path, :path
+
+    def initialize(data, path)
+      super(data)
+      @path = path
+    end
+
+    def fileno = raise(IOError, "#{@path} is inside the executable and has no file descriptor")
+    alias_method :to_i, :fileno
+    def stat = VirtualFS.stat(@path)
+    def size = string.bytesize
+    def mtime = stat.mtime
+    def flock(*) = 0
+    def inspect = "#<#{self.class} #{@path}>"
+  end
   IO.singleton_class.prepend(IOPatch)
   File.singleton_class.prepend(FilePatch)
   Dir.singleton_class.prepend(DirPatch)
 
-  @config.fetch(:env, {}).each { |k, v| ENV[k] = v.gsub("<ROOT>", ROOT) }
+  @config.fetch(:env).each { |name, value| ENV[name] = in_root.(value) }
+
   if @config[:rubygems]
+    # What Ruby's gem_prelude.rb does at startup, which the runtime skips
+    # (--disable=gems) so that it happens only once the archive is readable.
     require "rubygems"
-    Gem.clear_paths
+    %w[error_highlight did_you_mean syntax_suggest/core_ext].each do |feature|
+      require feature
+    rescue LoadError
+      # not packed: the application did not have it loaded at build time
+    end
   end
+
+  Dir.chdir(File.dirname(ENV.fetch("OCRAN_EXECUTABLE"))) if @config[:chdir_exe_dir]
+
+  # RUBYOPT -I and -r (the runtime never reads RUBYOPT itself).
+  $LOAD_PATH.unshift(*@config.fetch(:rubyopt_includes).map(&in_root))
+  @config.fetch(:rubyopt_requires).each { |feature| require in_root.(feature) }
 
   main = "#{PREFIX}#{@config.fetch(:main)}"
   $0 = main
   src = VirtualFS.read(main).force_encoding(Encoding::UTF_8)
   if (i = src.index(/^__END__\r?\n/))
-    data = StringIO.new(src.byteslice(src.index("\n", i) + 1..))
-    Object.const_set(:DATA, data)
+    Object.const_set(:DATA, StringIO.new(src.byteslice(src.index("\n", i) + 1..)))
   end
-  ARGV.unshift(*@config.fetch(:argv, []))
+  ARGV.unshift(*@config.fetch(:argv).map(&in_root))
 end
 
 OcranRuntime.compile($0).eval

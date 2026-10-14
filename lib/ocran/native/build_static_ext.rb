@@ -1,31 +1,37 @@
 # Compiles one C extension (a gem's ext/<name>/ directory) into a static
-# library for the ocran runtime, the way RubyGems would build it - extconf.rb
-# then make - except that mkmf targets the cross-built runtime and produces
-# a .a instead of a .so.
+# library for an ocran native runtime, the way RubyGems would build it -
+# extconf.rb then make - except that mkmf targets the runtime and produces
+# a static library instead of a DLL.
 #
-# Cross builds (MinGW) run it under the build host's Ruby with the cross
-# build's fake.rb, which makes RbConfig describe the Windows target; native
-# builds (mswin) under the freshly built and installed Ruby itself:
+# Runs in a process of its own (mkmf is global state), under a Ruby whose
+# RbConfig describes the runtime: for MinGW, any Ruby with the runtime's
+# <arch>-fake.rb loaded (Ruby's own cross-build mechanism); for mswin, the
+# runtime build's own Ruby.
 #
-#   ruby --disable=gems -I$BUILD -r$BUILD/<arch>-fake native/build-static-ext.rb \
-#        RUBY_BUILD_DIR RUBY_SRC_DIR EXT_SRC_DIR OUT_DIR [extconf args...]
+#   ruby --disable=gems -I SDK -r SDK/<arch>-fake build_static_ext.rb \
+#        INCLUDE_DIR ARCH_INCLUDE_DIR EXT_SRC_DIR OUT_DIR [extconf args...]
 #
-# Prints "<feature> <Init function> <archive> <libs>" on success, for the
-# runtime link (see build-runtime.sh).
+# INCLUDE_DIR holds ruby.h, ARCH_INCLUDE_DIR ruby/config.h. The compiler is
+# RbConfig's, or OCRAN_NATIVE_CC (with the matching ar and ranlib) when the
+# build host names it differently. Prints
+#   <feature> <Init function> <archive> <comma-separated libs>
+# on success, for the runtime link (Ocran::NativeSdk#link).
 require "rbconfig"
 require "fileutils"
 
-build, src, ext_src, out, *extconf_args = ARGV
-abort "usage: see header" unless out
+include_dir, arch_include_dir, ext_src, out, *extconf_args = ARGV
+abort "usage: see #{__FILE__}" unless out
 
-# Headers and libruby come from the build tree, not from an installation.
-arch = RbConfig::CONFIG["arch"]
 {
-  "rubyhdrdir" => File.join(src, "include"),
-  "rubyarchhdrdir" => File.join(build, ".ext/include", arch),
-  "libdir" => build,
-  "prefix" => build,
+  "rubyhdrdir" => File.expand_path(include_dir),
+  "rubyarchhdrdir" => File.expand_path(arch_include_dir),
 }.each { |k, v| RbConfig.fire_update!(k, v) }
+
+if (cc = ENV["OCRAN_NATIVE_CC"]) && !cc.empty?
+  tool = ->(name) { cc.sub(/(?:gcc|cc|clang)(\.exe)?\z/) { "#{name}#{$1}" } }
+  { "CC" => cc, "CPP" => "#{cc} -E", "LDSHARED" => "#{cc} -shared", "AR" => tool.("ar"),
+    "RANLIB" => tool.("ranlib") }.each { |k, v| RbConfig.fire_update!(k, v) }
+end
 
 # Built inside a copy of the whole gem, as RubyGems does: extconf.rb files
 # may reach into the gem's lib/ (racc's does).

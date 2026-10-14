@@ -1,8 +1,9 @@
-# Native no-extraction runtime (prototype)
+# Native no-extraction runtime
 
 A single Windows `.exe` that runs a Ruby application **without extracting
-anything**: no temp directory, no DLLs written to disk. Not yet wired into
-the `ocran` CLI.
+anything**: no temp directory, no DLLs written to disk. Built with
+`ocran app.rb --native <runtime-dir>` (see the main README); this directory
+holds how the runtime is built and how it works.
 
 ```
 app.exe = ocran-runtime.exe  +  ZIP archive (the application)
@@ -25,7 +26,7 @@ app.exe = ocran-runtime.exe  +  ZIP archive (the application)
    never be read as interpreter options, and `RUBYOPT` is ignored.
 2. `stage0.rb` (compiled into the runtime) clears `$LOAD_PATH`, indexes the
    archive and evaluates `ocran/boot.rb` from it.
-3. `boot.rb` (in the archive) serves the archive as a read-only tree rooted
+3. `boot.rb` (`lib/ocran/native/boot.rb`, packed by ocran) serves the archive as a read-only tree rooted
    at the exe's own path (`C:/apps/tool.exe/src/app.rb`), sets `$LOAD_PATH`
    from `ocran/config.rb`, and runs the main script.
 
@@ -34,12 +35,40 @@ cannot be shadowed by a planted file. Whatever `boot.rb` does not intercept
 fails with `ENOTDIR` instead of silently reading something else. It
 intercepts `require`, `require_relative`, `load`, `Kernel#open`, and a
 fixed list of read-only `File`/`IO`/`Dir` queries (see the header of
-`boot.rb`).
+`boot.rb`), and then loads RubyGems, so gems activate as usual.
 
-One MRI patch (`patches/ruby-require-dispatch.patch`): C-level `rb_require`
-dispatches through `Kernel#require`, as `autoload` already does, so C
-extensions and core (`String#unicode_normalize`, json, psych) see the
-archive too.
+MRI patches (`patches/`, `mswin/patches/`), each a few lines:
+
+* `ruby-require-dispatch.patch`: C-level `rb_require` dispatches through
+  `Kernel#require`, as `autoload` already does, so C extensions and core
+  (`String#unicode_normalize`, json, psych) see the archive too.
+* `ruby-openssl-winstore.patch`: `OpenSSL::X509::Store#set_default_paths`
+  also loads OpenSSL's Windows certificate store (`org.openssl.winstore://`,
+  OpenSSL 3.2+), so certificates verify as they do for Windows itself,
+  without a CA file. This is what openssl-win-root does by exporting the
+  ROOT store to PEM files on disk; OpenSSL looks the certificates up in
+  the store directly, in memory.
+* `mswin/ruby-win32-static-crt.patch`: see below.
+
+OpenSSL's compiled-in directories (configuration, certificates, engines)
+are set to its Windows defaults under `C:\Program Files`, which only
+administrators can write. Left at the build prefix they would resolve to
+`C:\root\...` on the user's machine, a directory any user can create.
+
+## C extensions of the application's gems
+
+A gem's C extension cannot be loaded from inside the executable, so it is
+linked into it. The runtime directory carries an SDK (`sdk/`, written by
+`make-sdk.rb` / `mswin/make-sdk.rb`): the runtime's link inputs and link
+command (`link.args`), Ruby's headers, the target's `rbconfig.rb` (and for
+MinGW Ruby's cross-build `<arch>-fake.rb`), the static C libraries, and the
+gem extensions already linked in. At packaging time ocran builds each
+missing extension from the gem's source with
+`lib/ocran/native/build_static_ext.rb` (extconf.rb and make, as RubyGems
+would, but to a static library) and links a runtime with it registered
+(`Ocran::NativeSdk#link`). The runtime's own build uses the same code.
+Tested: bcrypt (MinGW, packaged on Linux and on Windows with MSYS2 GCC 16
+against an SDK built with Debian's GCC 14) and jaro_winkler (mswin).
 
 ## Building
 
@@ -54,12 +83,15 @@ reproducible output. Results in `<build-dir>/out`:
 | | |
 |---|---|
 | `ocran-runtime.exe` | the runtime |
-| `lib/ruby/` | standard library and bundled gems (packed into the archive) |
-| `kit/` | the runtime's link inputs, for re-linking with an application's gem C extensions (`link-runtime.rb`) |
+| `lib/ruby/` | standard library and bundled gems (packed from here) |
+| `runtime.json` | version, architecture, load path, linked-in extensions, gems, SHA-256 of the exe (`write-runtime-info.rb`) |
+| `sdk/` | for linking more C extensions in at packaging time (see below) |
 
-Gem C extensions are compiled to static archives by `build-static-ext.rb`
-(extconf.rb + make against the cross build, as RubyGems would) and linked
-in with `link-runtime.rb`.
+`out/` minus `exts/` and `stage/` is the runtime directory to pass to
+`ocran --native`.
+
+The bundled gems' C extensions (fiddle, bigdecimal, racc, win32ole) are
+built and linked in the same way as an application's (see below).
 
 ### mswin (MSVC Build Tools)
 
@@ -68,7 +100,9 @@ The same runtime can be built with Visual Studio Build Tools, on Windows:
 ```
 native\mswin\build-ruby.cmd ROOT native\patches native\mswin\patches
 ROOT\stage\bin\ruby.exe native\mswin\build-gemexts.rb ROOT
-ruby native\mswin\link-runtime.rb ROOT\build ROOT\src out.exe ROOT\exts\*.line
+ROOT\stage\bin\ruby.exe native\mswin\make-sdk.rb ROOT\build ROOT\src ROOT\deps\installed\x64-windows-static ROOT\sdk ROOT\exts\*.line
+ROOT\stage\bin\ruby.exe native\link-runtime.rb ROOT\sdk x64-mswin64_140 runtime.exe
+native\mswin\make-runtime-dir.cmd ROOT runtime.exe RUNTIME_DIR
 ```
 
 `ROOT\src` is a Ruby checkout, `ROOT\baseruby` an official mswin build of
@@ -76,7 +110,7 @@ the same revision (from ruby-lang.org/pub/ruby/binaries/mswin64, checked
 against its `.sha256`), and `ROOT\deps` holds vcpkg's
 `x64-windows-static` libffi, libyaml, openssl and zlib (`vcpkg.json` with a
 pinned `builtin-baseline`). Gem extensions are built with
-`build-static-ext.rb`, run by the freshly installed Ruby.
+`mswin/build-gemexts.rb`, run by the freshly installed Ruby.
 
 Everything is compiled with **`-MT` (static CRT)**: the runtime imports only
 Windows system DLLs - not even `vcruntime140.dll` or the UCRT - and runs on
@@ -91,17 +125,28 @@ The official mswin zip itself cannot be used as the runtime: its extensions
 are DLLs, its C libraries are separate DLLs, and it needs the VC++
 redistributable.
 
-## Trying it
+## Using it
 
 ```
-ruby native/pack-prototype.rb out/ocran-runtime.exe out/lib/ruby/4.0.0 app.exe app.rb [files...]
+ocran app.rb --native RUNTIME_DIR
 ```
+
+Packaging works on Windows (the normal case: dependency detection sees
+Windows-only libraries) and on Linux/macOS for applications that do not
+need them; the build host's Ruby must have the runtime's API version.
 
 ## Known gaps
 
-* Not integrated into `ocran` yet: the prototype packs the whole stdlib
-  rather than the detected dependencies, and does not activate RubyGems.
-* Third-party gems with C extensions need re-linking the runtime at
-  packaging time (needs the mingw-w64 UCRT toolchain).
-* No windowed (`rubyw`) variant yet.
+* A gem whose C extension needs a C library the SDK does not have (beyond
+  zlib, OpenSSL, libyaml, libffi) needs that library added to the runtime
+  build first; nokogiri and tiny_tds are such gems.
+* OpenSSL cannot read a CA file packed inside the executable
+  (`SSL_CERT_FILE`); the Windows store makes one unnecessary, and a custom
+  one can be shipped next to the executable.
+* `--icon` and the version-resource options are not applied to the
+  runtime yet.
 * Writes to archive paths through `File.write` report `ENOENT`, not `EROFS`.
+* Ruby bug found on the way: once a `super` call site in a prepended module
+  has run, a later redefinition of the method in the module it was
+  prepended to is not seen by it. That is why boot.rb defines Kernel's
+  methods in Kernel itself (like RubyGems) instead of prepending.

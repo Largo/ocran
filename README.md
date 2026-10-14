@@ -218,6 +218,51 @@ goes through these steps in order of impact.
 
 #### Experimental options:
 
+* `--native <runtime-dir>`: Build a single Windows executable that runs the
+  application **without extracting anything**: no temporary directory, no
+  DLLs written to disk. The executable is a statically linked Ruby (the
+  *native runtime*) with the application appended as a plain ZIP archive.
+
+  ```
+  ocran app.rb --native path/to/runtime     # -> app.exe
+  unzip -l app.exe                          # lists exactly what will run
+  unzip -p app.exe ocran/manifest.sha256    # SHA-256 of the runtime and every file
+  ```
+
+  The runtime directory holds `ocran-runtime.exe`, its own standard
+  library and bundled gems (`lib/ruby/`) and `runtime.json`; build one with
+  `native/build-runtime.sh` (MinGW, on Linux) or the scripts in
+  `native/mswin/` (Visual Studio Build Tools). Either imports only DLLs
+  that ship with Windows and needs no VC++ redistributable. See
+  [native/README.md](native/README.md) for how it works and how it is
+  built.
+
+  Dependency detection runs as usual, under the build host's Ruby, which
+  must have the runtime's API version (e.g. 4.0.0). The standard library
+  and the gems the runtime ships come from the runtime, so that they match
+  its interpreter; OCRAN says when one replaces a different version on the
+  build host. C extensions are linked into the executable, since nothing
+  can be loaded from inside it: those the runtime has (openssl, psych,
+  zlib, fiddle, win32ole, bigdecimal, ...) are used as they are; any other
+  gem's extension is built from the gem's source against the runtime's
+  SDK (`sdk/` in the runtime directory) and linked into a runtime of the
+  application's own. That needs a compiler for the runtime: for a MinGW
+  runtime `x86_64-w64-mingw32ucrt-gcc` on Linux, or on Windows
+  RubyInstaller's MSYS2 GCC named with `OCRAN_NATIVE_CC=gcc` (with
+  `ucrt64\bin` and `usr\bin` on PATH); for an mswin runtime `cl` and
+  `nmake` of Visual Studio Build Tools, from a developer prompt. A
+  precompiled platform gem ships no source; install the source gem
+  (`gem install <gem> --platform ruby`).
+
+  OpenSSL verifies certificates against the Windows certificate store, as
+  Windows itself does - no CA file is packed or needed. The application reads its own files as
+  usual (`require`, `require_relative`, `autoload`, `File.read`,
+  `Dir.glob`, `__dir__`, `DATA`); their paths lie inside the executable
+  (`C:/app/tool.exe/src/tool.rb`) and cannot be written. Files next to the
+  executable are found through `ENV["OCRAN_EXECUTABLE"]`. `--windows` makes
+  a GUI-subsystem executable; `--icon`, `--dll` and the output-directory
+  formats do not apply. Experimental.
+
 * `--cosmo-ruby <ruby.com>`: Package a cosmopolitan-built Ruby (an APE)
   as the bundled interpreter instead of the host Ruby. The produced
   `.com` contains no host-native code at all and runs on Linux, Windows
