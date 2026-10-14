@@ -68,9 +68,9 @@ module Ocran
       module_function
 
       # The level attribute of a requestedExecutionLevel element, wherever it
-      # sits among the element's attributes, or an XML comment (so an element
-      # that is commented out is skipped).
-      REQUESTED_EXECUTION_LEVEL = /<!--.*?-->|(<(?:[\w.-]+:)?requestedExecutionLevel\b[^>]*?\slevel\s*=\s*)(["'])[^"']*\2/m
+      # sits among the element's attributes, or an XML comment or CDATA section
+      # (so element-shaped text inside one is skipped).
+      REQUESTED_EXECUTION_LEVEL = /<!--.*?-->|<!\[CDATA\[.*?\]\]>|(<(?:[\w.-]+:)?requestedExecutionLevel\b[^>]*?\slevel\s*=\s*)(["'])[^"']*\2/m
 
       # The RT_MANIFEST XML: the given manifest (or the stub's baseline one)
       # with its requestedExecutionLevel replaced when execution_level is given.

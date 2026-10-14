@@ -2041,15 +2041,17 @@ class TestOcran < Minitest::Test
     assert_includes xml, 'level="highestAvailable"'
 
     # Only the active requestedExecutionLevel's level changes, not an earlier
-    # level attribute or a commented-out element.
+    # level attribute, a commented-out element or one in a CDATA section.
     other = custom.sub("<trustInfo", %(<dependency level="keep"/>\n  <trustInfo))
                   .sub(%(<requestedExecutionLevel level="asInvoker"/>),
                        %(<requestedExecutionLevel uiAccess="false" level='asInvoker'/>))
                   .sub("<requestedPrivileges>",
-                       %(<requestedPrivileges>\n<!-- <requestedExecutionLevel level="asInvoker"/> -->))
+                       %(<requestedPrivileges>\n<!-- <requestedExecutionLevel level="asInvoker"/> -->) +
+                       %(\n<![CDATA[<requestedExecutionLevel level="asInvoker"/>]]>))
     xml = build.manifest(other, "requireAdministrator")
     assert_includes xml, %(<dependency level="keep"/>)
     assert_includes xml, %(<!-- <requestedExecutionLevel level="asInvoker"/> -->)
+    assert_includes xml, %(<![CDATA[<requestedExecutionLevel level="asInvoker"/>]]>)
     assert_includes xml, %(<requestedExecutionLevel uiAccess="false" level='requireAdministrator'/>)
 
     assert_raises(RuntimeError) { build.manifest(nil, "root") }
