@@ -120,8 +120,9 @@ module Ocran
     end
 
     # Compiles the C extension in +ext_dir+ (a gem's ext/<name>/, with its
-    # extconf.rb) to a static library under +work_dir+.
-    def build_extension(ext_dir, work_dir, *extconf_args)
+    # extconf.rb) to a static library under +work_dir+. +gem_path+: more
+    # gem directories for the gems extconf.rb itself uses.
+    def build_extension(ext_dir, work_dir, *extconf_args, gem_path: [])
       pkgconfig = File.join(work_dir.to_s + ".pkgconfig")
       FileUtils.mkdir_p(pkgconfig)
       Dir[(@dir / "deps/lib/pkgconfig/*.pc").to_s].each do |pc|
@@ -138,7 +139,7 @@ module Ocran
               "PKG_CONFIG_LIBDIR" => pkgconfig, "PKG_CONFIG_PATH" => "",
               # Build-time gems extconf.rb uses (nokogiri: mini_portile2):
               # the build host's, which the target's RbConfig would hide.
-              "GEM_HOME" => Gem.dir, "GEM_PATH" => Gem.path.join(File::PATH_SEPARATOR) }
+              "GEM_HOME" => Gem.dir, "GEM_PATH" => (gem_path + Gem.path).join(File::PATH_SEPARATOR) }
       cmd = [RbConfig.ruby, "--disable=gems", "-I", @dir.to_s, *(fake ? ["-r", fake] : []), BUILD_STATIC_EXT,
              (@dir / "include").to_s, (@dir / "include" / @arch).to_s, ext_dir.to_s, work_dir.to_s, *extconf_args]
       out, status = Open3.capture2e(env, *cmd)

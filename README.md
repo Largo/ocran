@@ -272,8 +272,12 @@ goes through these steps in order of impact.
   Linux runtime `musl-gcc`; for macOS clang. Gems that
   need a C library get the one the SDK provides: nokogiri uses its
   libxml2/libxslt, tiny_tds its FreeTDS. A precompiled platform gem is
-  built from the C sources it carries (nokogiri's and tiny_tds' do); one
-  without them needs the source gem (`gem install <gem> --platform ruby`).
+  built from its source gem of the same version, which OCRAN fetches from
+  the configured gem sources into `~/.cache/ocran/gems`, together with the
+  gems its build needs that are not installed (nokogiri's extconf.rb needs
+  mini_portile2), installed there for the build only. Failing that, it is
+  built from the C sources it carries, if any (`gem install <gem>
+  --platform ruby` installs the source gem).
 
   **Licenses:** the executable is statically linked - Ruby, OpenSSL and
   the other libraries are inside it, and their license texts are packed
