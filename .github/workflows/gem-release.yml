@@ -82,7 +82,8 @@ jobs:
       - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         with:
           ruby-version: '4.0'
-          bundler-cache: true
+          # No bundler-cache: gem build reads only the gemspec, and installing
+          # the Gemfile would compile fxruby, which needs libfox-1.6-dev.
 
       - name: Build source gem
         run: gem build ocran-source.gemspec
