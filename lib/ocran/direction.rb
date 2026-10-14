@@ -540,7 +540,7 @@ module Ocran
       end
 
       # Windows-only: Add detected DLLs
-      if Gem.win_platform? && @option.auto_detect_dlls? && !@option.native?
+      if Gem.win_platform? && @option.auto_detect_dlls? && !@option.static_runtime?
         # The Windows loader resolves the imports of a native extension from
         # the extension's own directory, the application directory of the
         # packed ruby.exe (bin) plus its SxS assembly (ruby_builtin_dlls),
@@ -624,7 +624,7 @@ module Ocran
       # libraries and the loader are never bundled - they must come from the
       # target system. Ruby native extensions are packed as features, not
       # here. Not needed with --cosmo-ruby: the APE payload is static.
-      if RUBY_PLATFORM.include?("linux") && @option.auto_detect_dlls? && !@option.cosmo_ruby && !@option.native?
+      if RUBY_PLATFORM.include?("linux") && @option.auto_detect_dlls? && !@option.cosmo_ruby && !@option.static_runtime?
         feature_set = features.to_set
         feature_realpaths = features.filter_map { |f| f.realpath rescue nil }.to_set
         # Ruby native extensions live in these directories and are packed as
@@ -1550,31 +1550,31 @@ module Ocran
       say "Finished building #{output} (#{output.size} bytes, #{builder.data_size} bytes of application data)"
     end
 
-    # --native: the application appended as a ZIP archive to a statically
-    # linked Windows Ruby (see NativeZipBuilder).
-    def build_native_exe
-      require_relative "native_zip_builder"
+    # --static-runtime: the application appended as a ZIP archive to a statically
+    # linked Windows Ruby (see StaticRuntimeBuilder).
+    def build_static_runtime_exe
+      require_relative "static_runtime_builder"
 
-      runtime = NativeRuntime.load(@option.native_runtime)
+      runtime = StaticRuntime.load(@option.static_runtime)
       runtime.verify!
       host_api = RbConfig::CONFIG["ruby_version"]
       # Gems, default gem specs and the host files the runtime does not
       # replace were resolved for the build host's Ruby; they only fit a
       # runtime with the same API version.
       unless host_api == runtime.ruby_api_version
-        raise "The native runtime in #{runtime.dir} is Ruby #{runtime.ruby_version} (API #{runtime.ruby_api_version}), " \
+        raise "The static runtime in #{runtime.dir} is Ruby #{runtime.ruby_version} (API #{runtime.ruby_api_version}), " \
               "but this is Ruby #{RUBY_VERSION} (API #{host_api}): package with a Ruby #{runtime.ruby_api_version.sub(/\.0\z/, "")}"
       end
       if RUBY_VERSION != runtime.ruby_version
-        warning "Dependency detection ran under Ruby #{RUBY_VERSION}; the native runtime is Ruby #{runtime.ruby_version}"
+        warning "Dependency detection ran under Ruby #{RUBY_VERSION}; the static runtime is Ruby #{runtime.ruby_version}"
       end
-      say "Packaging for the native runtime #{runtime.executable} (Ruby #{runtime.ruby_version} #{runtime.arch})"
+      say "Packaging for the static runtime #{runtime.executable} (Ruby #{runtime.ruby_version} #{runtime.arch})"
       if @option.extra_dlls.any?
-        warning "--dll has no effect with --native: a DLL cannot be loaded from inside the executable"
+        warning "--dll has no effect with --static-runtime: a DLL cannot be loaded from inside the executable"
       end
 
       output = @option.output_executable
-      NativeZipBuilder.new(output,
+      StaticRuntimeBuilder.new(output,
                            runtime: runtime,
                            host_ruby_api_version: host_api,
                            host_arch: RbConfig::CONFIG["arch"],
@@ -1582,7 +1582,7 @@ module Ocran
                            chdir_exe_dir: @option.chdir_exe_dir?,
                            windowed: @option.windowed?,
                            debug_mode: @option.enable_debug_mode?,
-                           dlls: @option.native_dlls,
+                           dlls: @option.runtime_dlls,
                            resources: { icon_path: @option.icon_filename&.to_s, **pe_resource_options },
                            &to_proc) => builder
 

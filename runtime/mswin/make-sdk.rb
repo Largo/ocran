@@ -1,18 +1,18 @@
-# The mswin counterpart of native/make-sdk.rb: captures what is needed to
+# The mswin counterpart of runtime/make-sdk.rb: captures what is needed to
 # link the runtime (again, with more C extensions) into an SDK directory.
 # Run by the Ruby build-ruby.cmd installed, inside a vcvars64 environment:
 #
-#   ruby native\mswin\make-sdk.rb BUILD_DIR SRC_DIR DEPS_DIR SDK_DIR [EXT_LINE_FILE...]
+#   ruby runtime\mswin\make-sdk.rb BUILD_DIR SRC_DIR DEPS_DIR SDK_DIR [EXT_LINE_FILE...]
 #
 # DEPS_DIR is vcpkg's x64-windows-static tree. Then link the runtime with
-#   ruby native\link-runtime.rb SDK_DIR ARCH ocran-runtime.exe
+#   ruby runtime\link-runtime.rb SDK_DIR ARCH ocran-runtime.exe
 require "fileutils"
 require "rbconfig"
 require "tmpdir"
 
 build, src, deps, sdk, *ext_files = ARGV.map { |a| File.expand_path(a.tr("\\", "/")) }
 abort "usage: make-sdk.rb BUILD_DIR SRC_DIR DEPS_DIR SDK_DIR [EXT_LINE_FILE...]" unless sdk
-native = File.expand_path("..", __dir__)
+recipes = File.expand_path("..", __dir__)
 FileUtils.rm_rf(sdk)
 FileUtils.mkdir_p(sdk)
 
@@ -34,10 +34,10 @@ FileUtils.cp_r(File.dirname(File.dirname(arch_hdr)), File.join(sdk, "include", a
 
 # ocran_main.obj, with stage0.rb compiled in, built with the runtime's flags.
 Dir.mktmpdir do |tmp|
-  system(RbConfig.ruby, File.join(native, "gen-stage0-header.rb"), File.join(native, "stage0.rb"),
+  system(RbConfig.ruby, File.join(recipes, "gen-stage0-header.rb"), File.join(recipes, "stage0.rb"),
          File.join(tmp, "stage0.h"), exception: true)
   system("cl", "-nologo", "-MT", "-O2", "-I#{tmp}", "-I#{File.join(sdk, "include", arch)}",
-         "-I#{File.join(sdk, "include")}", "-c", File.join(native, "ocran_main.c"),
+         "-I#{File.join(sdk, "include")}", "-c", File.join(recipes, "ocran_main.c"),
          "-Fo#{File.join(sdk, "ocran_main.obj")}", exception: true)
 end
 

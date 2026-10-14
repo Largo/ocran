@@ -1,12 +1,12 @@
-# Licenses and static linking (`--native`)
+# Licenses and static linking (`--static-runtime`)
 
-An executable built with `--native` is **statically linked**: Ruby and the
+An executable built with `--static-runtime` is **statically linked**: Ruby and the
 C libraries below are compiled into the one `.exe`, together with your
 application and the gems it uses. That is what lets it run without
 extracting anything, and it is also what licenses look at: distributing
 the executable means distributing all of these components, combined.
 
-This page lists what is in a native executable and what the licenses ask
+This page lists what is in a `--static-runtime` executable and what the licenses ask
 of whoever distributes it. **It is not legal advice.** If you distribute
 software commercially, or the obligations below are unclear for your
 case, ask someone qualified.
@@ -22,19 +22,20 @@ case, ask someone qualified.
 | libyaml | MIT | always |
 | zlib | zlib | always |
 | libxml2, libxslt | MIT | when an extension uses them (nokogiri) |
-| **GNU libiconv** | **LGPL-2.1-or-later** | when an extension uses it (nokogiri, tiny_tds) |
+| **GNU libiconv** (Windows only; musl has its own iconv) | **LGPL-2.1-or-later** | when an extension uses it (nokogiri, tiny_tds) |
 | **FreeTDS** | **LGPL-2.0-or-later** | when an extension uses it (tiny_tds) |
-| MinGW-w64 runtime (MinGW build) | permissive (public domain, ZPL, MIT) | always |
-| libgcc (MinGW build) | GPL-3.0 with the GCC Runtime Library Exception | always |
+| MinGW-w64 runtime (Windows, MinGW build) | permissive (public domain, ZPL, MIT) | always |
+| musl libc (Linux build) | MIT | always |
+| libgcc (MinGW and Linux builds) | GPL-3.0 with the GCC Runtime Library Exception | always |
 | Microsoft C runtime (mswin build, `-MT`) | Visual Studio license, which permits static linking into your program | always |
 | Your gems' C extensions | their own licenses | when used |
 
-The exact versions are in `native/sources.lock` (MinGW) and
-`native/mswin/vcpkg.json` (mswin).
+The exact versions are in `runtime/sources.lock` (MinGW) and
+`runtime/mswin/vcpkg.json` (mswin).
 
 ## What OCRAN does for you
 
-* Every native executable contains the license texts of the runtime's
+* Every executable built with `--static-runtime` contains the license texts of the runtime's
   components as `ocran/licenses/` inside its archive
   (`unzip -l app.exe "ocran/licenses/*"`), and the license files of the
   gems it packs. That covers the "include the copyright notice and license"
@@ -53,7 +54,7 @@ section 6, simplified):
 1. **Say so and include the license** (OCRAN packs it).
 2. **Provide the library's source code**, or a written offer for it. The
    sources ocran's runtime is built from are pinned with their SHA-256 in
-   `native/sources.lock`.
+   `runtime/sources.lock`.
 3. **Let the user replace the library with a modified version** and still
    run your program.
 
@@ -61,10 +62,10 @@ Condition 3 is the one static linking makes hard: the library is inside
 your executable. There are two ways to meet it:
 
 * **Ship the LGPL libraries as DLLs next to the executable** - which
-  `--native-dll` does:
+  `--runtime-dll` does:
 
   ```
-  ocran app.rb --native RUNTIME --native-dll iconv,sybdb
+  ocran app.rb --static-runtime RUNTIME --runtime-dll iconv,sybdb
   ```
 
   The executable is then linked against `libiconv-2.dll` and
@@ -73,7 +74,7 @@ your executable. There are two ways to meet it:
   simplest to explain. The executable is then no longer a single file:
   ship the DLLs with it, and keep them in the same directory.
 * **Provide the means to relink**: the object code of your program in a
-  form that can be linked again with a modified library. With `--native`
+  form that can be linked again with a modified library. With `--static-runtime`
   that is the application archive inside the executable plus the runtime's
   SDK (`sdk/`), which is what OCRAN links with - but making that usable
   and documented for your users is your responsibility, and it is more
@@ -81,6 +82,13 @@ your executable. There are two ways to meet it:
 
 Only applications that use these libraries are affected: an application
 without nokogiri or tiny_tds contains neither.
+
+**On Linux** the runtime is fully static (musl) and cannot load shared
+libraries, so `--runtime-dll` does not exist there; GNU libiconv is not
+used at all (musl provides iconv), which leaves FreeTDS (tiny_tds) as the
+one LGPL library. Meeting condition 3 for it means providing the means to
+relink, or building that application with OCRAN's default (extracting)
+mode, which keeps libraries as separate files.
 
 ## Other things to check
 

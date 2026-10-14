@@ -1,5 +1,5 @@
 # Compiles one C extension (a gem's ext/<name>/ directory) into a static
-# library for an ocran native runtime, the way RubyGems would build it -
+# library for an ocran static runtime, the way RubyGems would build it -
 # extconf.rb then make - except that mkmf targets the runtime and produces
 # a static library instead of a DLL.
 #
@@ -12,11 +12,11 @@
 #        INCLUDE_DIR ARCH_INCLUDE_DIR EXT_SRC_DIR OUT_DIR [extconf args...]
 #
 # INCLUDE_DIR holds ruby.h, ARCH_INCLUDE_DIR ruby/config.h. The compiler is
-# RbConfig's, or OCRAN_NATIVE_CC (with the matching ar and ranlib) when the
-# build host names it differently; OCRAN_NATIVE_LIBS are appended to $LIBS.
+# RbConfig's, or OCRAN_RUNTIME_CC (with the matching ar and ranlib) when the
+# build host names it differently; OCRAN_RUNTIME_LIBS are appended to $LIBS.
 # Prints
 #   <feature> <Init function> <archive> <comma-separated libs>
-# on success, for the runtime link (Ocran::NativeSdk#link).
+# on success, for the runtime link (Ocran::RuntimeSdk#link).
 require "rbconfig"
 require "fileutils"
 
@@ -28,7 +28,7 @@ abort "usage: see #{__FILE__}" unless out
   "rubyarchhdrdir" => File.expand_path(arch_include_dir),
 }.each { |k, v| RbConfig.fire_update!(k, v) }
 
-if (cc = ENV["OCRAN_NATIVE_CC"]) && !cc.empty?
+if (cc = ENV["OCRAN_RUNTIME_CC"]) && !cc.empty?
   tool = ->(name) { cc.sub(/(?:gcc|cc|clang)(\.exe)?\z/) { "#{name}#{$1}" } }
   { "CC" => cc, "CPP" => "#{cc} -E", "LDSHARED" => "#{cc} -shared", "AR" => tool.("ar"),
     "RANLIB" => tool.("ranlib") }.each { |k, v| RbConfig.fire_update!(k, v) }
@@ -53,9 +53,9 @@ $static = true # after require: loading mkmf resets it
 # iconv, OpenSSL, zlib, Windows system libraries - in link order. mkmf puts
 # $LIBS after the libraries extconf.rb finds, both in its link checks and
 # in the Makefile, which is the order a static link needs.
-$LIBS = [$LIBS, ENV["OCRAN_NATIVE_LIBS"]].compact.join(" ")
+$LIBS = [$LIBS, ENV["OCRAN_RUNTIME_LIBS"]].compact.join(" ")
 # Defines the static libraries' headers need (LIBXSLT_STATIC, ...).
-$CPPFLAGS = [$CPPFLAGS, ENV["OCRAN_NATIVE_CPPFLAGS"]].compact.join(" ")
+$CPPFLAGS = [$CPPFLAGS, ENV["OCRAN_RUNTIME_CPPFLAGS"]].compact.join(" ")
 load "./extconf.rb"
 
 mk = File.read("Makefile")

@@ -4,12 +4,12 @@ require "tmpdir"
 require "json"
 require "digest"
 require "zlib"
-require_relative "../lib/ocran/native_zip_builder"
+require_relative "../lib/ocran/static_runtime_builder"
 
-# Unit tests for Ocran::NativeZipBuilder (--native) against a made-up
+# Unit tests for Ocran::StaticRuntimeBuilder (--static-runtime) against a made-up
 # runtime directory: how the build host's layout is mapped onto the
 # runtime, what ends up in ocran/config.rb, and the archive itself.
-class TestNativeZipBuilder < Minitest::Test
+class TestStaticRuntimeBuilder < Minitest::Test
   HOST_API = "4.0.0"
   HOST_ARCH = "x86_64-linux"
 
@@ -81,11 +81,11 @@ class TestNativeZipBuilder < Minitest::Test
   end
 
   def runtime
-    Ocran::NativeRuntime.load(@runtime_dir)
+    Ocran::StaticRuntime.load(@runtime_dir)
   end
 
   def build(output = File.join(@dir, "app.exe"), **options, &block)
-    builder = Ocran::NativeZipBuilder.new(output, runtime: runtime, host_ruby_api_version: HOST_API,
+    builder = Ocran::StaticRuntimeBuilder.new(output, runtime: runtime, host_ruby_api_version: HOST_API,
                                                   host_arch: HOST_ARCH, **options) do |b|
       block&.call(b)
       b.exec("bin/ruby.exe", "src/app.rb", "a b") unless b.instance_variable_get(:@exec)
@@ -122,7 +122,7 @@ class TestNativeZipBuilder < Minitest::Test
     _, members = build { |b| b.cp(host_file("src/app.rb"), "src/app.rb") }
     exe = File.binread(File.join(@runtime_dir, "ocran-runtime.exe"))
     assert File.binread(File.join(@dir, "app.exe")).start_with?(exe)
-    assert_equal File.binread(Ocran::NativeZipBuilder::BOOT_SCRIPT), members.fetch("ocran/boot.rb")
+    assert_equal File.binread(Ocran::StaticRuntimeBuilder::BOOT_SCRIPT), members.fetch("ocran/boot.rb")
     assert_equal "# host src/app.rb", members.fetch("src/app.rb")
   end
 
@@ -237,7 +237,7 @@ class TestNativeZipBuilder < Minitest::Test
     end
     elf = host_file("gems/gems/tds-1.0-x86_64-linux-gnu/ports/lib/libsybdb.so.5", "\x7FELF....")
     rb = host_file("gems/gems/tds-1.0-x86_64-linux-gnu/lib/tds.rb", "# tds")
-    builder = Ocran::NativeZipBuilder.allocate
+    builder = Ocran::StaticRuntimeBuilder.allocate
     builder.instance_variable_set(:@entries, {
       "gems/specifications/tds-1.0-x86_64-linux-gnu.gemspec" => Pathname(host_file("spec", "x")),
       "gems/gems/tds-1.0-x86_64-linux-gnu/lib/tds.rb" => Pathname(rb),
@@ -251,6 +251,37 @@ class TestNativeZipBuilder < Minitest::Test
     assert_equal ["gems/gems/tds-1.0/lib/tds.rb", "gems/specifications/tds-1.0.gemspec"], entries.keys.sort
     assert_match(/s\.name = "tds"/, File.read(entries["gems/specifications/tds-1.0.gemspec"]))
     refute_match(/x86_64-linux/, File.read(entries["gems/specifications/tds-1.0.gemspec"]))
+  end
+
+  def linux_runtime!
+    info = JSON.parse(File.read(File.join(@runtime_dir, "runtime.json")))
+    exe = File.join(@runtime_dir, "ocran-runtime")
+    File.rename(File.join(@runtime_dir, "ocran-runtime.exe"), exe)
+    info.merge!("os" => "linux", "arch" => "x86_64-linux-musl", "executable" => "ocran-runtime")
+    File.write(File.join(@runtime_dir, "runtime.json"), JSON.generate(info))
+  end
+
+  def test_linux_runtime_joins_paths_with_colons_and_skips_windows_parts
+    linux_runtime!
+    runtime_file("lib/ruby/4.0.0/win32/registry.rb", "# win32")
+    _, members = build do |b|
+      b.cp(host_file("src/app.rb"), "src/app.rb")
+      b.export("GEM_PATH", ["|/gems", "|/lib/ruby/gems/4.0.0"].join(File::PATH_SEPARATOR))
+    end
+    assert_equal "<ROOT>/gems:<ROOT>/lib/ruby/gems/4.0.0", config(members)[:env]["GEM_PATH"]
+    refute members.key?("lib/ruby/4.0.0/win32/registry.rb")
+  end
+
+  def test_windows_only_options_are_refused_for_a_linux_runtime
+    linux_runtime!
+    error = assert_raises(RuntimeError) { build(windowed: true) { |b| b.cp(host_file("src/app.rb"), "src/app.rb") } }
+    assert_match(/--windows applies to Windows runtimes/, error.message)
+    error = assert_raises(RuntimeError) do
+      build(resources: { icon_path: "app.ico" }) { |b| b.cp(host_file("src/app.rb"), "src/app.rb") }
+    end
+    assert_match(/--icon and the version-resource options apply to Windows runtimes/, error.message)
+    error = assert_raises(RuntimeError) { build(dlls: ["sybdb"]) { |b| b.cp(host_file("src/app.rb"), "src/app.rb") } }
+    assert_match(/fully static and cannot load shared libraries/, error.message)
   end
 
   def test_manifest_lists_every_file_with_its_hash

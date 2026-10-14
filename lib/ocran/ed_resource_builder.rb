@@ -26,7 +26,7 @@ module Ocran
 
     # Builds the binary blobs (VS_VERSIONINFO, RT_STRING bundles) that Windows
     # expects. All structures are little-endian.
-    # Shared with the --native resource writer (pe_resources.rb), which
+    # Shared with the --static-runtime resource writer (pe_resources.rb), which
     # runs on any build host; ed_resource.rb needs Windows.
     EXECUTION_LEVELS = %w[asInvoker highestAvailable requireAdministrator].freeze
 

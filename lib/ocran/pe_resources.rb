@@ -5,7 +5,7 @@ module Ocran
   # Reads and rewrites the resources of a PE executable in pure Ruby, so that
   # icons and version information can be set on any build host - the
   # Windows API OCRAN uses for the stub (BeginUpdateResource) exists only on
-  # Windows. Used for --native, whose executable is a copy of the runtime.
+  # Windows. Used for --static-runtime, whose executable is a copy of the runtime.
   #
   # The resource tree is a Hash: type => { name => { language => data } },
   # where types and names are Integers (IDs) or Strings. #write puts the

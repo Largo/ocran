@@ -1,4 +1,4 @@
-# ocran native runtime, stage 0. Compiled into the runtime executable and
+# ocran static runtime, stage 0. Compiled into the runtime executable and
 # run (as `ruby -e`) before anything else. Nothing is loaded from disk
 # here: $LOAD_PATH is cleared first so a file planted next to the
 # executable can never be picked up.
@@ -38,15 +38,20 @@ module OcranRuntime
     end
 
     def index
-      # The archive ends where the Authenticode certificate table starts
-      # (a signer appends it after our data), otherwise at end of file.
-      @io.pos = 0x3c
-      pe = @io.read(4).unpack1("V")
-      @io.pos = pe + 24
-      ddir = pe + 24 + (@io.read(2).unpack1("v") == 0x20b ? 112 : 96)
-      @io.pos = ddir + 4 * 8 # IMAGE_DIRECTORY_ENTRY_SECURITY
-      cert_offset, = @io.read(8).unpack("VV")
-      stop = cert_offset.zero? ? @io.size : cert_offset
+      # The archive ends at the end of the file - or, in a signed Windows
+      # executable, where the Authenticode certificate table starts (a
+      # signer appends it after our data).
+      stop = @io.size
+      @io.pos = 0
+      if @io.read(2) == "MZ"
+        @io.pos = 0x3c
+        pe = @io.read(4).unpack1("V")
+        @io.pos = pe + 24
+        ddir = pe + 24 + (@io.read(2).unpack1("v") == 0x20b ? 112 : 96)
+        @io.pos = ddir + 4 * 8 # IMAGE_DIRECTORY_ENTRY_SECURITY
+        cert_offset, = @io.read(8).unpack("VV")
+        stop = cert_offset unless cert_offset.zero?
+      end
 
       tail_start = [stop - 65_557, 0].max
       @io.pos = tail_start
