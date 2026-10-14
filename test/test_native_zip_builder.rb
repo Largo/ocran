@@ -225,6 +225,34 @@ class TestNativeZipBuilder < Minitest::Test
     assert_equal ["json"], cfg[:rubyopt_requires]
   end
 
+  # A precompiled platform gem's packed copy becomes a platform "ruby"
+  # gem, and the binaries it carries for its platform are dropped.
+  def test_platform_gem_is_packed_as_a_ruby_platform_gem
+    spec = Gem::Specification.new do |s|
+      s.name = "tds"
+      s.version = "1.0"
+      s.platform = "x86_64-linux-gnu"
+      s.summary = "x"
+      s.authors = ["x"]
+    end
+    elf = host_file("gems/gems/tds-1.0-x86_64-linux-gnu/ports/lib/libsybdb.so.5", "\x7FELF....")
+    rb = host_file("gems/gems/tds-1.0-x86_64-linux-gnu/lib/tds.rb", "# tds")
+    builder = Ocran::NativeZipBuilder.allocate
+    builder.instance_variable_set(:@entries, {
+      "gems/specifications/tds-1.0-x86_64-linux-gnu.gemspec" => Pathname(host_file("spec", "x")),
+      "gems/gems/tds-1.0-x86_64-linux-gnu/lib/tds.rb" => Pathname(rb),
+      "gems/gems/tds-1.0-x86_64-linux-gnu/ports/lib/libsybdb.so.5" => Pathname(elf),
+    })
+    builder.instance_variable_set(:@renamed_gems, {})
+    builder.instance_variable_set(:@skipped, Hash.new { |h, k| h[k] = [] })
+    builder.instance_variable_set(:@data_size, 0)
+    builder.send(:use_as_ruby_platform_gem, spec, @dir)
+    entries = builder.instance_variable_get(:@entries)
+    assert_equal ["gems/gems/tds-1.0/lib/tds.rb", "gems/specifications/tds-1.0.gemspec"], entries.keys.sort
+    assert_match(/s\.name = "tds"/, File.read(entries["gems/specifications/tds-1.0.gemspec"]))
+    refute_match(/x86_64-linux/, File.read(entries["gems/specifications/tds-1.0.gemspec"]))
+  end
+
   def test_manifest_lists_every_file_with_its_hash
     _, members = build { |b| b.cp(host_file("src/app.rb"), "src/app.rb") }
     manifest = members.fetch("ocran/manifest.sha256")

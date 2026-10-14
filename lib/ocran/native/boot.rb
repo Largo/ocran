@@ -170,6 +170,21 @@ module OcranRuntime
       nil
     end
 
+    # Load-path-relative names an absolute archive path may be required by:
+    # C:/app.exe/lib/ruby/gems/4.0.0/gems/nokogiri-1.19.4/lib/nokogiri/nokogiri
+    # is nokogiri/nokogiri.
+    def linked_feature_candidates(feature)
+      feature = feature.to_path if feature.respond_to?(:to_path)
+      return [] unless feature.is_a?(String) && File.absolute_path?(feature)
+
+      path = VirtualFS.vpath(feature) or return []
+      path = path.sub(/\.(so|dll)\z/, "")
+      $LOAD_PATH.filter_map do |dir|
+        dir = VirtualFS.vpath(dir) or next
+        path.delete_prefix("#{dir}/") if path.start_with?("#{dir}/")
+      end.uniq
+    end
+
     def require_virtual(path)
       synchronize do
         return false if @loaded[path] || $LOADED_FEATURES.include?(path)
@@ -206,7 +221,19 @@ module OcranRuntime
       # ends in gem_original_require and keeps one that already exists.
       def gem_original_require(feature)
         archived = OcranRuntime.resolve(feature)
-        archived ? OcranRuntime.require_virtual(archived) : OcranRuntime::RUBY_REQUIRE.bind_call(self, feature)
+        return OcranRuntime.require_virtual(archived) if archived
+
+        OcranRuntime::RUBY_REQUIRE.bind_call(self, feature)
+      rescue LoadError => e
+        # require_relative of a C extension (nokogiri, tiny_tds) asks for an
+        # absolute path inside the archive; it is linked into the runtime
+        # under its feature name, relative to the load path.
+        OcranRuntime.linked_feature_candidates(feature).each do |linked|
+          return OcranRuntime::RUBY_REQUIRE.bind_call(self, linked)
+        rescue LoadError
+          next
+        end
+        raise e
       end
 
       def require(feature) = gem_original_require(feature)

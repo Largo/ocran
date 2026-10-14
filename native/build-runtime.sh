@@ -49,7 +49,7 @@ fetch() {
     echo "checksum mismatch for $file" >&2; exit 1; }
   rm -rf "$WORK/$name"
   mkdir -p "$WORK/$name"
-  tar -xzf "$file" -C "$WORK/$name" --strip-components=1
+  tar -xf "$file" -C "$WORK/$name" --strip-components=1
 }
 
 build_zlib() {
@@ -110,6 +110,57 @@ add_import_shim() {
     awk '{ printf "extern char %s;\nvoid *__imp_%s = &%s;\n", $1, $1, $1 }' > ocran_imp_shim.c
   $HOST-gcc $CFLAGS_COMMON -c ocran_imp_shim.c -o ocran_imp_shim.o
   $HOST-ar rs "$1" ocran_imp_shim.o
+}
+
+# GNU libiconv (LGPL-2.1) and FreeTDS (LGPL-2.0) are built both static and
+# as DLLs: linked in by default, or shipped next to the executable with
+# `ocran --native-dll iconv,sybdb` (see LICENSES.md).
+build_libiconv() {
+  fetch libiconv
+  cd "$WORK/libiconv"
+  ./configure --host=$HOST --prefix="$DEPS" --enable-static --enable-shared \
+    --disable-nls CFLAGS="$CFLAGS_COMMON" LDFLAGS="$LDFLAGS_COMMON -static-libgcc"
+  make -j"$JOBS" && make install
+}
+
+build_libxml2() {
+  fetch libxml2
+  cd "$WORK/libxml2"
+  ./configure --host=$HOST --prefix="$DEPS" --disable-shared --enable-static \
+    --without-python --without-lzma --without-icu --with-zlib="$DEPS" --with-iconv="$DEPS" \
+    CFLAGS="$CFLAGS_COMMON" CPPFLAGS="-I$DEPS/include" LDFLAGS="-L$DEPS/lib"
+  make -j"$JOBS" && make install
+}
+
+build_libxslt() {
+  fetch libxslt
+  cd "$WORK/libxslt"
+  ./configure --host=$HOST --prefix="$DEPS" --disable-shared --enable-static \
+    --without-python --without-crypto --with-libxml-prefix="$DEPS" \
+    CFLAGS="$CFLAGS_COMMON" CPPFLAGS="-I$DEPS/include" LDFLAGS="-L$DEPS/lib"
+  make -j"$JOBS" && make install
+}
+
+build_freetds() {
+  fetch freetds
+  cd "$WORK/freetds"
+  ./configure --host=$HOST --prefix="$DEPS" --enable-static --enable-shared \
+    --disable-odbc --disable-apps --disable-server --disable-pool --enable-sspi \
+    --with-openssl="$DEPS" --with-libiconv-prefix="$DEPS" \
+    CFLAGS="$CFLAGS_COMMON" CPPFLAGS="-I$DEPS/include" \
+    LDFLAGS="$LDFLAGS_COMMON -L$DEPS/lib -static-libgcc" \
+    OPENSSL_LIBS="-L$DEPS/lib -lssl -lcrypto -lcrypt32 -lws2_32 -lgdi32 -luser32 -ladvapi32" # static OpenSSL
+  make -j"$JOBS" && make install
+  # libtool links no static library into a DLL, so the DLL (named as in
+  # tiny_tds' own Windows builds) is made from the static library: all of
+  # it exported, OpenSSL linked in privately, GNU libiconv as its own DLL
+  # so that both LGPL libraries stay replaceable.
+  rm -f "$DEPS"/lib/libsybdb.la "$DEPS"/lib/libct.la
+  $HOST-gcc -shared -o "$DEPS/bin/libsybdb-5.dll" \
+    -Wl,--whole-archive "$DEPS/lib/libsybdb.a" -Wl,--no-whole-archive \
+    -Wl,--out-implib,"$DEPS/lib/libsybdb.dll.a" -Wl,--exclude-libs,libssl.a:libcrypto.a \
+    $LDFLAGS_COMMON -static-libgcc -L"$DEPS/lib" -lssl -lcrypto "$DEPS/lib/libiconv.dll.a" \
+    -lsecur32 -lcrypt32 -lws2_32 -lgdi32 -luser32 -ladvapi32
 }
 
 build_ruby() {
@@ -203,7 +254,49 @@ build_runtime() {
   sha256sum "$OUT/ocran-runtime.exe"
 }
 
-for step in ${STEPS:-zlib libffi yaml openssl ruby gemexts runtime}; do
+# The license texts of everything linked into the runtime (and of the DLL
+# builds). ocran packs them into every executable as ocran/licenses/.
+build_licenses() {
+  L="$OUT/LICENSES"
+  rm -rf "$L" && mkdir -p "$L"
+  copy() { d="$L/$1"; mkdir -p "$d"; shift; for f in "$@"; do cp "$f" "$d/"; done; }
+  copy ruby "$WORK/ruby/BSDL" "$WORK/ruby/COPYING" "$WORK/ruby/LEGAL"
+  copy openssl "$WORK/openssl/LICENSE.txt"
+  copy libffi "$WORK/libffi/LICENSE"
+  copy libyaml "$WORK/yaml/License"
+  copy zlib "$WORK/zlib/LICENSE"
+  copy libiconv "$WORK/libiconv/COPYING.LIB"
+  copy libxml2 "$WORK/libxml2/Copyright"
+  copy libxslt "$WORK/libxslt/Copyright"
+  copy freetds "$WORK/freetds/COPYING_LIB.txt"
+  # Linked in by the compiler: the MinGW-w64 runtime and libgcc (GPL with
+  # the GCC Runtime Library Exception).
+  copy mingw-w64 /usr/share/doc/mingw-w64-common/copyright
+  copy libgcc /usr/share/doc/gcc-mingw-w64-base/copyright
+  cat > "$L/README.txt" <<'TXT'
+Third-party software in this executable (ocran native runtime, MinGW-w64)
+
+ruby       Ruby (BSD-2-Clause or the Ruby license; LEGAL lists the code
+           Ruby itself includes). Bundled and default gems carry their
+           own license files inside the archive (lib/ruby/gems/...).
+openssl    OpenSSL (Apache-2.0)
+libffi     libffi (MIT)
+libyaml    libyaml (MIT)
+zlib       zlib (zlib license)
+libiconv   GNU libiconv (LGPL-2.1-or-later)
+libxml2    libxml2 (MIT)
+libxslt    libxslt (MIT)
+freetds    FreeTDS (LGPL-2.0-or-later)
+mingw-w64  MinGW-w64 runtime (various permissive licenses, see file)
+libgcc     GCC runtime (GPL-3.0 with the GCC Runtime Library Exception)
+
+GNU libiconv and FreeTDS are under the LGPL. They are linked into the
+executable only when an extension uses them (nokogiri: libiconv;
+tiny_tds: FreeTDS and libiconv). See ocran's native/LICENSES.md.
+TXT
+}
+
+for step in ${STEPS:-zlib libffi yaml openssl libiconv libxml2 libxslt freetds ruby gemexts runtime licenses}; do
   echo "==> $step"
   "build_$step"
   cd "$BUILD"

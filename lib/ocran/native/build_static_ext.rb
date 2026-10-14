@@ -13,7 +13,8 @@
 #
 # INCLUDE_DIR holds ruby.h, ARCH_INCLUDE_DIR ruby/config.h. The compiler is
 # RbConfig's, or OCRAN_NATIVE_CC (with the matching ar and ranlib) when the
-# build host names it differently. Prints
+# build host names it differently; OCRAN_NATIVE_LIBS are appended to $LIBS.
+# Prints
 #   <feature> <Init function> <archive> <comma-separated libs>
 # on success, for the runtime link (Ocran::NativeSdk#link).
 require "rbconfig"
@@ -48,6 +49,13 @@ $0 = File.expand_path("extconf.rb") # mkmf takes srcdir from $0
 ARGV.replace(extconf_args)
 require "mkmf"
 $static = true # after require: loading mkmf resets it
+# The static C libraries an extension's own (-lsybdb, -lxml2) need in turn -
+# iconv, OpenSSL, zlib, Windows system libraries - in link order. mkmf puts
+# $LIBS after the libraries extconf.rb finds, both in its link checks and
+# in the Makefile, which is the order a static link needs.
+$LIBS = [$LIBS, ENV["OCRAN_NATIVE_LIBS"]].compact.join(" ")
+# Defines the static libraries' headers need (LIBXSLT_STATIC, ...).
+$CPPFLAGS = [$CPPFLAGS, ENV["OCRAN_NATIVE_CPPFLAGS"]].compact.join(" ")
 load "./extconf.rb"
 
 mk = File.read("Makefile")

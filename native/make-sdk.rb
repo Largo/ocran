@@ -12,9 +12,12 @@
 #   where the fake.rb below expects it): ruby/config.h.
 # * rbconfig.rb and <arch>-fake.rb: the target's RbConfig, as Ruby's cross
 #   build uses it, made relative to the SDK directory.
-# * deps/: the static C libraries and their headers.
+# * deps/: the static C libraries and their headers, pkg-config files, and
+#   the DLL builds of the LGPL libraries (deps/bin) for --native-dll.
+# * sdk.json: toolchain, dependency libraries, DLLs.
 # * exts/: the gem extensions linked into the runtime, and their .line files.
 require "fileutils"
+require "json"
 require "shellwords"
 
 build, src, deps, sdk, *ext_files = ARGV.map { |a| File.expand_path(a) }
@@ -56,12 +59,42 @@ args.each_with_index do |arg, i|
   end
 end
 File.write(File.join(sdk, "link.args"), result.join("\n") + "\n")
-File.write(File.join(sdk, "sdk.json"), %({"toolchain": "gcc"}\n))
+# mkmf's link checks link with -l<RUBY_SO_NAME>, a DLL Ruby's import
+# library; for this static Ruby that is the static library itself.
+static_lib = Dir[File.join(sdk, "lib*-static.a")].first or abort "no static libruby in the link inputs"
+FileUtils.cp(static_lib, static_lib.sub(/-static\.a\z/, ".a"))
 
 FileUtils.mkdir_p(File.join(sdk, "deps"))
 FileUtils.cp_r(File.join(deps, "lib"), File.join(sdk, "deps"))
 FileUtils.cp_r(File.join(deps, "include"), File.join(sdk, "deps"))
-Dir[File.join(sdk, "deps/lib/{*.la,pkgconfig}")].each { |f| FileUtils.rm_rf(f) }
+Dir[File.join(sdk, "deps/lib/{*.la,cmake,engines-3,ossl-modules}")].each { |f| FileUtils.rm_rf(f) }
+# pkg-config files (nokogiri finds libxml2 through them): their absolute
+# paths become @SDK_DEPS@, filled in by Ocran::NativeSdk when it uses them.
+Dir[File.join(sdk, "deps/lib/pkgconfig/*.pc")].each do |pc|
+  File.write(pc, File.read(pc).gsub(deps, "@SDK_DEPS@"))
+end
+
+# The libraries also built as DLLs (the LGPL ones: GNU libiconv, FreeTDS),
+# for `ocran --native-dll`: the DLL and its import library.
+FileUtils.mkdir_p(File.join(sdk, "deps/bin"))
+dlls = {}
+Dir[File.join(deps, "lib", "lib*.dll.a")].sort.each do |import|
+  name = File.basename(import)[/\Alib(.+)\.dll\.a\z/, 1]
+  dll = Dir[File.join(deps, "bin", "lib#{name}{-*,}.dll")].first or next
+  FileUtils.cp(dll, File.join(sdk, "deps/bin"))
+  system(result.first.sub(/gcc\z/, "strip"), "--strip-unneeded", File.join(sdk, "deps/bin", File.basename(dll)), exception: true)
+  dlls[name] = { "dll" => "deps/bin/#{File.basename(dll)}", "import" => "deps/lib/#{File.basename(import)}" }
+end
+
+# What an extension's own libraries (-lsybdb, -lxml2, ...) need in turn, in
+# static link order; appended after them (see build_static_ext.rb).
+libs = %w[-lexslt -lxslt -lxml2 -lsybdb -lz -liconv -lssl -lcrypto -lyaml -lffi
+          -lsecur32 -lcrypt32 -lws2_32 -lbcrypt -lgdi32 -luser32 -ladvapi32]
+# Defines the static libraries' headers need, or they declare their API
+# dllimport (libxslt, libexslt, libxml2, libyaml).
+cppflags = %w[-DLIBXML_STATIC -DLIBXSLT_STATIC -DLIBEXSLT_STATIC -DYAML_DECLARE_STATIC]
+File.write(File.join(sdk, "sdk.json"),
+           JSON.pretty_generate("toolchain" => "gcc", "libs" => libs, "cppflags" => cppflags, "dlls" => dlls) + "\n")
 
 FileUtils.cp_r(File.join(src, "include"), File.join(sdk, "include"))
 arch_include = Dir[File.join(build, ".ext/include/*/ruby/config.h")].first or abort "no ruby/config.h"

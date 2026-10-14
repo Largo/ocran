@@ -55,6 +55,15 @@ are set to its Windows defaults under `C:\Program Files`, which only
 administrators can write. Left at the build prefix they would resolve to
 `C:\root\...` on the user's machine, a directory any user can create.
 
+## Licenses
+
+The runtime is statically linked; see [LICENSES.md](LICENSES.md). The
+build collects the license texts of everything linked in into `LICENSES/`
+of the runtime directory, and ocran packs them into every executable as
+`ocran/licenses/`. GNU libiconv and FreeTDS (LGPL) are also built as DLLs,
+which `ocran --native-dll iconv,sybdb` ships next to the executable
+instead of linking them in.
+
 ## C extensions of the application's gems
 
 A gem's C extension cannot be loaded from inside the executable, so it is
@@ -137,16 +146,20 @@ need them; the build host's Ruby must have the runtime's API version.
 
 ## Known gaps
 
-* A gem whose C extension needs a C library the SDK does not have (beyond
-  zlib, OpenSSL, libyaml, libffi) needs that library added to the runtime
-  build first; nokogiri and tiny_tds are such gems.
+* A gem whose C extension needs a C library the SDK does not have (it has
+  zlib, OpenSSL, libyaml, libffi, libiconv, libxml2, libxslt, FreeTDS)
+  needs that library added to the runtime build first.
+* The mswin runtime's SDK does not have libiconv, libxml2, libxslt and
+  FreeTDS yet (nokogiri and tiny_tds need the MinGW runtime for now).
 * OpenSSL cannot read a CA file packed inside the executable
   (`SSL_CERT_FILE`); the Windows store makes one unnecessary, and a custom
   one can be shipped next to the executable.
 * `--icon` and the version-resource options are not applied to the
   runtime yet.
 * Writes to archive paths through `File.write` report `ENOENT`, not `EROFS`.
-* Ruby bug found on the way: once a `super` call site in a prepended module
-  has run, a later redefinition of the method in the module it was
-  prepended to is not seen by it. That is why boot.rb defines Kernel's
-  methods in Kernel itself (like RubyGems) instead of prepending.
+* boot.rb defines Kernel's loading methods in Kernel itself (as RubyGems
+  does) rather than prepending a module: in Ruby 4.0.6, once a `super`
+  call site in a prepended module had run, a later redefinition of the
+  method in the module it was prepended to (RubyGems' require) was not
+  seen by it. Fixed in Ruby 4.0.7; defining the methods in place also
+  composes with later redefinitions (Zeitwerk) either way.

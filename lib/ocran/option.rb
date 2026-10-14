@@ -19,6 +19,7 @@ module Ocran
         :bundle_identifier => nil,
         :macosx_bundle => nil,
         :macosx_bundle? => false,
+        :native_dlls => [],
         :native_runtime => nil,
         :chdir_before? => false,
         :chdir_exe_dir? => false,
@@ -165,6 +166,11 @@ Experimental options:
                    bundled gems are packed; C extensions must be linked
                    into the runtime. The build host's Ruby must have the
                    runtime's API version (e.g. 4.0.0).
+--native-dll <lib,...>  With --native: link these C libraries of the
+                   runtime's SDK as DLLs shipped next to the executable
+                   instead of into it (e.g. iconv,sybdb - the LGPL ones;
+                   see native/LICENSES.md). Their DLL dependencies come
+                   along.
 --cosmo-ruby <ruby.com>  Package the given cosmopolitan-built Ruby (an APE,
                    e.g. ruby.com) as the interpreter instead of the host
                    Ruby: the result is a single <scriptname>.com that runs
@@ -381,6 +387,8 @@ EOF
           @options[:roundhouse_options] << required_argument(argv, arg)
         when "--native"
           @options[:native_runtime] = Pathname.new(required_argument(argv, arg)).expand_path
+        when "--native-dll"
+          @options[:native_dlls] |= required_argument(argv, arg).split(",").map(&:strip).reject(&:empty?)
         when "--cosmo-ruby"
           load_cosmo_toolchain
           @options[:cosmo_ruby] = CosmoToolchain.resolve_ruby(argv.shift)
@@ -596,6 +604,7 @@ EOF
         reject_with_native_runtime
         raise "#{native_runtime} is not a directory" unless native_runtime.directory?
       end
+      raise "--native-dll needs --native" if native_dlls.any? && !native_runtime
     end
 
     # --native produces one executable from a prebuilt runtime, so neither
@@ -609,7 +618,6 @@ EOF
         "--cosmo/--cosmo-ruby" => cosmo?,
         "--spinel/--roundhouse" => spinel? || roundhouse?,
         "--wasm" => wasm_runtime,
-        "--icon" => icon_filename,
         "--debug-extract" => enable_debug_extract?,
       }
       conflicts.each do |name, given|
@@ -715,6 +723,9 @@ EOF
     def native_runtime = @options[__method__]
 
     def native? = !!native_runtime
+
+    # C libraries --native-dll ships as DLLs next to the executable.
+    def native_dlls = @options[__method__]
 
     # True when the application is packaged by injecting it into the ZIP
     # store of the cosmopolitan Ruby itself: no cosmocc, no launcher stub,

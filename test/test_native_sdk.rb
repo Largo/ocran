@@ -58,6 +58,21 @@ class TestNativeSdk < Minitest::Test
     assert File.file?(out)
   end
 
+  def test_dll_libraries_are_linked_through_their_import_library
+    skip "the stand-in compiler is a shell script" if Gem.win_platform?
+    File.write(File.join(@sdk, "sdk.json"), JSON.generate(
+      "toolchain" => "gcc", "libs" => ["-lsybdb", "-liconv", "-lws2_32"],
+      "dlls" => { "sybdb" => { "dll" => "deps/bin/libsybdb-5.dll", "import" => "deps/lib/libsybdb.dll.a" } }))
+    File.write(File.join(@sdk, "link.args"), [@cc, "@EXTRA@", "-L@SDK@/deps/lib"].join("\n") + "\n")
+    sdk = Ocran::NativeSdk.new(@sdk, arch: "x64-mingw-ucrt")
+    sdk.link([], File.join(@dir, "out.exe"), dlls: ["sybdb"])
+    link = commands[1]
+    assert_includes link, " #{@sdk}/deps/lib/libsybdb.dll.a -liconv -lws2_32 "
+    refute_includes link, "-lsybdb"
+    error = assert_raises(RuntimeError) { sdk.link([], File.join(@dir, "x.exe"), dlls: ["ssl"]) }
+    assert_match(/No DLL build of ssl .*available: sybdb/, error.message)
+  end
+
   def test_extension_registration_source
     sdk = write_sdk("gcc", [@cc, "@EXTRA@"])
     source = sdk.send(:exts_source, sdk.base_extensions +
