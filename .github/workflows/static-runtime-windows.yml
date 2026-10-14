@@ -23,18 +23,19 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    # Debian 13: Ubuntu does not package the UCRT MinGW cross compiler. The
+    # official image also brings Ruby 4.0.7, the cross build's baseruby.
+    container:
+      image: ruby:4.0.7-trixie@sha256:d907e08a8558207d221f257afe1bfc3e274a12bac035d8bbc9049b01b5364140
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install the MinGW cross compiler
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-ucrt64 g++-mingw-w64-ucrt64
-
-      # baseruby: the same version as the runtime (a cross build).
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
-        with:
-          ruby-version: '4.0'
+        run: apt-get update && apt-get install -y --no-install-recommends gcc-mingw-w64-ucrt64 g++-mingw-w64-ucrt64
 
       - name: Cache source tarballs
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -44,7 +45,6 @@ jobs:
 
       - name: Build the runtime
         run: runtime/build-runtime.sh "$RUNNER_TEMP/rt" 2>&1 | tee "$RUNNER_TEMP/build.log"; exit ${PIPESTATUS[0]}
-        shell: bash
 
       - name: Install nokogiri for the build host
         run: gem install nokogiri --no-document
