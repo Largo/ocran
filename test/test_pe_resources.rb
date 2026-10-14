@@ -82,6 +82,15 @@ class TestPeResources < Minitest::Test
     assert_equal "payload", again.tree["CUSTOM"]["MYDATA"][0]
   end
 
+  # The new section goes where the sections end, which would cut off a
+  # signature or other data after them.
+  def test_rejects_data_after_the_last_section
+    pe = Ocran::PeResources.new(minimal_pe + "signature".b)
+    pe.set_manifest("<assembly/>")
+    error = assert_raises(RuntimeError) { pe.to_bytes }
+    assert_match(/9 bytes after its last section/, error.message)
+  end
+
   def test_rejects_what_is_not_an_icon
     assert_raises(RuntimeError) { Ocran::PeResources.new(minimal_pe).set_icon("PNG....") }
   end

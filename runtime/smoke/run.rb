@@ -52,7 +52,7 @@ if ocran.call("app.rb", "helper.rb", "lazy.rb", "data.txt", output: app) && runn
          "file_in_exe" => "true", "main" => "true", "helper" => "hello from helper.rb", "autoload" => "lazy",
          "json" => '[1,{"a":2}]', "yaml" => "3", "sha256" => "ba7816bf8f01cfea", "zlib" => "891568578",
          "data" => "payload", "glob" => "app.rb,helper.rb,lazy.rb", "argv" => "one|two words|--verbose",
-         "DATA" => "data section", "from_disk" => "0" })
+         "DATA" => "data section", "mtime" => "true", "from_disk" => "0" })
 end
 
 if ENV["OCRAN_SMOKE_NETWORK"] == "1"

@@ -382,6 +382,11 @@ module Ocran
           write(executable)
         end
         ship_dlls
+      rescue StandardError
+        # A copy of the runtime without its archive would look like a
+        # finished executable and fail only when run.
+        FileUtils.rm_f(@path.to_s)
+        raise
       ensure
         remove_work_dir(work)
       end
@@ -404,22 +409,30 @@ module Ocran
       warning "Could not remove the temporary directory #{work}: #{e.message}"
     end
 
-    # The C extensions of the application's gems that the runtime does not
-    # have: built from the gems' sources against the runtime's SDK and
-    # linked into a runtime of this application's own. Returns its path.
     # macOS: the archive is written on its own (offsets counted from its
     # start) and linked into the executable as the section __OCRAN,__zip,
     # together with any extensions; the linker lays the executable out and
-    # signs it. Appended data would break the code signature.
+    # signs it. Appended data would break the code signature. The
+    # extensions are built first: building them changes what is packed
+    # (build markers, renamed platform gems, dropped foreign binaries).
     def write_linked(work)
+      extensions = build_extensions(work)
       archive = File.join(work, "application.zip")
       File.binwrite(archive, ZipWriter.end_of_central_directory(0, 0, 0))
       ZipWriter.append(archive, archive_entries)
-      link_extensions(work, archive: archive, output: @path.to_s)
+      link_runtime(extensions, work, archive: archive, output: @path.to_s)
       File.chmod(0o755, @path.to_s)
     end
 
-    def link_extensions(work, archive: nil, output: nil)
+    # The C extensions of the application's gems that the runtime does not
+    # have: built from the gems' sources against the runtime's SDK and
+    # linked into a runtime of this application's own. Returns its path.
+    def link_extensions(work)
+      link_runtime(build_extensions(work), work)
+    end
+
+    # Builds the missing extensions; returns them for #link_runtime.
+    def build_extensions(work)
       sdk = @runtime.sdk
       unless sdk
         list = @unsupported_native.map { |name, source| "  #{name} (#{source})" }.join("\n")
@@ -475,7 +488,10 @@ module Ocran
         mark_extensions_built(spec, files)
         built
       end
+    end
 
+    def link_runtime(extensions, work, archive: nil, output: nil)
+      sdk = @runtime.sdk
       executable = output || File.join(work, "ocran-runtime.exe")
       say "Linking #{extensions.map(&:feature).join(", ")} into the static runtime" unless extensions.empty?
       say "Linking against the DLL builds of #{@dlls.join(", ")}" unless @dlls.empty?

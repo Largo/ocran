@@ -157,15 +157,17 @@ PE resource options (Windows, rcedit-compatible):
 
 Experimental options:
 
---static-runtime <runtime-dir>  Build a single Windows executable that runs the
+--static-runtime <runtime-dir>  Build a single executable that runs the
                    application without extracting anything: a statically
                    linked Ruby (the static runtime in <runtime-dir>, built
-                   by runtime/build-runtime.sh or runtime/mswin/) with the
-                   application appended as a ZIP archive, readable with
-                   unzip or 7-Zip. The runtime's own standard library and
-                   bundled gems are packed; C extensions must be linked
-                   into the runtime. The build host's Ruby must have the
-                   runtime's API version (e.g. 4.0.0).
+                   with the scripts in runtime/) with the application as a
+                   ZIP archive. The runtime decides the target: Windows or
+                   Linux (archive appended, readable with unzip or 7-Zip)
+                   or macOS (archive linked in as section __OCRAN,__zip;
+                   packaging needs a Mac). The runtime's own standard
+                   library and bundled gems are packed; C extensions must
+                   be linked into the runtime. The build host's Ruby must
+                   have the runtime's API version (e.g. 4.0.0).
 --runtime-dll <lib,...>  With --static-runtime: link these C libraries of the
                    runtime's SDK as DLLs shipped next to the executable
                    instead of into it (e.g. iconv,sybdb - the LGPL ones;
@@ -653,6 +655,7 @@ EOF
     # Validates --roundhouse and works out the application and the output
     # directory.
     def parse_roundhouse
+      raise "--static-runtime cannot be used with --roundhouse" if static_runtime
       raise "--roundhouse takes one Rails application directory" if @options[:inputs].size > 1
       reject_with_native_compilation("--roundhouse")
       raise "--spinel and --roundhouse cannot be used together (--roundhouse compiles with Spinel already)" if spinel?
@@ -874,6 +877,12 @@ EOF
     def warning? = @options[__method__]
 
     def windowed?
+      if static_runtime?
+        # The runtime decides, not the build host. For a runtime that is
+        # not for Windows only an explicit --windows counts, so that the
+        # builder can reject it; a .rbw script is just a script there.
+        return static_runtime_os == "windows" ? @options[:windowed?] : force_windows?
+      end
       return false unless Gem.win_platform?
       @options[:windowed?]
     end

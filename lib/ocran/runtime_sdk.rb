@@ -180,9 +180,22 @@ module Ocran
         cmd += ["-Wl,-sectcreate,__OCRAN,__zip,#{archive}"] if archive
         run(*cmd)
       end
-      strip = @info.key?("strip") ? @info["strip"] : cc.sub(/gcc(\.exe)?\z/) { "strip#{$1}" }
-      run(strip, output.to_s) if strip && !msvc?
+      strip = strip_tool
+      run(strip, output.to_s) if strip
       output
+    end
+
+    # The strip of the compiler in use: sdk.json names the SDK build host's
+    # (nil on macOS, where stripping would break the signature), which
+    # another compiler named with OCRAN_RUNTIME_CC may not come with (MSYS2
+    # has gcc and strip, not x86_64-w64-mingw32ucrt-strip).
+    def strip_tool
+      return nil if msvc? || (@info.key?("strip") && @info["strip"].nil?)
+
+      derived = cc.sub(/gcc(\.exe)?\z/) { "strip#{$1}" } if cc.match?(/gcc(\.exe)?\z/)
+      return derived if derived && cc != link_args.first
+
+      @info["strip"] || derived
     end
 
     # The DLL files to ship next to the executable for +dlls+: each named

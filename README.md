@@ -228,8 +228,8 @@ goes through these steps in order of impact.
   fully static, so it runs on any x86_64 distribution.
 
   ```
-  ocran app.rb --static-runtime path/to/runtime     # -> app.exe
-  unzip -l app.exe                          # lists exactly what will run
+  ocran app.rb --static-runtime path/to/runtime   # app.exe (Windows) or app (Linux, macOS)
+  unzip -l app.exe                          # lists exactly what will run (Linux: app)
   unzip -p app.exe ocran/manifest.sha256    # SHA-256 of the runtime and every file
 
   segedit app -extract __OCRAN __zip app.zip   # macOS: the archive is a section

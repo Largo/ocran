@@ -21,6 +21,9 @@ puts "zlib=#{Zlib.crc32("abc")}"
 puts "data=#{File.read(File.join(__dir__, "data.txt")).strip}"
 puts "glob=#{Dir.glob(File.join(__dir__, "*.rb")).map { File.basename(_1) }.sort.join(",")}"
 puts "argv=#{ARGV.join("|")}"
+# Times of archive files (once a stack overflow); and DATA after a
+# multibyte character - this line: "Grüße".
+puts "mtime=#{File.mtime(__FILE__).is_a?(Time) && File.stat(__dir__).mtime == File.mtime(__FILE__)}"
 puts "DATA=#{DATA.read.strip}" if defined?(DATA)
 from_disk = exe ? $LOADED_FEATURES.select { File.absolute_path?(_1) && !_1.start_with?(exe.tr("\\", "/")) } : []
 puts "from_disk=#{from_disk.size}"

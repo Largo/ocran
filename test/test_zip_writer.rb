@@ -44,6 +44,23 @@ class TestZipWriter < Minitest::Test
     end
   end
 
+  # A time given with a zero offset (+00:00) is not utc? and was converted
+  # to the build host's zone.
+  def test_zero_offset_times_pack_the_same_in_every_zone
+    stamps = %w[UTC Asia/Tokyo America/New_York].map do |zone|
+      with_tz(zone) { Ocran::ZipWriter.send(:dos_timestamp, Time.new(2001, 2, 3, 4, 5, 6, "+00:00")) }
+    end
+    assert_equal [Ocran::ZipWriter.send(:dos_timestamp, Time.utc(2001, 2, 3, 4, 5, 6))], stamps.uniq
+  end
+
+  def with_tz(zone)
+    saved = ENV["TZ"]
+    ENV["TZ"] = zone
+    yield
+  ensure
+    ENV["TZ"] = saved
+  end
+
   # The limits of the format were checked only after the archive had been
   # cut open and the new entries written, which left the file broken.
   def test_too_many_entries_are_refused_before_writing

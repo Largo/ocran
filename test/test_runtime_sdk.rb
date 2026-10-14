@@ -58,6 +58,37 @@ class TestRuntimeSdk < Minitest::Test
     assert File.file?(out)
   end
 
+  # sdk.json names the SDK build host's strip; MSYS2's gcc (named with
+  # OCRAN_RUNTIME_CC) comes with strip, not x86_64-w64-mingw32ucrt-strip.
+  def test_strip_follows_a_compiler_named_with_ocran_runtime_cc
+    skip "the stand-in compiler is a shell script" if Gem.win_platform?
+    gcc = File.join(@dir, "gcc")
+    FileUtils.cp(@cc, gcc)
+    FileUtils.cp(@cc, File.join(@dir, "strip"))
+    File.write(File.join(@sdk, "link.args"), [@cc, "@EXTRA@"].join("\n") + "\n")
+    File.write(File.join(@sdk, "sdk.json"), JSON.generate("toolchain" => "gcc", "strip" => "x86_64-w64-mingw32ucrt-strip"))
+    sdk = Ocran::RuntimeSdk.new(@sdk, arch: "x64-mingw-ucrt")
+    out = File.join(@dir, "app-runtime.exe")
+    with_env("OCRAN_RUNTIME_CC" => gcc) { sdk.link([], out) }
+    assert_equal "strip #{out}", commands.last
+  end
+
+  def test_no_strip_when_the_sdk_says_so
+    skip "the stand-in compiler is a shell script" if Gem.win_platform?
+    File.write(File.join(@sdk, "link.args"), [@cc, "@EXTRA@"].join("\n") + "\n")
+    File.write(File.join(@sdk, "sdk.json"), JSON.generate("toolchain" => "gcc", "strip" => nil))
+    Ocran::RuntimeSdk.new(@sdk, arch: "arm64-darwin24").link([], File.join(@dir, "app"))
+    refute commands.any? { _1.include?("strip") }
+  end
+
+  def with_env(vars)
+    saved = vars.keys.to_h { [_1, ENV[_1]] }
+    vars.each { |k, v| ENV[k] = v }
+    yield
+  ensure
+    saved.each { |k, v| ENV[k] = v }
+  end
+
   def test_dll_libraries_are_linked_through_their_import_library
     skip "the stand-in compiler is a shell script" if Gem.win_platform?
     File.write(File.join(@sdk, "sdk.json"), JSON.generate(
