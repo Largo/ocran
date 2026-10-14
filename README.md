@@ -253,7 +253,9 @@ goes through these steps in order of impact.
   a Linux build host can package for Windows and the other way round, as
   long as the application does not depend on platform-specific gems. See
   [runtime/README.md](runtime/README.md) for how it works and how it is
-  built.
+  built. CI builds and tests the three runtimes and publishes each as a
+  reproducible tarball with a signed build provenance attestation
+  (`gh attestation verify <tarball> -R Largo/ocran`).
 
   Dependency detection runs as usual, under the build host's Ruby, which
   must have the runtime's API version (e.g. 4.0.0). The standard library
