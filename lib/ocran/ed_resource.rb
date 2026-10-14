@@ -30,10 +30,8 @@ module Ocran
     MANIFEST_RESOURCE_ID = 1
 
     # Language/codepage constants (MAKELANGID, LANGID, LANGID_US_ENGLISH,
-    # CODEPAGE_UNICODE, STRING_TABLE_KEY) are defined in ed_resource_builder.rb,
-    # required above.
-
-    # EXECUTION_LEVELS and MANIFEST_TEMPLATE: ed_resource_builder.rb
+    # CODEPAGE_UNICODE, STRING_TABLE_KEY), EXECUTION_LEVELS and
+    # MANIFEST_TEMPLATE are defined in ed_resource_builder.rb, required above.
 
     extern "DWORD GetLastError()"
     extern "HANDLE BeginUpdateResourceW(LPCWSTR, BOOL)"
@@ -79,13 +77,7 @@ module Ocran
       end
 
       def write_manifest(handle, manifest_xml, execution_level)
-        xml = manifest_xml || MANIFEST_TEMPLATE
-        if execution_level
-          unless EXECUTION_LEVELS.include?(execution_level)
-            raise "Invalid requested execution level: #{execution_level}"
-          end
-          xml = xml.sub(/level="[^"]*"/, %(level="#{execution_level}"))
-        end
+        xml = Build.manifest(manifest_xml, execution_level)
         put(handle, RT_MANIFEST, MANIFEST_RESOURCE_ID, xml.b)
       end
 

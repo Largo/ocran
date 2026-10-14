@@ -793,13 +793,8 @@ module Ocran
         end
         if r[:application_manifest] || r[:execution_level]
           xml = r[:application_manifest] ? File.read(r[:application_manifest], encoding: "UTF-8") : nil
-          xml ||= pe.manifest&.dup&.force_encoding(Encoding::UTF_8) || EdResource::MANIFEST_TEMPLATE
-          if (level = r[:execution_level])
-            raise "Invalid requested execution level: #{level}" unless EdResource::EXECUTION_LEVELS.include?(level)
-
-            xml = xml.sub(/level="[^"]*"/, %(level="#{level}"))
-          end
-          pe.set_manifest(xml)
+          xml ||= pe.manifest&.dup&.force_encoding(Encoding::UTF_8)
+          pe.set_manifest(EdResource::Build.manifest(xml, r[:execution_level]))
         end
         pe.set_strings(r[:resource_strings]) if r[:resource_strings]
       end
