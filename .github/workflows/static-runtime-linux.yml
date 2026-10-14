@@ -22,6 +22,10 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write # Sigstore signing certificate for the attestation
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -110,13 +114,26 @@ jobs:
             ${{ runner.temp }}/smoke/*.build.log
           if-no-files-found: ignore
 
+      # Only a runtime that passed the tests above is packed and attested.
+      # The tarball is reproducible (runtime/pack-runtime.rb); verify a
+      # download with: gh attestation verify <file> -R Largo/ocran
+      - name: Pack the runtime
+        id: pack
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          ruby runtime/pack-runtime.rb "$RUNNER_TEMP/rt/out" "$RUNNER_TEMP/dist"
+          echo "tarball=$(ls "$RUNNER_TEMP"/dist/*.tar.gz)" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.pack.outputs.tarball }}
+            ${{ runner.temp }}/rt/out/ocran-runtime
+
       - name: Upload the runtime
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: static-runtime-linux
-          path: |
-            ${{ runner.temp }}/rt/out
-            !${{ runner.temp }}/rt/out/stage
-            !${{ runner.temp }}/rt/out/exts
-          # sdk/.ext/include holds ruby/config.h, where Ruby's fake.rb looks.
-          include-hidden-files: true
+          name: ocran-runtime-linux-x86_64
+          path: ${{ steps.pack.outputs.tarball }}
+          compression-level: 0 # already gzip

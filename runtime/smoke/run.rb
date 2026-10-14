@@ -5,7 +5,11 @@
 # Exits non-zero when an executable cannot be built or does not behave.
 # HTTPS is checked only when OCRAN_SMOKE_NETWORK=1, a gem with a C
 # extension (nokogiri, installed for the build host's Ruby) only when
-# OCRAN_SMOKE_GEMS=1.
+# OCRAN_SMOKE_GEMS=1. OCRAN_SMOKE_PREBUILT=1 runs the executables already in
+# OUT_DIR (packaged on another host) instead of building them.
+#
+# The executables run with a minimal PATH and without Ruby's environment
+# variables: they must need nothing from the machine.
 require "open3"
 require "rbconfig"
 require "fileutils"
@@ -25,9 +29,26 @@ host = case RbConfig::CONFIG["host_os"]
        else "linux"
        end
 runnable = target == host
-puts "runtime for #{target}; #{runnable ? "building and running" : "building only (not runnable on #{host})"}"
+prebuilt = ENV["OCRAN_SMOKE_PREBUILT"] == "1"
+abort "OCRAN_SMOKE_PREBUILT=1 needs a runtime for #{host}" if prebuilt && !runnable
+puts "runtime for #{target}; #{prebuilt ? "running prebuilt executables" : runnable ? "building and running" : "building only (not runnable on #{host})"}"
+
+system_dirs = if host == "windows"
+                root = ENV.fetch("SystemRoot", "C:\\Windows")
+                "#{root}\\System32;#{root}"
+              else
+                "/usr/bin:/bin"
+              end
+bare_env = { "PATH" => system_dirs, "RUBYOPT" => nil, "RUBYLIB" => nil, "GEM_HOME" => nil, "GEM_PATH" => nil,
+             "BUNDLE_GEMFILE" => nil, "SSL_CERT_FILE" => nil, "SSL_CERT_DIR" => nil }
+run = ->(exe, *args) { Open3.capture3(bare_env, exe, *args) }
 
 ocran = lambda do |*args, output:|
+  if prebuilt
+    exists = !Dir["#{output}{,.exe}"].empty?
+    failures << "#{File.basename(output)} was not found in #{File.dirname(output)}" unless exists
+    next exists
+  end
   cmd = [RbConfig.ruby, "-I", File.join(repo, "lib"), File.join(repo, "exe/ocran"),
          "--static-runtime", File.expand_path(runtime), "--output", output, *args]
   log, status = Open3.capture2e(*cmd, chdir: here)
@@ -48,7 +69,7 @@ end
 app = File.join(out, "smoke-app")
 if ocran.call("app.rb", "helper.rb", "lazy.rb", "data.txt", output: app) && runnable
   exe = Dir["#{app}{,.exe}"].first
-  stdout, stderr, status = Open3.capture3(exe, "one", "two words", "--verbose")
+  stdout, stderr, status = run.(exe, "one", "two words", "--verbose")
   failures << "smoke-app exited #{status.exitstatus}, expected 7: #{stderr}" unless status.exitstatus == 7
   check.("smoke-app", stdout, {
          "file_in_exe" => "true", "main" => "true", "helper" => "hello from helper.rb", "autoload" => "lazy",
@@ -61,7 +82,7 @@ if ENV["OCRAN_SMOKE_NETWORK"] == "1"
   https = File.join(out, "smoke-https")
   if ocran.call("https.rb", output: https) && runnable
     exe = Dir["#{https}{,.exe}"].first
-    stdout, stderr, = Open3.capture3(exe)
+    stdout, stderr, = run.(exe)
     failures << "smoke-https: #{stderr}" unless stderr.empty?
     check.("smoke-https", stdout, { "https" => "200", "self_signed" => "rejected" })
   end
@@ -71,7 +92,7 @@ if ENV["OCRAN_SMOKE_GEMS"] == "1"
   gems = File.join(out, "smoke-gems")
   if ocran.call("gems.rb", output: gems) && runnable
     exe = Dir["#{gems}{,.exe}"].first
-    stdout, stderr, status = Open3.capture3(exe)
+    stdout, stderr, status = run.(exe)
     failures << "smoke-gems exited #{status.exitstatus}: #{stderr}" unless status.success?
     check.("smoke-gems", stdout.force_encoding(Encoding::UTF_8), {
            "html" => "h\u00e9llo", "xpath" => "1,2", "xslt" => "sum=3", "from_disk" => "0" })
