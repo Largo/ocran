@@ -1,0 +1,53 @@
+--- a/load.c
++++ b/load.c
+@@ -1030,10 +1030,12 @@
+  *
+  */
+ 
++static VALUE rb_require_string_internal(VALUE fname, bool resurrect);
++
+ VALUE
+ rb_f_require(VALUE obj, VALUE fname)
+ {
+-    return rb_require_string(fname);
++    return rb_require_string_internal(FilePathValue(fname), false);
+ }
+ 
+ VALUE
+@@ -1419,10 +1421,15 @@
+     return result == TAG_RETURN ? 1 : result ? -1 : 0;
+ }
+ 
++/*
++ * ocran: C-level requires (extensions, String#unicode_normalize, Set, ...)
++ * dispatch through Kernel#require, as autoload already does, so that a
++ * Ruby-level require (ocran's archive loader) sees them too.
++ */
+ VALUE
+ rb_require_string(VALUE fname)
+ {
+-    return rb_require_string_internal(FilePathValue(fname), false);
++    return rb_funcall(rb_vm_top_self(), rb_intern("require"), 1, FilePathValue(fname));
+ }
+ 
+ static VALUE
+@@ -1455,7 +1462,7 @@
+ {
+     struct RString fake = {RBASIC_INIT};
+     VALUE str = rb_setup_fake_str(&fake, fname, strlen(fname), 0);
+-    return rb_require_string_internal(str, true);
++    return rb_require_string(rb_str_resurrect(str));
+ }
+ 
+ static int
+--- a/box.c
++++ b/box.c
+@@ -861,7 +861,7 @@
+ {
+     rb_vm_frame_flag_set_box_require(GET_EC());
+ 
+-    return rb_require_string(fname);
++    return rb_f_require(box, fname);
+ }
+ 
+ static VALUE

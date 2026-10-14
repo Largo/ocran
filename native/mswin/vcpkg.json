@@ -1,0 +1,6 @@
+{
+  "name": "ocran-native-deps",
+  "version": "0.0.0",
+  "dependencies": ["libffi", "libyaml", "openssl", "zlib"],
+  "builtin-baseline": "2750401336fb7c95f6619657a46a7e798661341c"
+}

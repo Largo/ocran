@@ -1,0 +1,34 @@
+--- a/win32/win32.c
++++ b/win32/win32.c
+@@ -2441,7 +2441,15 @@
+ #define _CRTIMP __declspec(dllimport)
+ #endif
+ 
++#if defined _MSC_VER && !defined _DLL
++/* ocran: static CRT (-MT). The process's lowio table is libucrt.lib's own
++ * __pioinfo, an ordinary external symbol; the one inside ucrtbase.dll that
++ * set_pioinfo_extra() would find belongs to a different CRT instance. */
++# define RB_W32_STATIC_CRT_PIOINFO 1
++extern ioinfo *__pioinfo[];
++#else
+ static ioinfo ** __pioinfo = NULL;
++#endif
+ #define IOINFO_L2E 6
+ static inline ioinfo* _pioinfo(int);
+ 
+@@ -2477,6 +2485,7 @@
+      * * https://bugs.ruby-lang.org/issues/11118
+      * * https://bugs.ruby-lang.org/issues/18605
+      */
++#ifndef RB_W32_STATIC_CRT_PIOINFO
+     char *p = (char*)get_proc_address(UCRTBASE, "_isatty", NULL);
+     /* _osfile(fh) & FDEV */
+ 
+@@ -2598,6 +2607,7 @@
+     __pioinfo = *(ioinfo***)(p);
+ #endif
+ #endif /* _M_ARM64 */
++#endif /* RB_W32_STATIC_CRT_PIOINFO */
+     int fd;
+ 
+     fd = _open("NUL", O_RDONLY);
