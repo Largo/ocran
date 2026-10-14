@@ -2040,6 +2040,14 @@ class TestOcran < Minitest::Test
     assert_includes xml, "ocran-test-manifest-marker"
     assert_includes xml, 'level="highestAvailable"'
 
+    # Only requestedExecutionLevel's level changes, not an earlier one.
+    other = custom.sub("<trustInfo", %(<dependency level="keep"/>\n  <trustInfo))
+                  .sub(%(<requestedExecutionLevel level="asInvoker"/>),
+                       %(<requestedExecutionLevel uiAccess="false" level='asInvoker'/>))
+    xml = build.manifest(other, "requireAdministrator")
+    assert_includes xml, %(<dependency level="keep"/>)
+    assert_includes xml, %(<requestedExecutionLevel uiAccess="false" level='requireAdministrator'/>)
+
     assert_raises(RuntimeError) { build.manifest(nil, "root") }
   end
 

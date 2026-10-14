@@ -67,6 +67,10 @@ module Ocran
     module Build
       module_function
 
+      # The level attribute of the requestedExecutionLevel element (the first
+      # one), wherever it sits among the element's attributes.
+      REQUESTED_EXECUTION_LEVEL = /(<(?:[\w.-]+:)?requestedExecutionLevel\b[^>]*?\slevel\s*=\s*)(["'])[^"']*\2/
+
       # The RT_MANIFEST XML: the given manifest (or the stub's baseline one)
       # with its requestedExecutionLevel replaced when execution_level is given.
       def manifest(manifest_xml, execution_level)
@@ -76,7 +80,7 @@ module Ocran
         unless EXECUTION_LEVELS.include?(execution_level)
           raise "Invalid requested execution level: #{execution_level}"
         end
-        xml.sub(/level="[^"]*"/, %(level="#{execution_level}"))
+        xml.sub(REQUESTED_EXECUTION_LEVEL) { "#{$1}#{$2}#{execution_level}#{$2}" }
       end
 
       NUL16 = [0].pack("v").freeze
