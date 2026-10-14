@@ -68,6 +68,10 @@ jobs:
         run: |
           for exe in "$RUNNER_TEMP"/smoke/smoke-app "$RUNNER_TEMP"/smoke/smoke-https "$RUNNER_TEMP"/smoke/smoke-gems; do
             codesign --verify --strict "$exe"
+            # libxml2 and libxslt are the runtime's, not those of macOS.
+            if otool -L "$exe" | grep -E 'libxml2|libxslt|libexslt'; then
+              echo "$exe links a system libxml2/libxslt" >&2; exit 1
+            fi
             size "$exe" -m | grep -A2 __OCRAN
             # The archive is a plain ZIP: extract the section and list it.
             segedit "$exe" -extract __OCRAN __zip "$exe.zip"
