@@ -45,14 +45,14 @@ skip_next = false
 keep_next = false
 args.each_with_index do |arg, i|
   next skip_next = false if skip_next
-  if keep_next # the framework name after -framework (macOS)
+  if keep_next # the argument of -framework, -arch, ... (macOS)
     result << arg
     next keep_next = false
   end
   case arg
   when "-o"
     skip_next = true
-  when "-framework"
+  when "-framework", "-arch", "-isysroot", "-target", "-Xlinker"
     result << arg
     keep_next = true
   when /\A-L(.*)\z/
