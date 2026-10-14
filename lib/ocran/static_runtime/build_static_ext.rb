@@ -34,6 +34,20 @@ if (cc = ENV["OCRAN_RUNTIME_CC"]) && !cc.empty?
     "RANLIB" => tool.("ranlib") }.each { |k, v| RbConfig.fire_update!(k, v) }
 end
 
+# RubyInstaller's RubyGems defaults (rubygems/defaults/operating_system.rb),
+# loaded when an extconf.rb requires rubygems (nokogiri's does), set up the
+# build host's Ruby - its DLL directories, MSYS2 - from RbConfig, which
+# describes the target here, and fail. None of that applies to building for
+# the target (MSYS2's gcc is on PATH already), so an empty file of that name
+# comes first on the load path.
+if $LOAD_PATH.any? { |dir| File.file?(File.join(dir, "ruby_installer/runtime.rb")) }
+  defaults = File.join(File.dirname(File.expand_path(out)), "ocran-rubygems-defaults")
+  FileUtils.mkdir_p(File.join(defaults, "rubygems/defaults"))
+  File.write(File.join(defaults, "rubygems/defaults/operating_system.rb"),
+             "# Left empty by ocran: see build_static_ext.rb.\n")
+  $LOAD_PATH.unshift(defaults)
+end
+
 # Built inside a copy of the whole gem, as RubyGems does: extconf.rb files
 # may reach into the gem's lib/ (racc's does).
 ext_src = File.expand_path(ext_src)
