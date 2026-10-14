@@ -11,11 +11,18 @@ module Ocran
       puts s if Ocran.option&.verbose?
     end
 
+    # Progress goes to stdout, which is buffered when it is not a terminal:
+    # flushed first, so that a warning or an error shows up after what led
+    # to it when both streams go to the same log.
     def warning(s)
-      STDERR.puts "WARNING: #{s}" if Ocran.option&.warning?
+      return unless Ocran.option&.warning?
+
+      $stdout.flush
+      STDERR.puts "WARNING: #{s}"
     end
 
     def error(s)
+      $stdout.flush
       STDERR.puts "ERROR: #{s}"
     end
   end
