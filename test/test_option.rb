@@ -57,6 +57,27 @@ class TestOption < Minitest::Test
     assert_rejected(/is not a directory/, "app.rb", "--static-runtime", "missing")
   end
 
+  def test_windows_option_follows_the_static_runtime_os
+    Dir.mkdir("rt")
+    File.write("rt/runtime.json", '{"format": 1, "os": "windows"}')
+    assert parse("app.rb", "--static-runtime", "rt", "--windows").windowed?
+    refute parse("app.rb", "--static-runtime", "rt").windowed?
+    File.write("app.rbw", "")
+    assert parse("app.rbw", "--static-runtime", "rt").windowed?
+    refute parse("app.rbw", "--static-runtime", "rt", "--console").windowed?
+
+    File.write("rt/runtime.json", '{"format": 1, "os": "linux"}')
+    refute parse("app.rbw", "--static-runtime", "rt").windowed?
+    # Left for the builder to reject: --windows means nothing on Linux.
+    assert parse("app.rb", "--static-runtime", "rt", "--windows").windowed?
+  end
+
+  def test_static_runtime_is_rejected_with_roundhouse
+    Dir.mkdir("rt")
+    Dir.mkdir("railsapp")
+    assert_rejected(/--static-runtime cannot be used with --roundhouse/, "railsapp", "--roundhouse", "--static-runtime", "rt")
+  end
+
   def test_unknown_gem_group_is_rejected_at_parse_time
     assert_rejected(/Invalid gem content detection option --gem-foo/, "app.rb", "--gem-foo")
     assert_rejected(/Invalid gem content detection option --gem-fulll=x/, "app.rb", "--gem-fulll=x")

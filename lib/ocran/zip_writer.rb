@@ -317,7 +317,7 @@ module Ocran
     # file times are written as local time, as zip tools do, and a UTC time
     # as given, so that a fixed time packs to the same bytes everywhere.
     def dos_timestamp(time)
-      time = time.getlocal unless time.utc?
+      time = time.getlocal unless time.utc? || time.utc_offset.zero?
       year = [time.year, 1980].max
       [(time.hour << 11) | (time.min << 5) | (time.sec / 2),
        ((year - 1980) << 9) | (time.month << 5) | time.day]

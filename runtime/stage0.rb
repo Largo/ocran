@@ -19,6 +19,8 @@ module OcranRuntime
   Entry = Struct.new(:name, :method, :crc, :csize, :size, :local_offset)
 
   @io = File.open(EXE, "rb")
+  # One handle for every thread: a seek and its reads must not interleave.
+  @io_lock = Thread::Mutex.new
 
   class << self
     attr_reader :entries
@@ -26,11 +28,13 @@ module OcranRuntime
     # Returns the contents of archive member +name+ (binary), or nil.
     def read(name)
       e = @entries[name] or return nil
-      @io.pos = e.local_offset
-      sig, _, _, _, _, _, _, _, _, nlen, xlen = @io.read(30).unpack("VvvvvvVVVvv")
-      raise "ocran: bad local header for #{name}" unless sig == 0x04034b50
-      @io.pos = e.local_offset + 30 + nlen + xlen
-      data = @io.read(e.csize)
+      data = @io_lock.synchronize do
+        @io.pos = e.local_offset
+        sig, _, _, _, _, _, _, _, _, nlen, xlen = @io.read(30).unpack("VvvvvvVVVvv")
+        raise "ocran: bad local header for #{name}" unless sig == 0x04034b50
+        @io.pos = e.local_offset + 30 + nlen + xlen
+        @io.read(e.csize)
+      end
       data = Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data) if e.method == 8
       raise "ocran: unsupported compression for #{name}" unless e.method == 0 || e.method == 8
       raise "ocran: CRC mismatch for #{name}" unless Zlib.crc32(data) == e.crc

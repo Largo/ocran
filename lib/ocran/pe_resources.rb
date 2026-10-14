@@ -76,6 +76,12 @@ module Ocran
       section = build_tree(rva)
       raw_size = align(section.bytesize, @file_align)
       raw_at = align(@sections.map { |s| s[:raw] + s[:rsize] }.max, @file_align)
+      # The new section goes where the file's sections end; whatever follows
+      # them (an Authenticode signature, an overlay) would be cut off.
+      if @bytes.bytesize > raw_at
+        raise "the PE file has #{@bytes.bytesize - raw_at} bytes after its last section " \
+              "(a signature or other appended data); its resources cannot be rewritten"
+      end
       table_at = @section_table + @sections.size * 40
       raise "no room in the PE header for another section" if table_at + 40 > @size_of_headers
 

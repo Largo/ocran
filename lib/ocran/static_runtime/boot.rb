@@ -17,6 +17,9 @@
 module OcranRuntime
   ROOT = EXE # archive members live at "#{ROOT}/<name>"
   PREFIX = "#{ROOT}/".freeze
+  # Read now: once File is patched, File.mtime(EXE) is an archive lookup
+  # that would end up here again.
+  MTIME = File.mtime(EXE)
 
   module VirtualFS
     module_function
@@ -86,7 +89,7 @@ module OcranRuntime
     Stat = Struct.new(:size, :directory?) do
       def file? = !directory?
       def ftype = directory? ? "directory" : "file"
-      def mtime = File.mtime(EXE)
+      def mtime = MTIME
       alias_method :ctime, :mtime
       alias_method :atime, :mtime
       def readable? = true
@@ -432,7 +435,7 @@ module OcranRuntime
   $0 = main
   src = VirtualFS.read(main).force_encoding(Encoding::UTF_8)
   if (i = src.index(/^__END__\r?\n/))
-    Object.const_set(:DATA, StringIO.new(src.byteslice(src.index("\n", i) + 1..)))
+    Object.const_set(:DATA, StringIO.new(src[src.index("\n", i) + 1..]))
   end
   ARGV.unshift(*@config.fetch(:argv).map(&in_root))
 end

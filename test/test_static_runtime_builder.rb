@@ -302,6 +302,15 @@ class TestStaticRuntimeBuilder < Minitest::Test
     assert_equal File.binread(first), File.binread(second)
   end
 
+  def test_failed_packaging_leaves_no_executable
+    output = File.join(@dir, "broken.exe")
+    error = assert_raises(RuntimeError) do
+      build(output, resources: { icon_path: File.join(@dir, "missing.ico") }) { |b| b.cp(host_file("src/app.rb"), "src/app.rb") }
+    end
+    assert_match(/missing\.ico not found/, error.message)
+    refute File.exist?(output), "a runtime copy without its archive was left behind"
+  end
+
   def test_runtime_executable_must_match_runtime_json
     File.binwrite(File.join(@runtime_dir, "ocran-runtime.exe"), "MZ tampered")
     error = assert_raises(RuntimeError) { runtime.verify! }
