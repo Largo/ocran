@@ -2,7 +2,8 @@ name: Static runtime (macOS)
 
 # Builds the macOS static Ruby runtime from the pinned sources
 # (runtime/macos/build-runtime.sh), packages the smoke-test applications
-# with it and runs them.
+# with it - nokogiri included, built against the runtime's SDK - and runs
+# them.
 
 on:
   push:
@@ -54,14 +55,18 @@ jobs:
           codesign -dv "$rt/ocran-runtime"
           codesign --verify --strict "$rt/ocran-runtime"
 
+      - name: Install nokogiri for the build host
+        run: gem install nokogiri --no-document
+
       - name: Smoke tests
         env:
           OCRAN_SMOKE_NETWORK: '1'
+          OCRAN_SMOKE_GEMS: '1'
         run: ruby runtime/smoke/run.rb "$RUNNER_TEMP/rt/out" "$RUNNER_TEMP/smoke"
 
       - name: Check the packaged executables
         run: |
-          for exe in "$RUNNER_TEMP"/smoke/smoke-app "$RUNNER_TEMP"/smoke/smoke-https; do
+          for exe in "$RUNNER_TEMP"/smoke/smoke-app "$RUNNER_TEMP"/smoke/smoke-https "$RUNNER_TEMP"/smoke/smoke-gems; do
             codesign --verify --strict "$exe"
             size "$exe" -m | grep -A2 __OCRAN
             # The archive is a plain ZIP: extract the section and list it.

@@ -3,7 +3,9 @@
 #   ruby runtime/smoke/run.rb RUNTIME_DIR [OUT_DIR]
 #
 # Exits non-zero when an executable cannot be built or does not behave.
-# HTTPS is checked only when OCRAN_SMOKE_NETWORK=1.
+# HTTPS is checked only when OCRAN_SMOKE_NETWORK=1, a gem with a C
+# extension (nokogiri, installed for the build host's Ruby) only when
+# OCRAN_SMOKE_GEMS=1.
 require "open3"
 require "rbconfig"
 require "fileutils"
@@ -62,6 +64,17 @@ if ENV["OCRAN_SMOKE_NETWORK"] == "1"
     stdout, stderr, = Open3.capture3(exe)
     failures << "smoke-https: #{stderr}" unless stderr.empty?
     check.("smoke-https", stdout, { "https" => "200", "self_signed" => "rejected" })
+  end
+end
+
+if ENV["OCRAN_SMOKE_GEMS"] == "1"
+  gems = File.join(out, "smoke-gems")
+  if ocran.call("gems.rb", output: gems) && runnable
+    exe = Dir["#{gems}{,.exe}"].first
+    stdout, stderr, status = Open3.capture3(exe)
+    failures << "smoke-gems exited #{status.exitstatus}: #{stderr}" unless status.success?
+    check.("smoke-gems", stdout.force_encoding(Encoding::UTF_8), {
+           "html" => "h\u00e9llo", "xpath" => "1,2", "xslt" => "sum=3", "from_disk" => "0" })
   end
 end
 

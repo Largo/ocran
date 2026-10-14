@@ -153,7 +153,9 @@ extensions, as in the cross builds. It targets the Mac it runs on
 (`uname -m`) and macOS 12 and later (`MACOSX_DEPLOYMENT_TARGET`). The
 runtime directory always needs `sdk/`, since every executable is linked
 from it. CI (`.github/workflows/static-runtime-macos.yml`) builds the arm64
-runtime on `macos-15` and runs `smoke/` with it.
+runtime on `macos-15` and runs `smoke/` with it;
+`static-runtime-linux.yml` does the same for the Linux runtime on Ubuntu
+and runs the executables in Alpine, BusyBox, Fedora and Debian containers.
 
 ### Smoke tests
 
@@ -166,7 +168,8 @@ reading files, `require_relative`, autoload, `DATA`, json, psych, zlib,
 digest, arguments, the exit status, and that every loaded file comes from
 inside the executable; HTTPS with the system's trust store, and that an
 untrusted certificate is refused. Executables for another system are only
-built.
+built. `OCRAN_SMOKE_GEMS=1` adds nokogiri (installed for the build host's
+Ruby), built from source against the runtime's SDK at packaging time.
 
 ### mswin (MSVC Build Tools)
 

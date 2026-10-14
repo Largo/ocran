@@ -1,0 +1,120 @@
+name: Static runtime (Linux)
+
+# Builds the Linux (x86_64, musl) static Ruby runtime from the pinned
+# sources (runtime/linux/build-runtime.sh), packages the smoke-test
+# applications with it - nokogiri included, built against the runtime's
+# SDK - and runs them here and in containers of other distributions.
+
+on:
+  push:
+    paths:
+      - 'runtime/**'
+      - 'lib/ocran/static_runtime/**'
+      - 'lib/ocran/static_runtime_builder.rb'
+      - 'lib/ocran/runtime_sdk.rb'
+      - '.github/workflows/static-runtime-linux.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install musl
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
+
+      # baseruby: the same minor version as the runtime.
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: '4.0'
+
+      - name: Cache source tarballs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/rt/src
+          key: static-runtime-linux-sources-${{ hashFiles('runtime/sources.lock') }}
+
+      - name: Build the runtime
+        run: runtime/linux/build-runtime.sh "$RUNNER_TEMP/rt" 2>&1 | tee "$RUNNER_TEMP/build.log"; exit ${PIPESTATUS[0]}
+        shell: bash
+
+      - name: Inspect the runtime
+        run: |
+          rt="$RUNNER_TEMP/rt/out"
+          ls -la "$rt" "$rt/sdk"
+          cat "$rt/runtime.json"
+          file "$rt/ocran-runtime"
+          # Fully static: no program interpreter, no shared libraries.
+          if readelf -l "$rt/ocran-runtime" | grep -q INTERP || readelf -d "$rt/ocran-runtime" | grep -q NEEDED; then
+            echo "the runtime is not fully static" >&2; exit 1
+          fi
+
+      - name: Install nokogiri for the build host
+        run: gem install nokogiri --no-document
+
+      - name: Smoke tests
+        env:
+          OCRAN_SMOKE_NETWORK: '1'
+          OCRAN_SMOKE_GEMS: '1'
+        run: ruby runtime/smoke/run.rb "$RUNNER_TEMP/rt/out" "$RUNNER_TEMP/smoke"
+
+      # The same executables on other distributions: musl, glibc, and
+      # BusyBox without any C library of its own.
+      - name: Run on other distributions
+        run: |
+          cd "$RUNNER_TEMP/smoke"
+          fail=0
+          for image in alpine:3.22 busybox:1.37 fedora:42 debian:13-slim; do
+            for app in smoke-app smoke-gems; do
+              want=0; [ "$app" = smoke-app ] && want=7
+              set +e
+              docker run --rm --network none -v "$PWD:/w:ro" "$image" "/w/$app" one > out.txt 2>&1
+              code=$?
+              set -e
+              if [ "$code" = "$want" ] && grep -q '^from_disk=0$' out.txt; then
+                echo "$image $app: ok"
+              else
+                echo "$image $app: exit $code"; cat out.txt; fail=1
+              fi
+            done
+          done
+          # HTTPS with the distribution's CA bundle (debian-slim and
+          # BusyBox have none).
+          for image in alpine:3.22 fedora:42; do
+            docker run --rm -v "$PWD:/w:ro" "$image" /w/smoke-https > out.txt 2>&1 || true
+            if grep -q '^https=200$' out.txt && grep -q '^self_signed=rejected$' out.txt; then
+              echo "$image smoke-https: ok"
+            else
+              echo "$image smoke-https:"; cat out.txt; fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-runtime-linux-logs
+          path: |
+            ${{ runner.temp }}/build.log
+            ${{ runner.temp }}/rt/work/gemext.log
+            ${{ runner.temp }}/rt/work/gemext/**/mkmf.log
+            ${{ runner.temp }}/rt/work/ruby-build/config.log
+            ${{ runner.temp }}/smoke/*.build.log
+          if-no-files-found: ignore
+
+      - name: Upload the runtime
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: static-runtime-linux
+          path: |
+            ${{ runner.temp }}/rt/out
+            !${{ runner.temp }}/rt/out/stage
+            !${{ runner.temp }}/rt/out/exts
