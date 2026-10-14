@@ -69,6 +69,15 @@ module Ocran
 
     def link_args = (@dir / "link.args").read.lines(chomp: true).map { |a| a.gsub("@SDK@", @dir.to_s) }
 
+    # The SDK's header directories, ahead of whatever an extconf.rb adds:
+    # the SDK's libraries are the ones linked, so their headers must win
+    # over a system copy (nokogiri adds the libxml2 headers of Apple's SDK,
+    # an older libxml2, on macOS).
+    def sdk_include_flags
+      deps = @dir / "deps" / "include"
+      [deps, deps / "libxml2"].select(&:directory?).map { |dir| "-I#{dir}" }
+    end
+
     # The C compiler driver of the target.
     def cc
       return "cl" if msvc?
@@ -135,7 +144,7 @@ module Ocran
       env = { "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil, "BUNDLER_SETUP" => nil,
               "OCRAN_RUNTIME_CC" => msvc? ? nil : ENV["OCRAN_RUNTIME_CC"] || (cc == link_args.first ? nil : cc),
               "OCRAN_RUNTIME_LIBS" => @info.fetch("libs", []).join(" "),
-              "OCRAN_RUNTIME_CPPFLAGS" => @info.fetch("cppflags", []).join(" "),
+              "OCRAN_RUNTIME_CPPFLAGS" => (sdk_include_flags + @info.fetch("cppflags", [])).join(" "),
               "PKG_CONFIG_LIBDIR" => pkgconfig, "PKG_CONFIG_PATH" => "",
               # Build-time gems extconf.rb uses (nokogiri: mini_portile2):
               # the build host's, which the target's RbConfig would hide.
