@@ -99,3 +99,5 @@ jobs:
             ${{ runner.temp }}/rt/out
             !${{ runner.temp }}/rt/out/stage
             !${{ runner.temp }}/rt/out/exts
+          # sdk/.ext/include holds ruby/config.h, where Ruby's fake.rb looks.
+          include-hidden-files: true
