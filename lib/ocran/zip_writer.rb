@@ -159,7 +159,8 @@ module Ocran
         }
         missing = parents.reject { |name| seen[name] }
         missing.each { |name| seen[name] = true }
-        missing.map { |name| Entry.new(name: name) } << entry
+        # Dated like the entry, so that packing stays reproducible.
+        missing.map { |name| Entry.new(name: name, mtime: entry.mtime) } << entry
       }
     end
 
