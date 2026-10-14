@@ -218,26 +218,37 @@ goes through these steps in order of impact.
 
 #### Experimental options:
 
-* `--static-runtime <runtime-dir>`: Build a single executable for Windows
-  or Linux that runs the application **without extracting anything**: no
-  temporary directory, no DLLs or shared libraries written to disk. The
+* `--static-runtime <runtime-dir>`: Build a single executable for Windows,
+  Linux or macOS that runs the application **without extracting anything**:
+  no temporary directory, no DLLs or shared libraries written to disk. The
   executable is a statically linked Ruby (the *static runtime*) with the
-  application appended as a plain ZIP archive. The Linux runtime is linked
-  against musl and fully static, so it runs on any x86_64 distribution.
+  application as a plain ZIP archive: appended on Windows and Linux, in a
+  section of its own on macOS (`__OCRAN,__zip`), where appended data would
+  break the code signature. The Linux runtime is linked against musl and
+  fully static, so it runs on any x86_64 distribution.
 
   ```
   ocran app.rb --static-runtime path/to/runtime     # -> app.exe
   unzip -l app.exe                          # lists exactly what will run
   unzip -p app.exe ocran/manifest.sha256    # SHA-256 of the runtime and every file
+
+  segedit app -extract __OCRAN __zip app.zip   # macOS: the archive is a section
+  unzip -l app.zip
   ```
 
   The runtime directory holds `ocran-runtime(.exe)`, its own standard
   library and bundled gems (`lib/ruby/`) and `runtime.json`; build one with
   `runtime/build-runtime.sh` (Windows, MinGW, on Linux), the scripts in
   `runtime/mswin/` (Windows, Visual Studio Build Tools) or
-  `runtime/linux/build-runtime.sh` (Linux x86_64, musl). The Windows
+  `runtime/linux/build-runtime.sh` (Linux x86_64, musl) or
+  `runtime/macos/build-runtime.sh` (macOS, on a Mac). The Windows
   runtimes import only DLLs that ship with Windows and need no VC++
-  redistributable; the Linux runtime imports nothing at all. Which system
+  redistributable; the Linux runtime imports nothing at all; the macOS
+  runtime links only libraries of macOS itself (libSystem, libiconv,
+  CoreFoundation). On macOS every executable is linked at packaging time,
+  with its archive, so packaging for macOS needs a Mac with clang (Xcode or
+  the Command Line Tools); the linker signs the result ad hoc, and it can
+  be signed again with `codesign`. Which system
   the executable is for follows from the runtime, not from the build host:
   a Linux build host can package for Windows and the other way round, as
   long as the application does not depend on platform-specific gems. See
@@ -257,7 +268,8 @@ goes through these steps in order of impact.
   runtime `x86_64-w64-mingw32ucrt-gcc` on Linux, or on Windows
   RubyInstaller's MSYS2 GCC named with `OCRAN_RUNTIME_CC=gcc` (with
   `ucrt64\bin` and `usr\bin` on PATH); for an mswin runtime `cl` and
-  `nmake` of Visual Studio Build Tools, from a developer prompt. Gems that
+  `nmake` of Visual Studio Build Tools, from a developer prompt; for a
+  Linux runtime `musl-gcc`; for macOS clang. Gems that
   need a C library get the one the SDK provides: nokogiri uses its
   libxml2/libxslt, tiny_tds its FreeTDS. A precompiled platform gem is
   built from the C sources it carries (nokogiri's and tiny_tds' do); one
@@ -272,7 +284,8 @@ goes through these steps in order of impact.
   [runtime/LICENSES.md](runtime/LICENSES.md) before distributing.
 
   OpenSSL verifies certificates against the Windows certificate store, as
-  Windows itself does - no CA file is packed or needed. The application reads its own files as
+  Windows itself does, and on Linux and macOS against the system's CA
+  bundle - no CA file is packed or needed. The application reads its own files as
   usual (`require`, `require_relative`, `autoload`, `File.read`,
   `Dir.glob`, `__dir__`, `DATA`); their paths lie inside the executable
   (`C:/app/tool.exe/src/tool.rb`) and cannot be written. Files next to the

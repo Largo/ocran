@@ -22,7 +22,7 @@ case, ask someone qualified.
 | libyaml | MIT | always |
 | zlib | zlib | always |
 | libxml2, libxslt | MIT | when an extension uses them (nokogiri) |
-| **GNU libiconv** (Windows only; musl has its own iconv) | **LGPL-2.1-or-later** | when an extension uses it (nokogiri, tiny_tds) |
+| **GNU libiconv** (Windows only; musl and macOS have their own iconv) | **LGPL-2.1-or-later** | when an extension uses it (nokogiri, tiny_tds) |
 | **FreeTDS** | **LGPL-2.0-or-later** | when an extension uses it (tiny_tds) |
 | MinGW-w64 runtime (Windows, MinGW build) | permissive (public domain, ZPL, MIT) | always |
 | musl libc (Linux build) | MIT | always |
@@ -88,7 +88,9 @@ libraries, so `--runtime-dll` does not exist there; GNU libiconv is not
 used at all (musl provides iconv), which leaves FreeTDS (tiny_tds) as the
 one LGPL library. Meeting condition 3 for it means providing the means to
 relink, or building that application with OCRAN's default (extracting)
-mode, which keeps libraries as separate files.
+mode, which keeps libraries as separate files. **On macOS** the same holds:
+iconv is the system's, FreeTDS is linked in, and `--runtime-dll` does not
+exist (yet).
 
 ## Other things to check
 
