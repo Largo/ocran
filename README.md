@@ -1517,8 +1517,10 @@ the rest of the artifact follows from your application source and the
 OCRAN options you pass. Pin them — e.g. a fixed `ruby-version` in
 `ruby/setup-ruby` plus a committed `Gemfile.lock` — and every build
 packages the same interpreter, gems and libraries. OCRAN's own stubs are
-built reproducibly (no timestamps in the PE header), and `--static-runtime`
-packing is byte-reproducible.
+built reproducibly (no timestamps in the PE header), the Windows, Linux
+and macOS static runtimes are reproducible, and `--static-runtime`
+executables are byte-reproducible on all three systems; CI packages a
+test application twice and requires the same bytes.
 
 **Inspect what went in.** Build with `--output-dir` and look at the
 directory, or run an executable with `--debug-extract`. A
@@ -1531,8 +1533,9 @@ of every file.
 `stubw.exe` and the Linux/macOS `stub`) are about 4,000 lines of C in
 `src/`, compiled from this repository by GitHub Actions. Released gems
 and the CI-built static runtimes carry signed build provenance
-attestations (`gh attestation verify <file> -R Largo/ocran`), and gems
-are pushed to rubygems.org with Sigstore attestations. The only
+attestations (`gh attestation verify <file> -R Largo/ocran`); from 1.5.1
+on, each GitHub release has the three runtimes attached next to the gems,
+and gems are pushed to rubygems.org with Sigstore attestations. The only
 third-party binary is `lzma.exe`, taken unmodified from the official
 7-Zip release (see [Safety](#safety)).
 
