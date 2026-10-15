@@ -90,8 +90,12 @@ module Ocran
             # Skip if found in known Gem dir
           elsif (spec = GemSpecQueryable.find_spec(feature))
             gems << spec
-          else
-            puts "Failed to load gemspec for #{feature}" if verbose
+          elsif verbose && Gem.path.any? { |gem_path| feature.subpath?(File.join(gem_path, "gems")) }
+            # Only a feature in a gem directory is expected to have a
+            # gemspec. Standard library and application files are not gems,
+            # and reporting each of them buried real errors under hundreds
+            # of lines.
+            puts "Failed to load gemspec for #{feature}"
           end
 
           gems
