@@ -53,8 +53,13 @@ class TestEnvHook < Minitest::Test
   # operating_system.rb of this Ruby's installation is not found.
   # Returns what the child saw.
   def run_hook(pkg, env = {})
+    # Cleared again inside the child: a Ruby can set some of them while it
+    # starts (setup-ruby's mswin build sets SSL_CERT_FILE), and the hook
+    # rightly keeps a value that is already there.
+    unset = VARIABLES - env.keys
     script = <<~RUBY
       require "json"
+      #{unset.inspect}.each { |name| ENV.delete(name) }
       $LOAD_PATH.replace(#{[File.join(pkg, SITE), File.join(pkg, STDLIB)].inspect})
       require "rubygems/defaults/operating_system"
       puts JSON.generate(env: ENV.to_h.slice(*#{VARIABLES.inspect}), original: $ocran_original,
