@@ -663,8 +663,12 @@ That bare `ruby.exe` still gets the package's environment: OCRAN packs a
 RubyGems startup hook (`lib/ruby/site_ruby/<version>/rubygems/defaults/operating_system.rb`)
 that sets `GEM_HOME`, `GEM_PATH`, `RUBYLIB`, `SSL_CERT_FILE` and the other
 variables of the launch script to the directory's actual location, unless
-they are already set, and then loads the Ruby installation's own one
-(RubyInstaller's). It does not change the working directory (a service
+they are already set, clears those the launch script clears
+(`BUNDLE_GEMFILE`), and then loads the Ruby installation's own one
+(RubyInstaller's). OCRAN leaves the hook out, and warns, when the building
+Ruby has such a file in its `site_ruby` already or keeps `site_ruby` outside
+its installation directory; then set those variables in the service's
+environment yourself. The hook does not change the working directory (a service
 starts in `C:\Windows\System32`), so find your files from `__dir__`. If the
 script the launch script runs is a generated `ocran-rubyopt-launcher.rb`
 (`-I`/`-r` in `RUBYOPT`), register that one.
