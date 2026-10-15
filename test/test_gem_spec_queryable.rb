@@ -47,4 +47,18 @@ class TestGemSpecQueryable < Minitest::Test
       assert_equal 1, files.count(gem_dir / "lib/demo.rb")
     end
   end
+
+  # --verbose reported every loaded feature without a gemspec, i.e. every
+  # standard library file: hundreds of lines that hid the real error. Only
+  # a file in a gem directory without a loadable gemspec is worth a message.
+  def test_detect_gems_from_reports_only_gem_directory_files
+    stdlib = Pathname(RbConfig::CONFIG["rubylibdir"]) / "pp.rb"
+    archdir = Pathname(RbConfig::CONFIG["archdir"]) / "etc.so"
+    orphan = Pathname(Gem.path.first) / "gems" / "ocran-no-such-gem-0.0" / "lib" / "orphan.rb"
+
+    out, _err = capture_io do
+      assert_equal [], Ocran::GemSpecQueryable.detect_gems_from([stdlib, archdir, orphan], verbose: true)
+    end
+    assert_equal "Failed to load gemspec for #{orphan}\n", out
+  end
 end
