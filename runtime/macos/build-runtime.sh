@@ -32,6 +32,11 @@ mkdir -p "$SRC" "$DEPS" "$WORK" "$OUT"
 # Only the pinned dependencies, never Homebrew's.
 export PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" PKG_CONFIG_PATH=
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1767225600}
+# Apple's ar, libtool and ranlib write each member's modification time
+# into a static library, and ld the objects' times into the executable's
+# debug map; with ZERO_AR_DATE they write 0, so that two builds of the same
+# sources give the same bytes.
+export ZERO_AR_DATE=1
 CFLAGS_COMMON="-O2 -ffile-prefix-map=$BUILD=/build"
 
 lock() { awk -v n="$1" '$1 == n { print $'"$2"' }' "$HERE/sources.lock"; }

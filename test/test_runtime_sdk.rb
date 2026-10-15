@@ -81,6 +81,22 @@ class TestRuntimeSdk < Minitest::Test
     refute commands.any? { _1.include?("strip") }
   end
 
+  # A macOS executable keeps a debug map naming its objects, compiled in a
+  # temporary directory at packaging time; -S leaves it out, so the same
+  # application links to the same bytes.
+  def test_macos_links_without_debug_map
+    skip "the stand-in compiler is a shell script" if Gem.win_platform?
+    File.write(File.join(@sdk, "link.args"), [@cc, "@EXTRA@"].join("\n") + "\n")
+    File.write(File.join(@sdk, "sdk.json"), JSON.generate("toolchain" => "gcc", "strip" => nil, "target_os" => "darwin24"))
+    Ocran::RuntimeSdk.new(@sdk, arch: "arm64-darwin24").link([], File.join(@dir, "app"))
+    assert_includes commands.last.split, "-Wl,-S"
+
+    File.write(@log, "")
+    File.write(File.join(@sdk, "sdk.json"), JSON.generate("toolchain" => "gcc", "target_os" => "linux-musl"))
+    Ocran::RuntimeSdk.new(@sdk, arch: "x86_64-linux-musl").link([], File.join(@dir, "app"))
+    refute commands.any? { _1.split.include?("-Wl,-S") }
+  end
+
   def with_env(vars)
     saved = vars.keys.to_h { [_1, ENV[_1]] }
     vars.each { |k, v| ENV[k] = v }

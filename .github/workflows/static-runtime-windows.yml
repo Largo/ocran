@@ -56,6 +56,14 @@ jobs:
           OCRAN_SMOKE_GEMS: '1'
         run: ruby runtime/smoke/run.rb "$RUNNER_TEMP/rt/out" "$RUNNER_TEMP/smoke"
 
+      # The same application, packaged again (another temporary directory,
+      # a later time), must give the same bytes.
+      - name: Packaging is reproducible
+        run: |
+          ruby runtime/smoke/run.rb "$RUNNER_TEMP/rt/out" "$RUNNER_TEMP/smoke-again"
+          cmp "$RUNNER_TEMP"/smoke/smoke-app.exe "$RUNNER_TEMP"/smoke-again/smoke-app.exe
+          echo "smoke-app.exe: identical"
+
       - name: Pack the runtime
         run: |
           mkdir -p "$RUNNER_TEMP/dist"
