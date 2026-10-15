@@ -8,6 +8,7 @@ UNAME           := $(shell uname -s 2>/dev/null || echo Windows)
 IS_POSIX        := $(filter $(UNAME),Linux Darwin)
 
 CC              := gcc
+WINDRES         ?= windres
 CFLAGS          := -Wall -O2 -DWITH_LZMA -Ilzma
 LDFLAGS         := -s
 
@@ -21,6 +22,9 @@ ifneq ($(IS_POSIX),)
   RESOURCE_OBJ    :=
 else
   EXEEXT          := .exe
+  # No build time in the PE header, so that the stubs (and the platform
+  # gem that ships them) build reproducibly.
+  LDFLAGS         += -Wl,--no-insert-timestamp
   LDLIBS          := -lbcrypt
   GUI_LDFLAGS     := -mwindows
   STUB_CFLAGS     := $(CFLAGS) -D_CONSOLE
@@ -69,7 +73,7 @@ $(LZMA_OBJS): $(LZMA_HEADERS)
 
 ifeq ($(IS_POSIX),)
 stub.res: stub.rc
-	windres -i stub.rc -O coff -o stub.res
+	$(WINDRES) -i stub.rc -O coff -o stub.res
 endif
 
 stub$(EXEEXT): $(COMMON_OBJS) $(CONSOLE_OBJS)
