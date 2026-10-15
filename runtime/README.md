@@ -112,18 +112,19 @@ publishing it as a workflow artifact:
 executables packaged on Linux and on Windows), `static-runtime-linux.yml`
 (tested on Ubuntu and in Alpine, BusyBox, Fedora and Debian containers) and
 `static-runtime-macos.yml` (arm64). Each artifact is one reproducible
-tarball, `ocran-runtime-<ruby version>-<arch>.tar.gz`
-(`pack-runtime.rb`: sorted entries, fixed times, no owners).
+archive (`pack-runtime.rb`: sorted entries, fixed times, no owners):
+`ocran-runtime-<ruby version>-<arch>.zip` for Windows, which Explorer and
+`Expand-Archive` unpack, `.tar.gz` for Linux and macOS.
 
 Only a runtime that passed its tests gets a signed
 [build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)
 (SLSA provenance, signed through Sigstore with the workflow's identity) for
-the tarball and for the runtime executable in it. It records which
+the archive and for the runtime executable in it. It records which
 workflow, at which commit of this repository, built that exact file:
 
 ```
-gh attestation verify ocran-runtime-4.0.7-x64-mingw-ucrt.tar.gz -R Largo/ocran
-tar -xzf ocran-runtime-4.0.7-x64-mingw-ucrt.tar.gz
+gh attestation verify ocran-runtime-4.0.7-x64-mingw-ucrt.zip -R Largo/ocran
+Expand-Archive ocran-runtime-4.0.7-x64-mingw-ucrt.zip .
 gh attestation verify ocran-runtime-4.0.7-x64-mingw-ucrt/ocran-runtime.exe -R Largo/ocran
 ```
 
