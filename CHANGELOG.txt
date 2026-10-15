@@ -1,4 +1,5 @@
 === Unreleased
+- Packaging no longer aborts with "No such file or directory" over an entry of $LOADED_FEATURES that has no file behind it. A racc parser generated with its runtime embedded marks <dir>/racc/parser.rb and racc/info.rb as loaded so that racc is not loaded twice; rdoc's RD parsers in Ruby 3.4 do, so an application that loaded them (directly or through a gem) failed with ".../lib/ruby/3.4.0/rdoc/rd/racc/parser.rb (Errno::ENOENT)" (reported on a Windows runner with Ruby 3.4.11 and ocran 1.4.6). Such entries are skipped; --verbose names them.
 - `--add-all-core` no longer aborts over an entry of the Ruby library directories that is not a readable file, e.g. Debian's packaged Ruby, whose rdoc fonts are links into fonts-lato: it packs the rest and warns which entries it left out. A configured library directory that does not exist (Debian's sitelibdir, /usr/local/lib/site_ruby/<version>) is skipped; it failed with "Unexpected library path format".
 
 === 1.5.0

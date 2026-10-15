@@ -373,6 +373,17 @@ class TestOcran < Minitest::Test
   end
 
   # Hello world test. Test that we can build and run executables.
+  # An entry in $LOADED_FEATURES without a file behind it aborted the
+  # build with ENOENT (rdoc/rd/racc/parser.rb on Ruby 3.4).
+  def test_phantom_loaded_feature
+    with_fixture 'phantom_feature' do
+      assert_system("ruby", ocran, "phantom_feature.rb", *DefaultArgs)
+      pristine_env exe_name("phantom_feature") do
+        assert_system(exe_name("phantom_feature"))
+      end
+    end
+  end
+
   def test_helloworld
     with_fixture 'helloworld' do
       each_path_combo "helloworld.rb" do |script|
