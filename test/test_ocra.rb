@@ -1227,6 +1227,30 @@ class TestOcran < Minitest::Test
     end
   end
 
+  # String#unicode_normalize is core, but core loads its implementation from
+  # the standard library on first use. An app that calls it only after the
+  # dependency run (here: only when packed) must still find it, in the
+  # executable and in --output-dir alike.
+  def test_unicode_normalize_packed_without_dep_run_use
+    with_fixture 'unicode_normalize' do
+      assert_system("ruby", ocran, "unicode_normalize.rb", *DefaultArgs)
+      exe = exe_name("unicode_normalize")
+      pristine_env exe do
+        output, status = capture_system(exe)
+        assert status&.success?, "packed executable failed:\n#{output}"
+        assert_equal "U+0065 U+0301\npacked", output.strip
+      end
+
+      outdir = File.expand_path("unicode_normalize_dir")
+      assert_system("ruby", ocran, "unicode_normalize.rb", *(DefaultArgs + ["--output-dir", outdir]))
+      Bundler.with_original_env do
+        output, status = capture_system(File.join(outdir, exe))
+        assert status&.success?, "--output-dir app failed:\n#{output}"
+        assert_equal "U+0065 U+0301\npacked", output.strip
+      end
+    end
+  end
+
   # With dep run disabled but including all core libs, should be able
   # to use ruby standard libraries (i.e. cgi)
   def test_rubycoreincl

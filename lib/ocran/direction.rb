@@ -482,6 +482,19 @@ module Ocran
         end
       end
 
+      # String#unicode_normalize (and unicode_normalized?, unicode_normalize!)
+      # is core, but core requires its implementation from the standard
+      # library (unicode_normalize/normalize.rb, which loads tables.rb) on
+      # first use. An app that does not call it during the dependency run
+      # fails with a LoadError once packed, so always pack these files.
+      # Not with --cosmo-ruby: the payload has its own standard library.
+      unless @option.cosmo_ruby
+        known = features.to_set { |f| f.path_key }
+        (Pathname(RbConfig::CONFIG["rubylibdir"]) / "unicode_normalize").glob("*.rb").sort.each do |path|
+          features << path unless known.include?(path.path_key)
+        end
+      end
+
       say "Building #{@option.output_executable}"
       require_relative "build_helper"
       builder.extend(BuildHelper)
