@@ -6,7 +6,10 @@ name: Static runtime (Windows)
 # included - and attests the runtime once the tests pass.
 
 on:
+  # Branch pushes only: for a release tag, gem-release.yml calls this
+  # workflow and attaches the runtime to the release.
   push:
+    branches: ['**']
     paths:
       - 'runtime/**'
       - 'lib/ocran/static_runtime/**'
@@ -15,6 +18,7 @@ on:
       - 'lib/ocran/pe_resources.rb'
       - '.github/workflows/static-runtime-windows.yml'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

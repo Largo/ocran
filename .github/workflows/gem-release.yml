@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - '*'
+  # A dry run: builds and tests everything a release would contain and
+  # lists it, but publishes nothing.
+  workflow_dispatch:
 
 jobs:
   # Any tag triggers this workflow, so make sure it names the version that
@@ -14,6 +17,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Check that the tag matches Ocran::VERSION
+        if: github.event_name == 'push'
         run: |
           version=$(ruby -e 'load "lib/ocran/version.rb"; print Ocran::VERSION')
           tag="${GITHUB_REF_NAME#v}"
@@ -94,8 +98,57 @@ jobs:
           name: gem-source
           path: '*.gem'
 
+  # The static runtimes for --static-runtime, built, tested and attested by
+  # their own workflows, go into the release with the gems: a published
+  # release is immutable, so they cannot be added afterwards.
+  runtime-windows:
+    needs: check-version
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/static-runtime-windows.yml
+
+  runtime-linux:
+    needs: check-version
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/static-runtime-linux.yml
+
+  runtime-macos:
+    needs: check-version
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/static-runtime-macos.yml
+
+  dry-run:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build, build-source-gem, runtime-windows, runtime-linux, runtime-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all gem artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: gem-*
+          merge-multiple: true
+
+      - name: Download the runtimes
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: ocran-runtime-*
+          path: runtimes
+          merge-multiple: true
+
+      - name: What a release would contain
+        run: sha256sum *.gem runtimes/*
+
   release:
-    needs: [build, build-source-gem]
+    if: github.event_name == 'push'
+    needs: [build, build-source-gem, runtime-windows, runtime-linux, runtime-macos]
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -110,6 +163,14 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: gem-*
+          merge-multiple: true
+
+      # Attested by the runtime workflows already.
+      - name: Download the runtimes
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: ocran-runtime-*
+          path: runtimes
           merge-multiple: true
 
       - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
@@ -145,6 +206,14 @@ jobs:
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
           awk "/^=== $VERSION/{found=1; next} found && /^===/{exit} found{print}" CHANGELOG.txt > /tmp/release-notes.txt
+          {
+            echo
+            echo "## Static runtimes (--static-runtime)"
+            echo
+            echo "Built from this tag, tested and attested by CI. Unpack one and pass its directory to \`ocran app.rb --static-runtime <dir>\`; verify a download with \`gh attestation verify <file> -R ${{ github.repository }}\`. See runtime/README.md."
+            echo
+            for f in runtimes/*; do echo "- \`$(basename "$f")\`"; done
+          } >> /tmp/release-notes.txt
 
       - name: Create GitHub Release and upload gems
         env:
@@ -154,7 +223,7 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "Release ${{ github.ref_name }}" \
             --notes-file /tmp/release-notes.txt \
-            *.gem
+            *.gem runtimes/*
 
       # Trusted publishing: exchanges the workflow's OIDC token for a
       # short-lived RubyGems API key, so no long-lived secret is needed.
