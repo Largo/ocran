@@ -1,11 +1,28 @@
-# OCRAN
+# OCRAN — turn Ruby scripts into standalone executables (.exe) for Windows, Linux and macOS
 
 ![OCRAN: ship your Ruby app as one file, no Ruby needed to run it](https://raw.githubusercontent.com/Largo/ocran/master/docs/social/twitter-card.png)
 
-[OCRAN (One-Click Ruby Application Next)](https://github.com/largo/ocran) packages Ruby applications for
+[![Gem Version](https://badge.fury.io/rb/ocran.svg)](https://rubygems.org/gems/ocran)
+
+**OCRAN (One-Click Ruby Application Next) is a Ruby-to-executable packager:
+`ocran app.rb` turns a Ruby script into a single `.exe` (Windows) or native
+binary (Linux, macOS) that runs on machines without Ruby installed.** It is
+the maintained successor of [OCRA](https://github.com/larsch/ocra) for
+Ruby 3.2 and newer.
+
+[OCRAN](https://github.com/largo/ocran) packages Ruby applications for
 distribution. It bundles your script, the Ruby interpreter, gems, and native
 libraries into a single self-contained artifact that runs without requiring
 Ruby to be installed on the target machine.
+
+Quick start:
+
+```
+gem install ocran
+ocran app.rb          # → app.exe on Windows, ./app on Linux/macOS
+```
+
+See the [FAQ](#faq) and the [comparison with other Ruby packagers](#comparison-with-other-ruby-packagers).
 
 OCRAN supports four output formats, all cross-platform:
 
@@ -1356,10 +1373,173 @@ actually encrypts stay out of reach until CosmoRuby's `openssl` grows a
 cipher surface — mbedtls has AES, GCM and PKCS5, so it is a bounded job;
 it is tracked in `PORTING-NOTES.md` in the CosmoRuby repository.
 
-## See elsewhere
+## FAQ
 
-- [State of Ruby Packagers](https://gist.github.com/YOU54F/3775e66e6090e0371c11601e6b75c305)
-- [Traveling Ruby](https://github.com/trubygems/traveling-ruby)
+### How do I convert a Ruby script into an .exe?
+
+Install OCRAN on Windows and run it on your entry script:
+
+    gem install ocran
+    ocran app.rb
+
+The result is `app.exe`, which contains your script, the Ruby interpreter,
+the gems it loaded and the DLLs they need. On Linux and macOS the same
+command produces a native executable `./app`.
+
+### Does the target machine need Ruby installed?
+
+No. The executable carries its own Ruby interpreter, standard library,
+gems and native libraries.
+
+### Can I build a Windows .exe on Linux or macOS?
+
+Not with the default mode: OCRAN bundles the Ruby of the machine it runs
+on, so build a Windows `.exe` on Windows (for example on a GitHub Actions
+Windows runner, see
+[Building for multiple platforms](#building-for-multiple-platforms-with-github-actions)),
+or run a Windows Ruby and OCRAN under Wine on Linux/macOS.
+Two experimental modes package without the target's own Ruby:
+`--static-runtime` with a Windows runtime builds a Windows `.exe` on
+Linux (and the other way round), and `--cosmo-ruby` packages a
+cosmopolitan Ruby into one file that runs on Windows, Linux and macOS.
+
+### What is the difference between OCRA and OCRAN?
+
+OCRAN is a maintained fork of OCRA. OCRA targets Windows only and is no
+longer updated for current Ruby versions; OCRAN supports Ruby 3.2+, builds
+for Windows, Linux and macOS, and adds directory, zip, macOS `.app` and
+Inno Setup output. To migrate, call `ocran` instead of `ocra` and replace
+`OCRA_EXECUTABLE` with `OCRAN_EXECUTABLE` in your code.
+
+### Which gems and native extensions are supported?
+
+OCRAN runs your script once at build time and records every file that
+`require` and `load` pull in, including compiled extensions and the DLLs
+or shared libraries they link. In the default mode, gems with native extensions
+(for example `sqlite3`, `pg`, `nokogiri`) are packaged along with their
+libraries; the experimental `--cosmo-ruby` mode only supports the native
+extensions built into its interpreter. Use
+`--gemfile` to include everything from a Bundler `Gemfile`, and the
+[gem detection modes](#gem-content-detection-modes) to include extra files.
+
+### Can I package a Rails, GUI or command-line app?
+
+Yes. Command-line tools work out of the box, GUI apps can use
+`--windows` to hide the console on Windows, and Rails apps with SQLite are
+covered in [Packaging a Rails application](#packaging-a-rails-application).
+
+### Why does my packaged app start slowly?
+
+The default self-extracting executable unpacks Ruby to a temporary
+directory on every launch. Use `--output-dir`, `--output-zip` or
+`--innosetup` to install the files once, `--static-runtime` for a single
+executable that runs without extracting, or `--cosmo-ruby` with an
+interpreter that supports ZIP packaging (CosmoRuby `v4.0.6-cosmo3` or
+newer) to run without extracting; with other interpreters `--cosmo-ruby`
+falls back to a launcher stub that extracts on every start.
+
+### My antivirus flags the generated .exe. What can I do?
+
+Self-extracting executables that unpack an interpreter are a common
+heuristic trigger. Sign the executable (OCRAN output is code-signing
+compatible, e.g. with `signtool` on Windows), ship an
+installer built with `--innosetup`, or ship a plain directory with
+`--output-dir`.
+
+## Comparison with other Ruby packagers
+
+| Tool | Output | Platforms | Single file | Maintained for Ruby 3.2+ |
+|------|--------|-----------|-------------|--------------------------|
+| **OCRAN** | `.exe` / native binary, directory, zip, macOS `.app`, Inno Setup installer | Windows, Linux, macOS | Yes | Yes |
+| [OCRA](https://github.com/larsch/ocra) | `.exe` | Windows only | Yes | No |
+| [Traveling Ruby](https://github.com/trubygems/traveling-ruby) | Prebuilt Ruby runtime you ship next to your app | Windows, Linux, macOS | No | Yes |
+| [Tebako](https://github.com/tamatebako/tebako) | Single binary with an embedded filesystem | Windows, Linux, macOS | Yes | Yes |
+| [ruby-packer](https://github.com/pmq20/ruby-packer) | Single binary with Ruby compiled from source | Windows, Linux, macOS | Yes | No |
+
+OCRAN's distinguishing features are that, in its default mode, it needs no
+C compiler to package an app (it reuses your installed Ruby), detects dependencies by running
+your script, and can produce installers and macOS app bundles directly.
+
+See also: [State of Ruby Packagers](https://gist.github.com/YOU54F/3775e66e6090e0371c11601e6b75c305).
+
+## Security, dependencies and reproducibility
+
+A packager decides which interpreter, libraries and gems end up on your
+users' machines, so where those come from matters as much as the
+packaging itself. OCRAN is built so that nothing reaches the executable
+that you did not install, run and test yourself, and so that you can
+check what went in.
+
+**No hidden downloads.** In its default mode OCRAN makes no network
+requests: it does not fetch an interpreter, prebuilt runtime, patched
+Ruby source or library tarball while packaging. The executables it
+produces, in every mode, never download a runtime when they start. Some
+packaging approaches ship a small launcher that pulls the actual runtime
+from the internet on first launch; the app then depends on a server
+being reachable and trustworthy long after you released it. An OCRAN
+executable carries the interpreter, gems and libraries it runs; whether
+your app uses the network is up to your own code. The opt-in modes that
+do fetch say so and verify what they get:
+
+* `--wasm` downloads the ruby.wasm or PicoRuby package from the npm
+  registry once, checks it against the SHA-512 integrity the registry
+  publishes, and caches it, so later builds run offline.
+* `--static-runtime` fetches the source gem of a precompiled platform gem
+  from your configured gem sources when it has to build that gem's
+  extension for the runtime.
+
+**Your Ruby, from the source you already trust.** By default OCRAN
+packages the Ruby interpreter installed on the build machine —
+RubyInstaller, a distribution package, `ruby-build`, `ruby/setup-ruby` in
+CI, or your own build. It does not substitute a separately built or
+patched interpreter from a third party. Security fixes reach your app the
+same way they reach your development machine: update Ruby, rebuild.
+Packagers that embed their own copy of Ruby and its C libraries (OpenSSL,
+zlib, libyaml, libffi, ...) freeze those versions at whatever the
+packager last shipped, and fall behind on security fixes when the
+packager stops being updated. The `--static-runtime` runtimes are built
+by scripts in this repository (`runtime/`) that you can run yourself;
+OCRAN checks a runtime against the SHA-256 recorded in its
+`runtime.json`.
+
+**Exactly the gems and libraries you tested.** Dependencies are not
+resolved again at packaging time. OCRAN runs your script, records the
+files Ruby actually loaded, and packs those files from your installed
+gems — the versions pinned in your `Gemfile.lock` when you build under
+Bundler. Native libraries are taken from the same installation your
+extensions were loaded from. There is no second dependency resolution
+that could pick a different version than the one you ran.
+
+**Reproducible builds.** The bundled interpreter and dependencies are
+determined by three things you control: the Ruby installation (or static
+runtime), the installed gems (or `Gemfile.lock`) and the OCRAN version;
+the rest of the artifact follows from your application source and the
+OCRAN options you pass. Pin them — e.g. a fixed `ruby-version` in
+`ruby/setup-ruby` plus a committed `Gemfile.lock` — and every build
+packages the same interpreter, gems and libraries. OCRAN's own stubs are
+built reproducibly (no timestamps in the PE header), and `--static-runtime`
+packing is byte-reproducible.
+
+**Inspect what went in.** Build with `--output-dir` and look at the
+directory, or run an executable with `--debug-extract`. A
+`--static-runtime` executable is a plain ZIP archive behind the runtime:
+`unzip -l app.exe` lists exactly what will run, and
+`ocran/manifest.sha256` inside it records the SHA-256 of the runtime and
+of every file.
+
+**Verifiable OCRAN releases.** The launcher stubs (`stub.exe`,
+`stubw.exe` and the Linux/macOS `stub`) are about 4,000 lines of C in
+`src/`, compiled from this repository by GitHub Actions. Released gems
+and the CI-built static runtimes carry signed build provenance
+attestations (`gh attestation verify <file> -R Largo/ocran`), and gems
+are pushed to rubygems.org with Sigstore attestations. The only
+third-party binary is `lzma.exe`, taken unmodified from the official
+7-Zip release (see [Safety](#safety)).
+
+The trade-off: keeping the bundled Ruby patched is your job, just as it
+is for the Ruby you develop with. The experimental `--cosmo-ruby` mode
+packages a cosmopolitan interpreter file you choose, such as a CosmoRuby
+release, as given.
 
 ## Credits
 
