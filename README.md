@@ -643,6 +643,37 @@ On Windows, run the batch file:
 
     myapp\script.bat
 
+### Running as a Windows service
+
+The self-extracting `.exe`, the wrapper `.exe` and the launch script all
+start the packed `ruby.exe` as a child process. The Windows service control
+manager accepts the service dispatcher only from the process it started
+itself, so a service registered through any of them fails with error 1063
+("The service process could not connect to the service controller").
+
+Build with `--output-dir` (or `--innosetup`) instead and register the packed
+interpreter directly, e.g. with `sc create` or the
+[win32-service](https://github.com/chef/win32-service) gem's
+`Win32::Service.create`:
+
+    ocran service.rb --output-dir C:\MyService
+    sc create MyService binPath= "C:\MyService\bin\ruby.exe C:\MyService\src\service.rb"
+
+That bare `ruby.exe` still gets the package's environment: OCRAN packs a
+RubyGems startup hook (`lib/ruby/site_ruby/<version>/rubygems/defaults/operating_system.rb`)
+that sets `GEM_HOME`, `GEM_PATH`, `RUBYLIB`, `SSL_CERT_FILE` and the other
+variables of the launch script to the directory's actual location, unless
+they are already set, and then loads the Ruby installation's own one
+(RubyInstaller's). It does not change the working directory (a service
+starts in `C:\Windows\System32`), so find your files from `__dir__`. If the
+script the launch script runs is a generated `ocran-rubyopt-launcher.rb`
+(`-I`/`-r` in `RUBYOPT`), register that one.
+
+OCRAN runs the script at build time, where the service's `mainloop` cannot
+work: skip it with `defined?(Ocran)` (see "Detecting OCRAN at build time")
+and `require` there what the service only loads later, such as `net/http`,
+so that it gets packed.
+
 ### Pitfalls:
 
 * Avoid modifying load paths at runtime. Use `-I` or `RUBYLIB` if needed, but don't expect OCRAN to preserve them for runtime. OCRAN may pack sources into other directories than you
