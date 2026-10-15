@@ -1,10 +1,20 @@
 require "rubygems"
-require 'bundler/setup'
-require "minitest/test_task"
 
-# rake test: runs test/**/test_*.rb. The gems themselves are built from
-# ocran.gemspec and ocran-source.gemspec (see .github/workflows/gem-release.yml).
-Minitest::TestTask.create
+# Building the stubs needs only a C compiler, none of the development gems
+# in the Gemfile, so a run of nothing but the stub tasks leaves Bundler and
+# Minitest out: `rake build` then works in a checkout whose bundle is not
+# installed, such as a Bundler git source. Anything else, the tests above
+# all, runs under the bundle as before.
+STUB_TASKS = %w[build build_stub clean].freeze
+requested = Rake.application.top_level_tasks
+unless requested.any? && (requested - STUB_TASKS).empty?
+  require 'bundler/setup'
+  require "minitest/test_task"
+
+  # rake test: runs test/**/test_*.rb. The gems themselves are built from
+  # ocran.gemspec and ocran-source.gemspec (see .github/workflows/gem-release.yml).
+  Minitest::TestTask.create
+end
 
 task :default => :test
 
