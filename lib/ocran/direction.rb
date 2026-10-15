@@ -955,14 +955,23 @@ module Ocran
       elsif @option.add_all_core?
         say "Will include all ruby core libraries"
         all_core_dir.each do |path|
+          # A configured directory that was never created (Debian's
+          # sitelibdir, /usr/local/lib/site_ruby/<ver>) holds nothing.
+          next unless path.directory?
+
           # Match the load path against standard library, site_ruby, and vendor_ruby paths
           unless (subdir = path.to_posix.match(RUBY_LIBRARY_PATH_REGEX)&.[](1))
             raise "Unexpected library path format (does not match core dirs): #{path}"
           end
-          path.find.each do |src|
-            next if src.directory?
+          files, skipped = self.class.core_library_files(path)
+          files.each do |src|
             builder.copy_to_lib(src, Pathname(subdir) / src.relative_path_from(path))
           end
+          next if skipped.empty?
+
+          warning "Not packed: #{skipped.size} entr#{skipped.size == 1 ? "y" : "ies"} of #{path} that " \
+                  "#{skipped.size == 1 ? "is" : "are"} not a readable file (#{skipped.first(3).join(", ")}" \
+                  "#{skipped.size > 3 ? ", ..." : ""})"
         end
       end
 
@@ -1222,6 +1231,23 @@ module Ocran
         target_script = generate_rubyopt_launcher(builder, target_script, rubyopt_result)
       end
       builder.exec(installed_ruby_exe, target_script, *@option.argv)
+    end
+
+    # The files below +dir+ that --add-all-core packs, and the entries it
+    # cannot: a Ruby installation can list what is not there - Debian's
+    # rdoc links its fonts into a fonts-lato package that may not be
+    # installed, and a stdlib entry that vanished or cannot be read used to
+    # abort the whole build (ENOENT) over a file no application needs.
+    # Returns [files, skipped], both lists of Pathname.
+    def self.core_library_files(dir)
+      files = []
+      skipped = []
+      dir.find do |src|
+        next if src.directory?
+
+        (src.file? && src.readable? ? files : skipped) << src
+      end
+      [files, skipped]
     end
 
     # Maps an absolute build-machine path to its location (relative to the
