@@ -396,19 +396,30 @@ module Ocran
       # Convert all relative paths to absolute paths before building.
       # NOTE: In the future, different strategies may be needed before and after script execution.
       features.filter_map do |feature|
-        if feature.absolute?
-          feature
-        elsif (load_path = @post_env.find_load_path(feature))
-          feature.expand_path(@post_env.expand_path(load_path))
-        else
-          # This message occurs when paths for core library files (e.g., enumerator.so,
-          # rational.so, complex.so, fiber.so, thread.rb, ruby2_keywords.rb) are not
-          # found. These are integral to Ruby's standard libraries or extensions and
-          # may not be located via normal load path searches, especially in RubyInstaller
-          # environments.
-          verbose "Load path not found for #{feature}, skip this feature"
-          nil
+        path =
+          if feature.absolute?
+            feature
+          elsif (load_path = @post_env.find_load_path(feature))
+            feature.expand_path(@post_env.expand_path(load_path))
+          else
+            # This message occurs when paths for core library files (e.g., enumerator.so,
+            # rational.so, complex.so, fiber.so, thread.rb, ruby2_keywords.rb) are not
+            # found. These are integral to Ruby's standard libraries or extensions and
+            # may not be located via normal load path searches, especially in RubyInstaller
+            # environments.
+            verbose "Load path not found for #{feature}, skip this feature"
+            next
+          end
+        # An entry can be in $LOADED_FEATURES without a file behind it: a
+        # racc parser generated with its runtime embedded marks
+        # <dir>/racc/parser.rb and racc/info.rb as loaded so that racc is not
+        # loaded twice (rdoc's RD parsers in Ruby 3.4 do). Copying it failed
+        # the whole build with ENOENT; there is nothing to pack.
+        unless path.file?
+          verbose "#{path} is marked as loaded but is not a file, skip this feature"
+          next
         end
+        path
       end
     end
 
