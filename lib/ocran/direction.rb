@@ -6,6 +6,7 @@ require_relative "refine_pathname"
 require_relative "host_config_helper"
 require_relative "command_output"
 require_relative "build_constants"
+require_relative "env_hook"
 
 module Ocran
   class Direction
@@ -1248,6 +1249,8 @@ module Ocran
       end
       builder.set_env_path("GEM_PATH", *gem_paths)
 
+      pack_env_hook(builder)
+
       # Add the opcode to launch the script
       installed_ruby_exe = BINDIR / ruby_executable
       target_script = builder.resolve_source_path(@option.script, inst_src_prefix)
@@ -1256,6 +1259,41 @@ module Ocran
       end
       builder.exec(installed_ruby_exe, target_script, *@option.argv)
     end
+
+    # Packs the RubyGems startup hook that sets the exported variables for a
+    # bare bin/ruby of the package (see EnvHook), e.g. a Windows service
+    # registered as `bin\ruby.exe src\service.rb`. It goes into the packed
+    # sitelibdir, the first default load path entry, in every output that
+    # carries the host Ruby: the stub and the launch scripts set the
+    # variables themselves, so there it only loads the original file.
+    # Not with --cosmo-ruby and --static-runtime, which bring their own
+    # Ruby and set up their environment themselves.
+    def pack_env_hook(builder)
+      return if @option.cosmo_ruby || @option.static_runtime?
+
+      site = Pathname(sitelibdir)
+      unless site.subpath?(exec_prefix)
+        verbose "Not packing #{EnvHook::FEATURE}: sitelibdir #{site} is outside #{exec_prefix}"
+        return
+      end
+      if (site / EnvHook::FEATURE).exist?
+        warning "Not packing ocran's #{EnvHook::FEATURE}: #{site} has one already, so a bare " \
+                "#{BINDIR / ruby_executable} of the package will not get the launch script's environment"
+        return
+      end
+
+      target = site.relative_path_from(exec_prefix) / EnvHook::FEATURE
+      say "Adding #{target} (sets the launch environment for a bare #{BINDIR / ruby_executable})"
+      require "tempfile"
+      hook_file = Tempfile.new(["ocran-operating_system", ".rb"])
+      hook_file.write(EnvHook.source(builder.exported_env, target.dirname.each_filename.count))
+      hook_file.close
+      verbose File.read(hook_file.path)
+      # Kept until the build finishes, like the RUBYOPT launcher.
+      @env_hook_file = hook_file
+      builder.cp(hook_file.path, target)
+    end
+    private :pack_env_hook
 
     # The files below +dir+ that --add-all-core packs, and the entries it
     # cannot: a Ruby installation can list what is not there - Debian's

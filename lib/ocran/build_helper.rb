@@ -30,7 +30,14 @@ module Ocran
 
     def export(name, value)
       verbose "export #{name}=#{replace_placeholder(value)}"
+      exported_env[name.to_s] = value.to_s
       super
+    end
+
+    # The variables exported so far (name => value with the extraction root
+    # placeholder), whatever the builder does with them.
+    def exported_env
+      @exported_env ||= {}
     end
 
     def replace_placeholder(s)
