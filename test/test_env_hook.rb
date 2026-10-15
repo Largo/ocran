@@ -71,6 +71,17 @@ class TestEnvHook < Minitest::Test
     JSON.parse(out.lines.last)
   end
 
+  # The launch script empties BUNDLE_GEMFILE (and BUNDLE_LOCKFILE) whatever
+  # the parent set, so that the packaged Gemfile is used; so does the hook.
+  def test_variables_the_launch_script_empties_are_removed
+    Dir.mktmpdir do |dir|
+      pkg = File.join(dir, "pkg")
+      build_package(pkg)
+      env = run_hook(pkg, "BUNDLE_GEMFILE" => "/parent/Gemfile")
+      refute env["env"].key?("BUNDLE_GEMFILE"), "an inherited BUNDLE_GEMFILE was kept"
+    end
+  end
+
   # How the launch script renders a packed path under the package root.
   def packed(root, rel)
     path = File.join(root, rel)
