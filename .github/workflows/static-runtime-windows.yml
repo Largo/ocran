@@ -78,8 +78,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ocran-runtime-windows-x64
-          path: ${{ runner.temp }}/dist/*.tar.gz
-          compression-level: 0 # already gzip
+          path: ${{ runner.temp }}/dist/*.zip
+          compression-level: 0 # already compressed
 
       - name: Upload the executables packaged on Linux
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -116,11 +116,11 @@ jobs:
           name: smoke-windows-packaged-on-linux
           path: ${{ runner.temp }}/smoke-linux
 
+      # As a user would: Windows' own zip support.
       - name: Extract the runtime
         run: |
-          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\rt" | Out-Null
-          $tarball = (Get-ChildItem "$env:RUNNER_TEMP\dist\*.tar.gz").FullName
-          & "$env:SystemRoot\System32\tar.exe" -xzf $tarball -C "$env:RUNNER_TEMP\rt"
+          $zip = (Get-ChildItem "$env:RUNNER_TEMP\dist\*.zip").FullName
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\rt"
           $dir = (Get-ChildItem -Directory "$env:RUNNER_TEMP\rt").FullName
           "RUNTIME_DIR=$dir" | Out-File -Append $env:GITHUB_ENV
           Get-Content "$dir\runtime.json"
@@ -157,7 +157,7 @@ jobs:
           path: ${{ runner.temp }}/smoke-windows/*.build.log
           if-no-files-found: ignore
 
-  # Only a runtime that passed the tests is attested. The tarball is
+  # Only a runtime that passed the tests is attested. The zip is
   # reproducible (runtime/pack-runtime.rb); verify a download with:
   # gh attestation verify <file> -R Largo/ocran
   attest:
@@ -176,11 +176,11 @@ jobs:
           path: dist
 
       - name: Extract the runtime executable
-        run: tar -xzf dist/*.tar.gz --wildcards '*/ocran-runtime.exe' --strip-components=1
+        run: unzip -j dist/*.zip '*/ocran-runtime.exe'
 
       - name: Attest build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
-            dist/*.tar.gz
+            dist/*.zip
             ocran-runtime.exe
