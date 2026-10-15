@@ -4,6 +4,7 @@ require "tmpdir"
 require "tmpdir"
 require "fileutils"
 require "open3"
+require "json"
 require "rbconfig"
 require "pathname"
 require "bundler"
@@ -1574,6 +1575,55 @@ class TestOcran < Minitest::Test
       refute File.exist?(File.join(outdir, exe_name("helloworld"))), "Wrapper executable should be omitted with --no-wrapper-exe"
     ensure
       FileUtils.rm_rf(outdir)
+    end
+  end
+
+  # A Windows service has to be registered as the packed bin\ruby.exe itself
+  # (the service control manager only accepts the service dispatcher from
+  # the process it started), so it runs without the launch script. The
+  # RubyGems hook ocran packs gives that bare interpreter the launch
+  # script's environment: the packed gem directories and CA bundle.
+  def test_output_dir_bare_ruby_gets_launch_environment
+    vars = %w[GEM_HOME GEM_PATH SSL_CERT_FILE SSL_CERT_DIR BUNDLER_SETUP RUBYLIB LD_LIBRARY_PATH]
+    with_tmpdir do
+      File.write("envdump.rb", <<~RUBY)
+        require "json"
+        require "openssl"
+        puts JSON.generate(ENV.to_h.slice(*#{vars.inspect}).merge("Gem.path" => Gem.path))
+      RUBY
+      assert_system("ruby", ocran, "envdump.rb", *(DefaultArgs + ["--output-dir", "out", "--no-wrapper-exe"]))
+      site = Pathname(RbConfig::CONFIG["sitelibdir"]).relative_path_from(Pathname(RbConfig::CONFIG["exec_prefix"])).to_s
+      skip "sitelibdir is outside the Ruby prefix, so no hook is packed" if site.start_with?("..")
+      assert File.file?("out/#{site}/rubygems/defaults/operating_system.rb"), "the RubyGems environment hook was not packed"
+
+      cleared = vars.to_h { |name| [name, nil] }
+      Bundler.with_original_env do
+        launch = Gem.win_platform? ? ["cmd", "/c", File.expand_path("out/envdump.bat")] : ["sh", "out/envdump.sh"]
+        output, status = Open3.capture2(cleared, *launch)
+        assert status.success?, "launch script failed: #{output}"
+        launched = JSON.parse(output.lines.last)
+
+        # On POSIX the interpreter finds its standard library only through
+        # the launch script's RUBYLIB (its prefix is compiled in), and
+        # libruby through LD_LIBRARY_PATH; both are read before any Ruby
+        # code runs. Windows' ruby.exe locates its installation itself.
+        bare_env = cleared.dup
+        unless Gem.win_platform?
+          bare_env.update(launched.slice("RUBYLIB", "LD_LIBRARY_PATH"))
+        end
+        ruby = File.expand_path("out/bin/#{exe_name("ruby")}")
+        output, status = Open3.capture2(bare_env, ruby, File.expand_path("out/src/envdump.rb"), chdir: Dir.tmpdir)
+        assert status.success?, "bare ruby failed: #{output}"
+        bare = JSON.parse(output.lines.last)
+
+        refute_nil bare["GEM_HOME"], "bare ruby did not get GEM_HOME"
+        %w[GEM_HOME GEM_PATH SSL_CERT_FILE SSL_CERT_DIR BUNDLER_SETUP Gem.path].each do |name|
+          message = "#{name} differs between the launch script and bare ruby"
+          # SSL_CERT_* are only set when the build Ruby keeps its CA bundle
+          # inside its installation (RubyInstaller does).
+          launched[name].nil? ? assert_nil(bare[name], message) : assert_equal(launched[name], bare[name], message)
+        end
+      end
     end
   end
 
