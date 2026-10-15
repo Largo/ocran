@@ -256,7 +256,8 @@ goes through these steps in order of impact.
   built. CI builds and tests the three runtimes and publishes each as a
   reproducible archive (a zip for Windows, a tarball otherwise) with a
   signed build provenance attestation
-  (`gh attestation verify <archive> -R Largo/ocran`).
+  (`gh attestation verify <archive> -R Largo/ocran`); releases from 1.5.1
+  on have them attached.
 
   Dependency detection runs as usual, under the build host's Ruby, which
   must have the runtime's API version (e.g. 4.0.0). The standard library

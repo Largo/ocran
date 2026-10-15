@@ -6,7 +6,10 @@ name: Static runtime (macOS)
 # them.
 
 on:
+  # Branch pushes only: for a release tag, gem-release.yml calls this
+  # workflow and attaches the runtime to the release.
   push:
+    branches: ['**']
     paths:
       - 'runtime/**'
       - 'lib/ocran/static_runtime/**'
@@ -14,6 +17,7 @@ on:
       - 'lib/ocran/runtime_sdk.rb'
       - '.github/workflows/static-runtime-macos.yml'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

@@ -107,7 +107,9 @@ against an SDK built with Debian's GCC 14) and jaro_winkler (mswin).
 ## Prebuilt runtimes and attestations
 
 CI builds every runtime from the pinned sources and tests it before
-publishing it as a workflow artifact:
+publishing it, as a workflow artifact and, for a release, as an asset of
+the GitHub release (from 1.5.1 on; the release workflow calls the three
+runtime workflows and attaches what they built):
 `static-runtime-windows.yml` (cross-built on Linux, tested on Windows with
 executables packaged on Linux and on Windows), `static-runtime-linux.yml`
 (tested on Ubuntu and in Alpine, BusyBox, Fedora and Debian containers) and
