@@ -886,5 +886,45 @@ EOF
       return false unless Gem.win_platform?
       @options[:windowed?]
     end
+
+    # Where the compiled launcher stubs live (StubBuilder::STUB_PATH and
+    # STUBW_PATH). A released gem ships them; a git checkout, such as
+    # Bundler's `gem "ocran", git: ...`, has only their sources in src/.
+    STUB_DIR = File.expand_path("../../share/ocran", __dir__)
+
+    # The prebuilt stub the build will copy, or nil when it copies none:
+    # native compilation, --wasm, --static-runtime and --cosmo-ruby's ZIP
+    # mode use no stub, --cosmo compiles its own, and installer, directory
+    # and zip output only need one for the wrapper executable.
+    def prebuilt_stub
+      return nil if spinel? || roundhouse? || wasm_runtime || static_runtime? || cosmo_zip? || cosmo_cc
+      return nil if (inno_setup_script || output_dir || output_zip) && !wrapper_exe?
+
+      name = if !Gem.win_platform? then "stub"
+             elsif windowed? && !macosx_bundle then "stubw.exe"
+             else "stub.exe"
+             end
+      File.join(STUB_DIR, name)
+    end
+
+    # Fails when the build needs a stub that was never compiled. Checked
+    # before the dependency run, which can take minutes, since the build
+    # would otherwise end in a bare ENOENT for the stub after it.
+    def check_prebuilt_stub(path = prebuilt_stub)
+      return if path.nil? || File.exist?(path)
+
+      root = File.dirname(STUB_DIR, 2)
+      build = if RUBY_PLATFORM.include?("mswin")
+                "`nmake -f Makefile.mswin install` in #{File.join(root, "src")} from a Visual Studio developer prompt"
+              elsif Gem.win_platform?
+                "`ridk exec make -C src install` in #{root}"
+              else
+                "`make -C src install` in #{root}"
+              end
+      message = "The launcher stub #{path} has not been built (OCRAN from a git checkout " \
+                "ships only its sources): run #{build}"
+      message += ", or pass --no-wrapper-exe to skip the wrapper executable" if inno_setup_script || output_dir || output_zip
+      raise message
+    end
   end
 end

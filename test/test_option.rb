@@ -2,6 +2,7 @@
 require "minitest/autorun"
 require "tmpdir"
 require_relative "../lib/ocran/option"
+require_relative "../lib/ocran/stub_builder"
 
 # Unit tests for command line validation in Ocran::Option#parse. Invalid
 # and conflicting options must be rejected before the dependency run.
@@ -118,5 +119,35 @@ class TestOption < Minitest::Test
     assert_match(/--add-all-core/, parse("app.rb", "--no-dep-run").warnings.join)
     warnings = parse("app.rb", "--no-dep-run", "--add-all-core", "--gemfile", "Gemfile").warnings
     assert_match(/--gem-all or --gem-full/, warnings.join)
+  end
+
+  def test_missing_stub_says_how_to_build_it
+    error = assert_raises(RuntimeError) { parse("app.rb").check_prebuilt_stub(File.expand_path("stub")) }
+    assert_match(/launcher stub .*stub has not been built/, error.message)
+    assert_match(/make(\.mswin)? .*install/, error.message)
+    refute_match(/--no-wrapper-exe/, error.message)
+
+    error = assert_raises(RuntimeError) do
+      parse("app.rb", "--output-dir", "out").check_prebuilt_stub(File.expand_path("stub"))
+    end
+    assert_match(/--no-wrapper-exe/, error.message)
+  end
+
+  def test_existing_stub_passes_the_check
+    File.write("stub", "")
+    assert_nil parse("app.rb").check_prebuilt_stub(File.expand_path("stub"))
+  end
+
+  def test_prebuilt_stub_only_where_one_is_copied
+    stub_dir = Ocran::Option::STUB_DIR
+    # Kept in step with where StubBuilder copies the stub from.
+    assert_equal stub_dir, File.dirname(Ocran::StubBuilder::STUB_PATH)
+    assert_equal stub_dir, File.dirname(parse("app.rb").prebuilt_stub)
+    assert_equal stub_dir, File.dirname(parse("app.rb", "--output-dir", "out").prebuilt_stub)
+    assert_nil parse("app.rb", "--output-dir", "out", "--no-wrapper-exe").prebuilt_stub
+    assert_nil parse("app.rb", "--output-zip", "o.zip", "--no-wrapper-exe").prebuilt_stub
+    assert_nil parse("app.rb", "--spinel").prebuilt_stub
+    Dir.mkdir("rt")
+    assert_nil parse("app.rb", "--static-runtime", "rt").prebuilt_stub
   end
 end
