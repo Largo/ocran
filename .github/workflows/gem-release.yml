@@ -112,6 +112,10 @@ jobs:
           pattern: gem-*
           merge-multiple: true
 
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          ruby-version: '4.0'
+
       # Signed build provenance for every gem, before it is published: the
       # same files go to the GitHub release and to rubygems.org, so a gem
       # from either can be checked with
@@ -120,6 +124,18 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: '*.gem'
+
+      # rubygems.org shows a gem as built and signed on GitHub Actions only
+      # when it is pushed with a Sigstore bundle for it (the attestation
+      # above stays on GitHub). Every gem is signed with this workflow's
+      # identity before anything is published (the GitHub release is
+      # immutable), so that a failed signature stops the release; RubyGems
+      # 4.0 does not sign by itself (this is what rubygems/release-gem does).
+      - name: Sign gems for RubyGems.org provenance
+        run: |
+          for gem in *.gem; do
+            gem exec sigstore-cli:0.2.3 sign "$gem" --bundle "$gem.sigstore.json"
+          done
 
       - name: Extract changelog for this version
         # Written to a file and passed via --notes-file: interpolating the
@@ -140,10 +156,6 @@ jobs:
             --notes-file /tmp/release-notes.txt \
             *.gem
 
-      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
-        with:
-          ruby-version: '4.0'
-
       # Trusted publishing: exchanges the workflow's OIDC token for a
       # short-lived RubyGems API key, so no long-lived secret is needed.
       - name: Configure RubyGems credentials
@@ -152,5 +164,5 @@ jobs:
       - name: Push gems to RubyGems
         run: |
           for gem in *.gem; do
-            gem push "$gem"
+            gem push "$gem" --attestation "$gem.sigstore.json"
           done
