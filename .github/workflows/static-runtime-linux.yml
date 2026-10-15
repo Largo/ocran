@@ -71,6 +71,14 @@ jobs:
 
       # The same executables on other distributions: musl, glibc, and
       # BusyBox without any C library of its own.
+      # The same application, packaged again (another temporary directory,
+      # a later time), must give the same bytes.
+      - name: Packaging is reproducible
+        run: |
+          ruby runtime/smoke/run.rb "$RUNNER_TEMP/rt/out" "$RUNNER_TEMP/smoke-again"
+          cmp "$RUNNER_TEMP"/smoke/smoke-app "$RUNNER_TEMP"/smoke-again/smoke-app
+          echo "smoke-app: identical"
+
       - name: Run on other distributions
         run: |
           cd "$RUNNER_TEMP/smoke"

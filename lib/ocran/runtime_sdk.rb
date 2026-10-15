@@ -188,6 +188,10 @@ module Ocran
         cmd = cmd.map { |a| as_dll.fetch(a, a) }
         cmd += ["-o", output.to_s] unless args.any? { |a| a.include?("@OUTPUT@") }
         cmd += ["-Wl,-sectcreate,__OCRAN,__zip,#{archive}"] if archive
+        # macOS: no debug map (the objects' paths, here in a temporary
+        # directory, would differ every time), and nothing for strip to do,
+        # which would break the signature the linker writes.
+        cmd += ["-Wl,-S"] if @info["target_os"].to_s.start_with?("darwin")
         run(*cmd)
       end
       strip = strip_tool
@@ -242,8 +246,11 @@ module Ocran
     # Compilers, linkers and strip run with SOURCE_DATE_EPOCH set: binutils
     # then writes that, not the current time, into a PE header it rewrites
     # (strip does), so that the same application links to the same bytes.
+    # ZERO_AR_DATE does the same for Apple's ld, which otherwise writes the
+    # objects' modification times into the executable's debug map.
     def run(*cmd)
-      out, status = Open3.capture2e({ "SOURCE_DATE_EPOCH" => ENV["SOURCE_DATE_EPOCH"] || "1767225600" }, *cmd)
+      env = { "SOURCE_DATE_EPOCH" => ENV["SOURCE_DATE_EPOCH"] || "1767225600", "ZERO_AR_DATE" => "1" }
+      out, status = Open3.capture2e(env, *cmd)
       raise "#{cmd.first} failed:\n#{out.lines.last(25).join}" unless status.success?
 
       out
