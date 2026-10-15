@@ -8,6 +8,9 @@ require "ocran/pe_imports"
 
 system32 = File.join(ENV.fetch("SystemRoot", "C:/Windows"), "System32")
 compiler_runtime = /\A(vcruntime|msvcp|concrt|ucrtbased|libgcc|libstdc\+\+|libwinpthread)/i
+# A glob that matched nothing must not pass as "all checked".
+abort "check-pe-imports.rb: no executables to check" if ARGV.empty?
+
 failed = false
 ARGV.each do |exe|
   dlls = Ocran::PEImports.dll_names(exe).uniq.sort_by(&:downcase)
