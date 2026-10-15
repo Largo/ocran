@@ -207,6 +207,14 @@ module Ocran
             # environment, so it is preferable to ignore exceptions other than
             # critical errors.
             warning "#{mod}::#{const} loading failed: #{e.message}"
+          rescue SystemExit => e
+            # Some libraries exit when an optional dependency is missing -
+            # rdoc/servlet.rb aborts without webrick, which Ruby 3.4 no
+            # longer ships. That ended the whole build (exit 1) over a
+            # constant the application never asked for; the abort message
+            # went to stderr ahead of the buffered progress output.
+            warning "#{mod}::#{const} loading exited (status #{e.status})" \
+                    "#{e.message == "exit" ? "" : ": #{e.message}"}"
           end
         end
         checked_modules[mod] = true

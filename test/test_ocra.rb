@@ -373,6 +373,17 @@ class TestOcran < Minitest::Test
   end
 
   # Hello world test. Test that we can build and run executables.
+  # An autoloaded file that exits (rdoc/servlet.rb aborts without
+  # webrick) ended the build with exit 1 while OCRAN probed autoloads.
+  def test_autoload_that_exits
+    with_fixture 'autoloadexit' do
+      assert_system("ruby", ocran, "autoloadexit.rb", "optional_server.rb", *DefaultArgs)
+      pristine_env exe_name("autoloadexit") do
+        assert_system(exe_name("autoloadexit"))
+      end
+    end
+  end
+
   # An entry in $LOADED_FEATURES without a file behind it aborted the
   # build with ENOENT (rdoc/rd/racc/parser.rb on Ruby 3.4).
   def test_phantom_loaded_feature
