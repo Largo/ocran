@@ -24,6 +24,8 @@ Gem::Specification.new do |spec|
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/largo/ocran"
   spec.metadata["changelog_uri"] = "https://github.com/largo/ocran/blob/master/CHANGELOG.txt"
+  spec.metadata["bug_tracker_uri"] = "https://github.com/largo/ocran/issues"
+  spec.metadata["documentation_uri"] = "https://github.com/largo/ocran#readme"
 
   # Source gem: no platform set, ships C source and compiles the stub on install.
   # RubyGems falls back to this when no binary gem matches the user's platform.

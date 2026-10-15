@@ -24,6 +24,8 @@ Gem::Specification.new do |spec|
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/largo/ocran"
   spec.metadata["changelog_uri"] = "https://github.com/largo/ocran/blob/master/CHANGELOG.txt"
+  spec.metadata["bug_tracker_uri"] = "https://github.com/largo/ocran/issues"
+  spec.metadata["documentation_uri"] = "https://github.com/largo/ocran#readme"
 
   # Each platform ships only its own compiled stub binary.
   # gem install ocran automatically selects the right gem for the current platform.

@@ -1,0 +1,28 @@
+# OCRAN
+
+> OCRAN (One-Click Ruby Application Next) turns Ruby scripts into standalone executables. `ocran app.rb` bundles the script, the Ruby interpreter, gems and native libraries into a single `.exe` on Windows or a native binary on Linux and macOS, which runs without Ruby installed. It is the maintained fork of OCRA for Ruby 3.2+. Install with `gem install ocran`. MIT licensed.
+
+Key facts:
+
+- Output formats: self-extracting executable (default), directory with launch script (`--output-dir`), zip (`--output-zip`), macOS `.app` bundle (`--macosx-bundle`), Windows installer via Inno Setup (`--innosetup`).
+- Dependencies are detected by running the script once at build time; gems with native extensions and their DLLs/shared libraries are bundled. `--gemfile` includes a whole Bundler Gemfile.
+- By default not a cross-compiler: build on the target OS (e.g. a GitHub Actions matrix). Experimental exceptions: `--static-runtime <dir>` packages onto a prebuilt static Ruby (single executable, no extraction, cross-builds Windows from Linux and vice versa), and `--cosmo-ruby ruby.com` produces one file that runs on Windows, Linux and macOS. `--wasm` exports the app as a web page running Ruby in the browser.
+- Supply chain: in its default mode OCRAN makes no network requests; generated executables never download a runtime. It packages the Ruby already installed on the build machine and the exact gem files the script loaded (pinned by Gemfile.lock under Bundler). Opt-in `--wasm` fetches npm packages (SHA-512 verified, cached); `--static-runtime` may fetch source gems from the configured gem sources. Stubs and static-runtime packing are reproducible; releases carry signed build provenance attestations (`gh attestation verify <file> -R Largo/ocran`).
+- Migrating from OCRA: run `ocran` instead of `ocra`; use `OCRAN_EXECUTABLE` instead of `OCRA_EXECUTABLE`; detect build time with `defined?(Ocran)`.
+
+## Docs
+
+- [README](https://github.com/largo/ocran/blob/master/README.md): usage, all command-line options, Rails packaging, code signing, Inno Setup, GitHub Actions setup, FAQ
+- [Workarounds](https://github.com/largo/ocran/blob/master/Workarounds.md): known problems with specific gems and their fixes
+- [Changelog](https://github.com/largo/ocran/blob/master/CHANGELOG.txt): release history
+
+## Examples
+
+- [samples/](https://github.com/largo/ocran/tree/master/samples): small apps packaged with OCRAN (ActiveRecord, pg, Prawn, Glimmer GUI, Bundler git gems)
+
+## Optional
+
+- [RubyGems page](https://rubygems.org/gems/ocran)
+- [Releases](https://github.com/largo/ocran/releases)
+- [Issues](https://github.com/largo/ocran/issues)
+- [CosmoRuby](https://github.com/Largo/cosmoruby): cosmopolitan Ruby used by `--cosmo-ruby`
