@@ -29,6 +29,7 @@ module Ocran
       load File.expand_path("option.rb", __dir__)
       @option = Option.new.tap do |opt|
         opt.parse(ARGV)
+        opt.check_prebuilt_stub
       rescue *USER_ERRORS => e
         # Invalid option arguments, usually; report them as such.
         user_error e
