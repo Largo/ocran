@@ -239,8 +239,11 @@ module Ocran
       C
     end
 
+    # Compilers, linkers and strip run with SOURCE_DATE_EPOCH set: binutils
+    # then writes that, not the current time, into a PE header it rewrites
+    # (strip does), so that the same application links to the same bytes.
     def run(*cmd)
-      out, status = Open3.capture2e(*cmd)
+      out, status = Open3.capture2e({ "SOURCE_DATE_EPOCH" => ENV["SOURCE_DATE_EPOCH"] || "1767225600" }, *cmd)
       raise "#{cmd.first} failed:\n#{out.lines.last(25).join}" unless status.success?
 
       out

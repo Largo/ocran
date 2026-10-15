@@ -99,7 +99,8 @@ jobs:
     environment: production
     permissions:
       contents: write
-      id-token: write   # OIDC token for RubyGems trusted publishing
+      id-token: write   # OIDC token for RubyGems trusted publishing and Sigstore
+      attestations: write
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -109,6 +110,15 @@ jobs:
         with:
           pattern: gem-*
           merge-multiple: true
+
+      # Signed build provenance for every gem, before it is published: the
+      # same files go to the GitHub release and to rubygems.org, so a gem
+      # from either can be checked with
+      # gh attestation verify ocran-<version>-<platform>.gem -R Largo/ocran
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: '*.gem'
 
       - name: Extract changelog for this version
         # Written to a file and passed via --notes-file: interpolating the
