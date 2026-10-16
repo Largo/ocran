@@ -50,6 +50,65 @@ module Ocran
     # ships a prebuilt sqlite3_native.so inside its lib directory. Both the
     # gem directory and the extension directory (where RubyGems puts the
     # products of a source build) are scanned.
+    # Decides where each Windows DLL candidate is packed, so that every DLL
+    # basename lands once, where the loader finds it for every extension.
+    #
+    # Ruby loads an extension with LoadLibraryW and an absolute path, which
+    # resolves the extension's imports from the application directory of
+    # ruby.exe (bin) plus its SxS assembly (ruby_builtin_dlls) and the
+    # system directories - never from the extension's own directory. So:
+    # - a DLL in bindir (or ruby_builtin_dlls) stays where it is;
+    # - a basename that ruby_builtin_dlls provides is not packed again;
+    # - any other DLL is copied into bin once per basename, preferring the
+    #   copy from the Ruby tree over one from the devkit's msys64 tree or
+    #   from outside the prefix (a same-named DLL loaded from
+    #   msys64\ucrt64\bin under ridk/bundle exec is skipped);
+    # - a DLL from a gem's tree (e.g. FreeTDS under tiny_tds' ports/) also
+    #   keeps its original location, where the gem may load it by path. One
+    #   from a Ruby arch dir or msys64 does not: its bin copy serves every
+    #   extension already.
+    #
+    # +candidates+ are [path, kind] pairs in detection order. +builtin_dir+
+    # is RubyInstaller's ruby_builtin_dlls (packed whole elsewhere), or nil.
+    # Returns [source, target, kind] triples, target relative to the
+    # extraction root.
+    def self.windows_dll_placement(candidates, exec_prefix:, bindir:, builtin_dir: nil, arch_dirs: [])
+      msys_dir = exec_prefix / "msys64"
+      rank = lambda do |dll|
+        if dll.subpath?(bindir) then 0
+        elsif dll.subpath?(msys_dir) then 2
+        elsif dll.subpath?(exec_prefix) then 1
+        else 3
+        end
+      end
+
+      in_bin = Set.new
+      builtin_dir&.children&.each { |path| in_bin << path.basename.to_s.downcase if path.extname?(".dll") }
+      targets = Set.new
+      placement = []
+      place = lambda do |dll, target, kind|
+        placement << [dll, target, kind] if targets.add?(target.to_s.downcase)
+      end
+
+      candidates.each_with_index.sort_by { |(dll, _), i| [rank.(dll), i] }.each do |(dll, kind), _|
+        name = dll.basename.to_s.downcase
+        if dll.subpath?(bindir)
+          next if builtin_dir && dll.subpath?(builtin_dir)
+
+          in_bin << name if dll.dirname.path_key == bindir.path_key
+          place.(dll, dll.relative_path_from(exec_prefix), kind)
+          next
+        end
+        next unless in_bin.add?(name)
+
+        place.(dll, BINDIR / dll.basename, kind)
+        if dll.subpath?(exec_prefix) && !dll.subpath?(msys_dir) && arch_dirs.none? { |dir| dll.subpath?(dir) }
+          place.(dll, dll.relative_path_from(exec_prefix), kind)
+        end
+      end
+      placement
+    end
+
     def self.gem_native_binaries(spec)
       ext_dir =
         begin
@@ -555,32 +614,25 @@ module Ocran
         end
       end
 
-      # Windows-only: DLLs bundled into bin, next to ruby.exe, by basename
-      dlls_in_bin = Set.new
-      add_dll_to_bin = proc do |dll|
-        next if dll.subpath?(bindir) || !dlls_in_bin.add?(dll.basename.to_s.downcase)
-
-        say "Adding detected DLL #{dll} to bin"
-        builder.copy_to_bin(dll, dll.basename)
-      end
+      # Windows-only: DLL candidates, packed by .windows_dll_placement below
+      windows_dlls = []
 
       # Windows-only: Add detected DLLs
       if Gem.win_platform? && @option.auto_detect_dlls? && !@option.static_runtime?
         # The Windows loader resolves the imports of a native extension from
-        # the extension's own directory, the application directory of the
-        # packed ruby.exe (bin) plus its SxS assembly (ruby_builtin_dlls),
-        # and the system directories. PATH is not consulted on hardened
-        # systems, and the AddDllDirectory mechanism gems use through
-        # ruby_installer/runtime is not available in a packed app. A detected
-        # DLL that lives anywhere else - a gem's bundled library (e.g.
-        # FreeTDS under tiny_tds' ports/), a devkit's msys64 tree inside the
-        # Ruby prefix, or a directory outside the prefix entirely - is packed
-        # only at a location the loader never searches, and the application
-        # dies with LoadError on machines where nothing masks the gap. So
-        # additionally bundle a copy of every such DLL into bin, next to
-        # ruby.exe, mirroring what the Linux branch below achieves with
-        # LD_LIBRARY_PATH. DLLs from the Windows directory always come from
-        # the target system and are never bundled.
+        # the application directory of the packed ruby.exe (bin) plus its SxS
+        # assembly (ruby_builtin_dlls), and the system directories. PATH is
+        # not consulted on hardened systems, and the AddDllDirectory
+        # mechanism gems use through ruby_installer/runtime is not available
+        # in a packed app. A detected DLL that lives anywhere else - a gem's
+        # bundled library (e.g. FreeTDS under tiny_tds' ports/), a devkit's
+        # msys64 tree inside the Ruby prefix, or a directory outside the
+        # prefix entirely - is packed only at a location the loader never
+        # searches, and the application dies with LoadError on machines
+        # where nothing masks the gap. So bundle every such DLL into bin,
+        # next to ruby.exe, mirroring what the Linux branch below achieves
+        # with LD_LIBRARY_PATH. DLLs from the Windows directory always come
+        # from the target system and are never bundled.
         windows_dir = Pathname(ENV["SystemRoot"] || "C:/Windows")
 
         detect_dlls.each do |dll|
@@ -589,17 +641,9 @@ module Ocran
           # (and any MSVC-built DLL a gem loads) fails to start with
           # 0xC0000135 where the VC++ Redistributable is not installed.
           # Microsoft permits deploying it app-locally, next to ruby.exe.
-          if dll.basename.to_s.match?(VC_RUNTIME_DLL_RE)
-            add_dll_to_bin.call(dll)
-            next
-          end
-          next if dll.subpath?(windows_dir)
+          next if dll.subpath?(windows_dir) && !dll.basename.to_s.match?(VC_RUNTIME_DLL_RE)
 
-          if dll.subpath?(exec_prefix)
-            say "Adding detected DLL #{dll}"
-            builder.duplicate_to_exec_prefix(dll)
-          end
-          add_dll_to_bin.call(dll)
+          windows_dlls << [dll, "detected"]
         end
 
         # Proactively include companion DLLs for loaded native extensions.
@@ -607,18 +651,17 @@ module Ocran
         # directory (e.g., libssl-3-x64.dll alongside openssl.so) that are
         # loaded lazily on first use. Scanning .so directories ensures those
         # DLLs are bundled even when the extension is required but not
-        # exercised during the OCRAN dependency scan. They also go into bin:
-        # a copy in archdir only helps extensions in archdir itself, while
-        # the same extension packed at a gem path (openssl and psych are
-        # gems since Ruby 3.x) resolves its imports from bin.
+        # exercised during the OCRAN dependency scan. They go into bin: a
+        # copy in archdir is not even searched for archdir's own extensions
+        # (Ruby loads them with LoadLibraryW), while bin serves the same
+        # extension packed at a gem path too (openssl and psych are gems
+        # since Ruby 3.x).
         features.select { |f| f.extname?(".so") && f.subpath?(exec_prefix) }
                 .map(&:dirname).uniq { |dir| dir.path_key }
                 .each do |dir|
           dir.each_child do |path|
             next unless path.file? && path.extname?(".dll")
-            say "Adding companion DLL #{path}"
-            builder.duplicate_to_exec_prefix(path)
-            add_dll_to_bin.call(path)
+            windows_dlls << [path, "companion"]
           end
         end
       end
@@ -632,13 +675,15 @@ module Ocran
       # PE import tables, so they are packed with --no-autodll too, and for
       # extensions the dependency run did not exercise.
       if Gem.win_platform?
-        windows_imported_dlls(features).each do |dll|
-          if dll.subpath?(bindir)
-            verbose "Adding imported DLL #{dll}"
-            builder.duplicate_to_exec_prefix(dll)
-          else
-            add_dll_to_bin.call(dll)
-          end
+        windows_dlls.concat(windows_imported_dlls(features).map { |dll| [dll, "imported"] })
+
+        arch_dirs = RbConfig::CONFIG.values_at("archdir", "sitearchdir", "vendorarchdir")
+                                    .compact.map { |dir| Pathname(dir) }
+        Direction.windows_dll_placement(windows_dlls, exec_prefix: exec_prefix, bindir: bindir,
+                                        builtin_dir: ruby_builtin_manifest&.dirname,
+                                        arch_dirs: arch_dirs).each do |dll, target, kind|
+          say "Adding #{kind} DLL #{dll} as #{target}"
+          builder.cp(dll, target)
         end
       end
 
