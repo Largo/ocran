@@ -1,6 +1,6 @@
 # OCRAN
 
-> OCRAN (One-Click Ruby Application Next) turns Ruby scripts into standalone executables. `ocran app.rb` bundles the script, the Ruby interpreter, gems and native libraries into a single `.exe` on Windows or a native binary on Linux and macOS, which runs without Ruby installed. It is the maintained fork of OCRA for Ruby 3.2+. Install with `gem install ocran`. MIT licensed.
+> OCRAN (One-Click Ruby Application Next) turns Ruby scripts into standalone executables. `ocran app.rb` bundles the script, the Ruby interpreter, gems and native libraries into a single `.exe` on Windows or a native binary on Linux and macOS, which runs without Ruby installed. It is the maintained fork of OCRA for Ruby 3.3+. Install with `gem install ocran`. MIT licensed.
 
 Key facts:
 
