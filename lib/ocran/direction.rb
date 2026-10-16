@@ -50,23 +50,29 @@ module Ocran
     # ships a prebuilt sqlite3_native.so inside its lib directory. Both the
     # gem directory and the extension directory (where RubyGems puts the
     # products of a source build) are scanned.
-    # Decides where each Windows DLL candidate is packed, so that every DLL
-    # basename lands once, where the loader finds it for every extension.
+    # Decides where each Windows DLL candidate is packed, so that a DLL is
+    # packed only where the loader looks for it.
     #
-    # Ruby loads an extension with LoadLibraryW and an absolute path, which
-    # resolves the extension's imports from the application directory of
-    # ruby.exe (bin) plus its SxS assembly (ruby_builtin_dlls) and the
-    # system directories - never from the extension's own directory. So:
-    # - a DLL in bindir (or ruby_builtin_dlls) stays where it is;
+    # RubyInstaller ships the DLLs of an extension next to it as a private
+    # SxS assembly: openssl.so embeds a dependency on "openssl.so-assembly",
+    # whose manifest beside it (openssl.so-assembly.manifest) lists
+    # libcrypto-3-x64.dll and libssl-3-x64.dll as its files. The loader
+    # resolves those names to the assembly's directory and nowhere else - a
+    # copy in bin does not help openssl.so, and it fails to load without the
+    # copy beside it. ruby_builtin_dlls is the same mechanism for ruby.exe's
+    # own assembly, active for the whole process. Every other DLL is found
+    # through the search order, whose only packed directory is bin (the
+    # application directory of ruby.exe). So:
+    # - a DLL listed by an assembly manifest in its own directory, or one in
+    #   bindir, stays where it is and gets no copy in bin;
     # - a basename that ruby_builtin_dlls provides is not packed again;
-    # - any other DLL is copied into bin once per basename, preferring the
-    #   copy from the Ruby tree over one from the devkit's msys64 tree or
-    #   from outside the prefix (a same-named DLL loaded from
-    #   msys64\ucrt64\bin under ridk/bundle exec is skipped);
-    # - a DLL from a gem's tree (e.g. FreeTDS under tiny_tds' ports/) also
-    #   keeps its original location, where the gem may load it by path. One
-    #   from a Ruby arch dir or msys64 does not: its bin copy serves every
-    #   extension already.
+    # - any other DLL - a companion without an assembly, one the dependency
+    #   run loaded from the devkit's msys64\ucrt64\bin or from outside the
+    #   prefix (OpenSSL loads ZLIB1.dll by name at run time) - is copied into
+    #   bin once per basename, preferring the copy from the Ruby tree. A DLL
+    #   from a gem's tree (e.g. FreeTDS under tiny_tds' ports/) also keeps its
+    #   original location, where the gem may load it by path; one from a
+    #   Ruby arch dir or msys64 does not, the bin copy serves it.
     #
     # +candidates+ are [path, kind] pairs in detection order. +builtin_dir+
     # is RubyInstaller's ruby_builtin_dlls (packed whole elsewhere), or nil.
@@ -81,6 +87,13 @@ module Ocran
         else 3
         end
       end
+      assembly_files = Hash.new do |cache, dir|
+        cache[dir] = dir.glob("*.manifest").flat_map do |manifest|
+          File.read(manifest, mode: "rb").scan(/<file\s[^>]*?\bname\s*=\s*["']([^"']+)["']/i).flatten
+        rescue SystemCallError
+          []
+        end.to_set { |name| name.downcase }
+      end
 
       in_bin = Set.new
       builtin_dir&.children&.each { |path| in_bin << path.basename.to_s.downcase if path.extname?(".dll") }
@@ -92,10 +105,14 @@ module Ocran
 
       candidates.each_with_index.sort_by { |(dll, _), i| [rank.(dll), i] }.each do |(dll, kind), _|
         name = dll.basename.to_s.downcase
-        if dll.subpath?(bindir)
-          next if builtin_dir && dll.subpath?(builtin_dir)
+        next if builtin_dir && dll.subpath?(builtin_dir)
 
+        if dll.subpath?(bindir)
           in_bin << name if dll.dirname.path_key == bindir.path_key
+          place.(dll, dll.relative_path_from(exec_prefix), kind)
+          next
+        end
+        if dll.subpath?(exec_prefix) && assembly_files[dll.dirname].include?(name)
           place.(dll, dll.relative_path_from(exec_prefix), kind)
           next
         end
@@ -620,9 +637,10 @@ module Ocran
       # Windows-only: Add detected DLLs
       if Gem.win_platform? && @option.auto_detect_dlls? && !@option.static_runtime?
         # The Windows loader resolves the imports of a native extension from
-        # the application directory of the packed ruby.exe (bin) plus its SxS
-        # assembly (ruby_builtin_dlls), and the system directories. PATH is
-        # not consulted on hardened systems, and the AddDllDirectory
+        # its own SxS assembly (RubyInstaller's <ext>.so-assembly.manifest
+        # beside it), the application directory of the packed ruby.exe (bin)
+        # plus its assembly (ruby_builtin_dlls), and the system directories.
+        # PATH is not consulted on hardened systems, and the AddDllDirectory
         # mechanism gems use through ruby_installer/runtime is not available
         # in a packed app. A detected DLL that lives anywhere else - a gem's
         # bundled library (e.g. FreeTDS under tiny_tds' ports/), a devkit's
@@ -651,11 +669,9 @@ module Ocran
         # directory (e.g., libssl-3-x64.dll alongside openssl.so) that are
         # loaded lazily on first use. Scanning .so directories ensures those
         # DLLs are bundled even when the extension is required but not
-        # exercised during the OCRAN dependency scan. They go into bin: a
-        # copy in archdir is not even searched for archdir's own extensions
-        # (Ruby loads them with LoadLibraryW), while bin serves the same
-        # extension packed at a gem path too (openssl and psych are gems
-        # since Ruby 3.x).
+        # exercised during the OCRAN dependency scan. Those an extension's
+        # assembly manifest lists stay beside it, where the loader looks for
+        # them; others go into bin (see .windows_dll_placement).
         features.select { |f| f.extname?(".so") && f.subpath?(exec_prefix) }
                 .map(&:dirname).uniq { |dir| dir.path_key }
                 .each do |dir|
