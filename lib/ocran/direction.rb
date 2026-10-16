@@ -63,8 +63,10 @@ module Ocran
     # own assembly, active for the whole process. Every other DLL is found
     # through the search order, whose only packed directory is bin (the
     # application directory of ruby.exe). So:
-    # - a DLL listed by an assembly manifest in its own directory, or one in
-    #   bindir, stays where it is and gets no copy in bin;
+    # - a DLL listed by an assembly manifest in its own directory stays
+    #   where it is and gets no copy in bin; one in bindir goes into bin,
+    #   beside the packed ruby.exe, even where bindir is not
+    #   exec_prefix/bin;
     # - a basename that ruby_builtin_dlls provides is not packed again;
     # - any other DLL - a companion without an assembly, one the dependency
     #   run loaded from the devkit's msys64\ucrt64\bin or from outside the
@@ -109,7 +111,7 @@ module Ocran
 
         if dll.subpath?(bindir)
           in_bin << name if dll.dirname.path_key == bindir.path_key
-          place.(dll, dll.relative_path_from(exec_prefix), kind)
+          place.(dll, BINDIR / dll.relative_path_from(bindir), kind)
           next
         end
         if dll.subpath?(exec_prefix) && assembly_files[dll.dirname].include?(name)

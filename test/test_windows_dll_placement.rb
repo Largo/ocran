@@ -117,6 +117,14 @@ class TestWindowsDllPlacement < Minitest::Test
     assert_equal [["bin/libffi-8.dll", "bin/libffi-8.dll"]], place(candidates)
   end
 
+  def test_bindir_outside_exec_prefix_bin_maps_to_bin
+    bindir = @prefix / "usr/bin"
+    candidates = [[bindir / "libgmp-10.dll", "imported"], [@msys / "libgmp-10.dll", "detected"]]
+    placement = Ocran::Direction.windows_dll_placement(candidates, exec_prefix: @prefix, bindir: bindir)
+    assert_equal [["usr/bin/libgmp-10.dll", "bin/libgmp-10.dll"]],
+                 placement.map { |source, target, _| [source.relative_path_from(@prefix).to_s, target.to_s] }
+  end
+
   def test_basenames_are_compared_case_insensitively
     candidates = [
       [@archdir / "ZLIB1.dll", "companion"],
