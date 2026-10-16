@@ -8,7 +8,7 @@
 `ocran app.rb` turns a Ruby script into a single `.exe` (Windows) or native
 binary (Linux, macOS) that runs on machines without Ruby installed.** It is
 the maintained successor of [OCRA](https://github.com/larsch/ocra) for
-Ruby 3.2 and newer.
+Ruby 3.3 and newer.
 
 [OCRAN](https://github.com/largo/ocran) packages Ruby applications for
 distribution. It bundles your script, the Ruby interpreter, gems, and native
@@ -1406,7 +1406,7 @@ cosmopolitan Ruby into one file that runs on Windows, Linux and macOS.
 ### What is the difference between OCRA and OCRAN?
 
 OCRAN is a maintained fork of OCRA. OCRA targets Windows only and is no
-longer updated for current Ruby versions; OCRAN supports Ruby 3.2+, builds
+longer updated for current Ruby versions; OCRAN supports Ruby 3.3+, builds
 for Windows, Linux and macOS, and adds directory, zip, macOS `.app` and
 Inno Setup output. To migrate, call `ocran` instead of `ocra` and replace
 `OCRA_EXECUTABLE` with `OCRAN_EXECUTABLE` in your code.
@@ -1448,7 +1448,7 @@ installer built with `--innosetup`, or ship a plain directory with
 
 ## Comparison with other Ruby packagers
 
-| Tool | Output | Platforms | Single file | Maintained for Ruby 3.2+ |
+| Tool | Output | Platforms | Single file | Maintained for current Ruby |
 |------|--------|-----------|-------------|--------------------------|
 | **OCRAN** | `.exe` / native binary, directory, zip, macOS `.app`, Inno Setup installer | Windows, Linux, macOS | Yes | Yes |
 | [OCRA](https://github.com/larsch/ocra) | `.exe` | Windows only | Yes | No |
