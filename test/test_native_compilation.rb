@@ -89,6 +89,51 @@ class TestNativeCompilation < Minitest::Test
     assert_match(/dynamic\.rb:6: define_method with a computed name works only where/, report)
   end
 
+  # Constructs Spinel compiles are not reported; the forms it refuses are.
+  def test_compatibility_follows_spinels_subset
+    File.write(File.join(@tmp, "app.rb"), <<~'RUBY')
+      require "date"
+      require "rbconfig"
+      class Base; end
+      Err = Class.new(StandardError)
+      Foo = Class.new(Base) { def hi = 1 }
+      Point = Class.new(Struct.new(:x, :y))
+      base = Base
+      Bad = Class.new(base)
+      class Base
+        class_eval "def lit = 1"
+        class_eval <<~SRC
+          def heredoc = 2
+        SRC
+        n = "x"
+        class_eval "def #{n} = 3"
+        class_eval(n)
+      end
+      Base.instance_eval("1")
+    RUBY
+    findings = ::Ocran::SpinelCompatibility.new(File.join(@tmp, "app.rb")).analyze.findings
+    by_line = findings.to_h { |f| [f.line, f] }
+
+    assert_equal [8, 15, 16, 18], by_line.keys.sort, findings.map(&:message).join("\n")
+    assert_equal :error, by_line[8].severity
+    assert_match(/Class.new with a superclass computed at run time/, by_line[8].message)
+    assert_equal :warning, by_line[15].severity
+    assert_equal :error, by_line[16].severity
+    assert_match(/instance_eval with a string/, by_line[18].message)
+  end
+
+  def test_features_read_from_packages_dir
+    packages = File.join(@tmp, "packages")
+    %w[shellwords/shellwords.rb net/net/smtp.rb racc/ext/cparse/extconf.rb racc/test/t.rb].each do |rel|
+      FileUtils.mkdir_p(File.dirname(File.join(packages, rel)))
+      File.write(File.join(packages, rel), "")
+    end
+    File.write(File.join(@tmp, "app.rb"), %(require "shellwords"\nrequire "net/smtp"\nrequire "ext/cparse/extconf"\n))
+    findings = ::Ocran::SpinelCompatibility.new(File.join(@tmp, "app.rb"), packages_dir: packages).analyze.findings
+
+    assert_equal [3], findings.map(&:line)
+  end
+
   def test_compatibility_report_names_native_gems
     # Any installed gem with a C extension will do, except the ones whose
     # library Spinel provides itself (bigdecimal, json, ...).
@@ -125,6 +170,24 @@ class TestNativeCompilation < Minitest::Test
       ::Ocran::AotToolchain.find(:spinel, { "SPINEL" => File.join(@tmp, "nope") }.merge(empty_env))
     end
     assert_match(/SPINEL=.* does not name the spinel command/, err.message)
+  end
+
+  # The layout of Spinel's `make install`: the compiler and packages/ in
+  # PREFIX/lib/spinel, a link to it and spinel-doctor in PREFIX/bin.
+  def test_installed_layout
+    posix_only
+    require_relative "../lib/ocran/spinel_builder"
+    prefix = File.join(@tmp, "prefix")
+    FileUtils.mkdir_p([File.join(prefix, "bin"), File.join(prefix, "lib/spinel/packages")])
+    compiler = write_script(File.join(prefix, "lib/spinel/spinel"), "exit 0\n")
+    File.symlink(compiler, File.join(prefix, "bin/spinel"))
+    doctor = write_script(File.join(prefix, "bin/spinel-doctor"), "exit 0\n")
+    builder = ::Ocran::SpinelBuilder.allocate
+
+    [compiler, File.join(prefix, "bin/spinel")].each do |spinel|
+      assert_equal doctor, builder.send(:doctor_path, spinel)
+      assert_equal File.join(File.realpath(prefix), "lib/spinel/packages"), builder.send(:packages_dir, spinel)
+    end
   end
 
   def test_install_instructions
