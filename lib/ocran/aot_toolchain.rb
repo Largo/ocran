@@ -18,8 +18,10 @@ module Ocran
         command: "spinel",
         env: "SPINEL",
         # `make install` (default PREFIX /usr/local, or PREFIX=$HOME/.local),
-        # and the convenience symlink `make` leaves at the root of a checkout.
+        # and in a source checkout the binary `make` builds in bin/ (and the
+        # convenience link to it at the root).
         locations: %w[~/.local/bin/spinel /usr/local/bin/spinel /opt/homebrew/bin/spinel
+                      ~/spinel/bin/spinel ~/src/spinel/bin/spinel
                       ~/spinel/spinel ~/src/spinel/spinel]
       ),
       spin: Tool.new(
@@ -82,10 +84,12 @@ module Ocran
       lines = []
 
       if Gem.win_platform?
-        lines << "Spinel does not build natively on Windows yet (Roundhouse's Windows build is untested)."
-        lines << "Until it does, run OCRAN inside WSL (https://learn.microsoft.com/windows/wsl/install),"
-        lines << "where both work as on Linux; the result is then a Linux binary. Once they support"
-        lines << "Windows, installing them there is all this option needs."
+        lines << "On Windows, WSL (https://learn.microsoft.com/windows/wsl/install) is the dependable"
+        lines << "way to run Spinel and Roundhouse: they work there as on Linux, and the result is a"
+        lines << "Linux binary. Spinel also builds natively with MinGW-w64 gcc, in RubyInstaller's"
+        lines << "Devkit (`ridk enable`) or an MSYS2 UCRT64 shell; that port is community-maintained"
+        lines << "and best effort (#{SPINEL_URL}/blob/master/docs/windows.md). Roundhouse's"
+        lines << "Windows build is untested."
         lines << ""
       end
 

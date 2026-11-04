@@ -559,12 +559,13 @@ jemalloc on Apple Silicon (under `/opt/homebrew/lib`, which the linker does
 not search by default) links. The asset step needs Bundler, and Node.js
 with npm when the app builds Tailwind.
 
-**Windows.** Spinel does not build natively on Windows yet, and
-Roundhouse's Windows build is untested. For now, run OCRAN inside WSL,
-where both work as they do on Linux; you get a Linux binary. Nothing in
-OCRAN is tied to a platform here: once the compilers run on Windows,
-`--spinel` and `--roundhouse` work there as they are and produce `.exe`
-files.
+**Windows.** WSL is the dependable way to use `--spinel` and `--roundhouse`
+on Windows: both compilers work there as they do on Linux, and you get a
+Linux binary. Spinel also builds natively with MinGW-w64 gcc, in
+RubyInstaller's Devkit (`ridk enable`) or an MSYS2 UCRT64 shell (see
+Spinel's [docs/windows.md](https://github.com/matz/spinel/blob/master/docs/windows.md));
+that port is community-maintained and best effort, and with it `--spinel`
+produces a Windows `.exe`. Roundhouse's Windows build is untested.
 
 #### WebAssembly export (experimental):
 

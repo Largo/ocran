@@ -124,10 +124,13 @@ module Ocran
       verbose "spinel-doctor could not be run: #{e.message}"
     end
 
+    # `make install` puts it in PREFIX/bin, beside the link to the compiler
+    # in PREFIX/lib/spinel; a source checkout has both in bin/.
     def doctor_path(spinel)
       candidates = [File.dirname(spinel)]
       real = File.realpath(spinel)
-      candidates += [File.dirname(real), File.join(File.dirname(File.dirname(real)), "bin")]
+      candidates += [File.dirname(real), File.join(File.dirname(File.dirname(real)), "bin"),
+                     File.join(File.dirname(File.dirname(File.dirname(real))), "bin")]
       candidates.uniq.map { |dir| File.join(dir, "spinel-doctor") }.find { |path| AotToolchain.executable?(path) }
     rescue SystemCallError
       nil

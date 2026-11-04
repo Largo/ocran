@@ -16,19 +16,23 @@ module Ocran
   class SpinelCompatibility < CompatibilityScan
     # Features Spinel provides when its own packages/ directory cannot be
     # found to read the list from (it is installed beside the compiler).
-    # Mirrors packages/ plus the requires the compiler answers natively
-    # (src/spinel_parse.c: sp_lib_is_native, sp_require_tolerated,
-    # sp_require_preloaded) as of Spinel 2026.09.
+    # Mirrors the top-level libraries of packages/ as of Spinel 2026.11.
     FALLBACK_FEATURES = %w[
-      base64 benchmark bigdecimal cgi cgi/escape cgi/util csv digest digest/md5
-      digest/sha1 digest/sha2 erb ffi fiddle fiddle/import fileutils forwardable
-      io/buffer json logger net/http open3 openssl optparse pathname
-      securerandom set stringio strscan tempfile tmpdir uri zlib
+      base64 benchmark bigdecimal cgi cgi/escape cgi/util csv date did_you_mean
+      digest digest/md5 digest/sha1 digest/sha2 erb erb/escape ffi fiddle
+      fiddle/import fileutils find forwardable getoptlong io/buffer ipaddr json
+      logger net/http net/https net/protocol net/smtp observer open3 openssl
+      optparse pathname pp prettyprint psych pty racc racc/parser resolv rexml
+      rexml/document securerandom set shellwords singleton sqlite3 stringio
+      strscan tempfile time timeout tmpdir uri weakref yaml zlib
     ].freeze
 
+    # Requires the compiler answers itself, without a file in packages/
+    # (src/spinel_parse.c: sp_lib_is_native, sp_require_tolerated,
+    # sp_require_preloaded).
     NATIVE_FEATURES = %w[
-      io/console monitor time socket ostruct
-      thread enumerator fiber rational complex
+      io/console monitor time socket ostruct set
+      thread enumerator fiber ffi rational complex io/wait rbconfig
     ].freeze
 
     # packages_dir: Spinel's packages/ directory, if known, to read the
@@ -71,7 +75,7 @@ module Ocran
       if packages_dir && File.directory?(packages_dir)
         Dir.glob(File.join(packages_dir, "*")).each do |pkg|
           Dir.glob("**/*.rb", base: pkg).each do |rel|
-            next if rel.start_with?("test/", "build/") || rel.include?("/test/")
+            next if rel.start_with?("test/", "build/", "ext/") || rel.include?("/test/")
 
             features << rel.delete_suffix(".rb")
           end
@@ -106,9 +110,23 @@ module Ocran
         flag(:error, node, "load: a compiled program cannot load Ruby files at run time") if kernel && !args.empty?
       when :eval
         flag(:error, node, "eval of a string is not supported (no parser at run time)") if kernel
-      when :instance_eval, :class_eval, :module_eval, :class_exec
-        if node.block.nil? && args.any? && !args.first.is_a?(Prism::BlockArgumentNode)
-          flag(:error, node, "#{name} with a string is not supported (the block form works)")
+      when :instance_eval, :instance_exec
+        if name == :instance_eval && string_argument?(node, args)
+          flag(:error, node, "instance_eval with a string is not supported (the block form works)")
+        end
+      when :class_eval, :module_eval
+        if string_argument?(node, args)
+          # Spinel compiles the string when its text is known at compile
+          # time: a literal, or a heredoc without interpolation. Some
+          # interpolations (a surrounding literal-list loop variable) work too.
+          case args.first
+          when Prism::StringNode
+            nil
+          when Prism::InterpolatedStringNode
+            flag(:warning, node, "#{name} of an interpolated string compiles only when Spinel can work out its text at compile time")
+          else
+            flag(:error, node, "#{name} of a string built at run time is not supported (a literal string or the block form works)")
+          end
         end
       when :define_method
         unless literal?(args.first)
@@ -142,7 +160,29 @@ module Ocran
           flag(:error, node, "refinements (refine / using) are not supported")
         end
       when :new
-        flag(:error, node, "Class.new builds a class at run time, which is not supported") if constant?(receiver, :Class)
+        # Class.new(Constant) is compiled, with or without a block; only a
+        # superclass computed at run time is refused.
+        if constant?(receiver, :Class) && (superclass = args.first) && !static_superclass?(superclass)
+          flag(:error, node, "Class.new with a superclass computed at run time is not supported (a constant superclass works)")
+        end
+      end
+    end
+
+    def string_argument?(node, args)
+      node.block.nil? && args.any? && !args.first.is_a?(Prism::BlockArgumentNode)
+    end
+
+    # A superclass Spinel knows at compile time: a constant, or a
+    # Struct.new / Data.define call.
+    def static_superclass?(node)
+      case node
+      when Prism::ConstantReadNode, Prism::ConstantPathNode
+        true
+      when Prism::CallNode
+        (node.name == :new && constant?(node.receiver, :Struct)) ||
+          (node.name == :define && constant?(node.receiver, :Data))
+      else
+        false
       end
     end
   end
