@@ -29,10 +29,22 @@ module Ocran
       @output = option.output_executable
     end
 
+    # Keeps spin out of whatever bundle OCRAN was started under: a package's
+    # native build step may shell out to Ruby.
+    BUNDLER_FREE_ENV = {
+      "RUBYOPT" => nil,
+      "BUNDLER_SETUP" => nil,
+      "BUNDLE_GEMFILE" => nil,
+      "BUNDLE_LOCKFILE" => nil
+    }.freeze
+
     def build
       spinel = AotToolchain.find(:spinel)
+      spin_root = find_spin_root(@script.dirname)
+      spin_flags = spin_root && spinel ? spin_flags(spin_root, spinel) : []
       analysis = SpinelCompatibility.new(@script, packages_dir: packages_dir(spinel),
-                                                  project_dirs: project_dirs).analyze
+                                                  package_roots: package_roots(spin_flags, spin_root),
+                                                  project_dirs: project_dirs + [spin_root].compact).analyze
 
       unless spinel
         error "--spinel needs the Spinel compiler, which was not found."
@@ -43,10 +55,12 @@ module Ocran
         raise "Spinel is not installed"
       end
 
-      verbose "Using Spinel at #{spinel} (#{AotToolchain.version(spinel) || "version unknown"})"
+      verbose "Using Spinel at #{spinel} (#{AotToolchain.version(spinel) || "version unknown"})" if @option.verbose?
       warn_about_uncompiled_files(analysis)
 
-      flags = analysis.include_dirs.flat_map { |dir| ["-I", dir] }
+      flags = spin_flags.dup
+      given = include_roots(spin_flags)
+      analysis.include_dirs.each { |dir| flags.push("-I", dir) unless given.include?(dir) }
       flags << "-g" if @option.enable_debug_mode?
       flags.concat(@option.spinel_options)
       command = [spinel, *flags, @script.to_s, "-o", @output.to_s]
@@ -98,6 +112,11 @@ module Ocran
       unless analysis.problem_gems.empty?
         names = analysis.problem_gems.map(&:name).join(", ")
         STDERR.puts "  - replace or drop the gems Spinel cannot compile (#{names}), or leave out --spinel to package them with Ruby"
+        if analysis.problem_gems.any?(&:native)
+          STDERR.puts "  - Spinel compiles native code only from spin packages: with a spin.toml beside the script"
+          STDERR.puts "    (`spin init`) whose dependencies provide those libraries, OCRAN builds with `spin flags`"
+          STDERR.puts "    (#{AotToolchain::SPINEL_URL}/blob/master/docs/spin.md)"
+        end
       end
       raise "Spinel could not compile #{display(@script)}"
     end
@@ -140,6 +159,71 @@ module Ocran
       STDERR.puts heading
       STDERR.puts
       STDERR.puts analysis.report.gsub(/^(?=.)/, "  ")
+    end
+
+    # The directory of the spin project the script is in: the nearest one
+    # up from it with a spin.toml, as spin itself finds it. Unlike spin, the
+    # search stops at the repository root (.git) and the home directory and
+    # never takes /, so a stray spin.toml far above the program does not
+    # turn every build under it into a spin build.
+    def find_spin_root(dir)
+      dir = File.expand_path(dir)
+      home = (File.expand_path("~") rescue nil)
+      loop do
+        up = File.dirname(dir)
+        return nil if up == dir
+
+        return dir if File.file?(File.join(dir, "spin.toml"))
+        return nil if dir == home || File.exist?(File.join(dir, ".git"))
+
+        dir = up
+      end
+    end
+
+    # The flags `spin flags` prints for the project: the -I roots of its
+    # dependencies, the objects of the C they carry (--link) and
+    # --strict-require. Running it also resolves the dependencies and
+    # compiles their C, which is what makes the --link paths real.
+    def spin_flags(root, spinel)
+      spin = AotToolchain.find(:spin)
+      unless spin
+        error "#{display(root)} is a spin project (spin.toml), which needs the spin command to resolve " \
+              "its dependencies, and it was not found."
+        STDERR.puts
+        STDERR.puts AotToolchain.install_instructions([:spin])
+        raise "spin is not installed"
+      end
+
+      say "Resolving the dependencies of the spin project in #{display(root)}"
+      # spin runs spinel by name, so the one OCRAN found goes first on PATH.
+      path = [File.dirname(spinel), File.dirname(spin), ENV.fetch("PATH", "")].uniq.join(File::PATH_SEPARATOR)
+      env = BUNDLER_FREE_ENV.merge("PATH" => path)
+      verbose "#{spin} flags (in #{root})"
+      out, err, status = Open3.capture3(env, spin, "flags", chdir: root)
+      unless status.success?
+        STDERR.puts "spin could not resolve the project's dependencies (exit status #{status.exitstatus.inspect}):"
+        STDERR.puts (err + out).lines.last(MAX_OUTPUT_LINES).map { |l| "  #{l}" }.join
+        if (err + out).include?("--allow-native-build")
+          STDERR.puts
+          STDERR.puts "Set SPIN_ALLOW_NATIVE_BUILD=1 for this build, or run `spin trust <package>` once, to let"
+          STDERR.puts "spin run the native build steps of the dependencies."
+        end
+        raise "spin flags failed in #{display(root)}"
+      end
+      # spin joins the flags with spaces, unquoted.
+      out.split
+    rescue SystemCallError => e
+      raise "spin could not be run: #{e.message}"
+    end
+
+    def include_roots(flags)
+      flags.each_cons(2).select { |flag, _| flag == "-I" }.map { |_, dir| dir }
+    end
+
+    # The dependencies' roots: every -I root but the project's own, whose
+    # files the scan reads as the program's.
+    def package_roots(flags, spin_root)
+      include_roots(flags).reject { |dir| spin_root && File.expand_path(dir) == spin_root }
     end
 
     # Files given on the command line besides the script, which Spinel

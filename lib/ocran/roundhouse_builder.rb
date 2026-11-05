@@ -50,8 +50,11 @@ module Ocran
       missing = tools.select { |_, path| path.nil? }.keys
       report_missing_tools(tools, missing) unless missing.empty?
 
-      tools.each do |name, path|
-        verbose "Using #{name} at #{path} (#{AotToolchain.version(path) || "version unknown"})"
+      # --version starts each tool, so only when the answer is shown.
+      if @option.verbose?
+        tools.each do |name, path|
+          verbose "Using #{name} at #{path} (#{AotToolchain.version(path) || "version unknown"})"
+        end
       end
 
       work = Dir.mktmpdir("ocran-roundhouse")

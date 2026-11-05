@@ -4,4 +4,5 @@ class Dynamic
   end
 
   %w[a b].each { |n| define_method(n) { n } }
+  ENV.keys.each { |n| define_method(n) { n } }
 end

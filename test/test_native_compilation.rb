@@ -51,6 +51,7 @@ class TestNativeCompilation < Minitest::Test
   def fake_spinel
     FileUtils.mkdir_p(File.join(@tmp, "bin"))
     write_script(File.join(@tmp, "bin", "spinel"), <<~SH)
+      [ "$1" = "--version" ] && { echo "spinel 0.0 (stand-in)"; exit 0; }
       printf '%s\\n' "$@" > "#{@tmp}/spinel-args"
       if [ -n "$FAKE_SPINEL_FAIL" ]; then
         echo "spinel: cannot compile: eval is not supported" >&2
@@ -86,7 +87,10 @@ class TestNativeCompilation < Minitest::Test
     assert_match(/spinel_incompatible\.rb:1: require "no_such_library_anywhere": not a Spinel library/, report)
     assert_match(/spinel_incompatible\.rb:4: eval of a string is not supported/, report)
     assert_match(/dynamic\.rb:2: method_missing is never dispatched/, report)
-    assert_match(/dynamic\.rb:6: define_method with a computed name works only where/, report)
+    # The loop over a literal list on line 6 is expanded by Spinel; the
+    # names on line 7 exist only at run time.
+    refute_match(/dynamic\.rb:6:/, report)
+    assert_match(/error: dynamic\.rb:7: define_method with a name computed at run time is refused/, report)
   end
 
   # Constructs Spinel compiles are not reported; the forms it refuses are.
@@ -120,6 +124,26 @@ class TestNativeCompilation < Minitest::Test
     assert_equal :warning, by_line[15].severity
     assert_equal :error, by_line[16].severity
     assert_match(/instance_eval with a string/, by_line[18].message)
+  end
+
+  def test_define_method_names
+    File.write(File.join(@tmp, "app.rb"), <<~'RUBY')
+      NAMES = %i[a b]
+      class K
+        %w[x y].each { |n| define_method("#{n}=") { |v| v } }
+        NAMES.each { |n| define_method(n) { 1 } }
+        NAMES.each { |n| define_method(n.to_s + "?") { 1 } }
+        def self.flag(name) = define_method("#{name}?") { true }
+        name = ENV["X"]
+        define_method(name) { 1 }
+        [1].map(&:to_s).each { |n| define_method(n) { n } }
+      end
+    RUBY
+    findings = ::Ocran::SpinelCompatibility.new(File.join(@tmp, "app.rb")).analyze.findings
+    severities = findings.to_h { |f| [f.line, f.severity] }
+
+    assert_equal({ 5 => :warning, 6 => :warning, 8 => :error, 9 => :error }, severities,
+                 findings.map(&:message).join("\n"))
   end
 
   def test_features_read_from_packages_dir
@@ -214,6 +238,65 @@ class TestNativeCompilation < Minitest::Test
     assert_equal ["-o", exe], args.last(2)
   end
 
+  # A script in a spin project is compiled with what `spin flags` prints:
+  # its dependencies' roots and the objects of the C they carry. A library
+  # a dependency provides is not reported, whatever gem has the same name.
+  def fake_spin_project(fail: false)
+    project = File.join(@tmp, "proj")
+    pkg = File.join(@tmp, "pkgs", "curses")
+    FileUtils.mkdir_p([File.join(project, "lib"), pkg])
+    File.write(File.join(project, "spin.toml"), "[package]\nname = \"proj\"\n")
+    File.write(File.join(pkg, "curses.rb"), "module Curses; end\n")
+    File.write(File.join(project, "app.rb"), %(require "curses"\nrequire "helper"\nputs Helper::X\n))
+    File.write(File.join(project, "lib", "helper.rb"), "module Helper; X = 1; end\n")
+    spin = write_script(File.join(@tmp, "bin", "spin"), <<~SH)
+      pwd > "#{@tmp}/spin-cwd"
+      [ "$1" = flags ] || exit 2
+      #{fail ? 'echo "spin: curses has a native build step. Allow it with --allow-native-build" >&2; exit 1' : ""}
+      echo "--strict-require -I #{File.dirname(pkg)}/curses -I #{project} --link /cache/sp_curses.o"
+    SH
+    [project, spin, pkg]
+  end
+
+  def test_spinel_in_spin_project
+    posix_only
+    spinel = fake_spinel
+    project, spin, pkg = fake_spin_project
+    out, status = ocran(project, "app.rb", "--spinel", env: { "SPINEL" => spinel, "SPIN" => spin })
+
+    assert status.success?, out
+    assert_equal File.realpath(project), File.realpath(File.read(File.join(@tmp, "spin-cwd")).strip)
+    args = File.read(File.join(@tmp, "spinel-args")).lines(chomp: true)
+    assert_equal ["--strict-require", "-I", pkg, "-I", project, "--link", "/cache/sp_curses.o"], args.first(7)
+    assert_equal ["-I", File.join(project, "lib")], args[7, 2]
+    refute_match(/curses/, out.sub(/^.*spin project.*$/, ""))
+  end
+
+  def test_spin_root_search_stops_at_repository
+    require_relative "../lib/ocran/spinel_builder"
+    builder = ::Ocran::SpinelBuilder.allocate
+    repo = File.join(@tmp, "outer", "repo")
+    FileUtils.mkdir_p(File.join(repo, ".git"))
+    FileUtils.mkdir_p(File.join(repo, "app", "bin"))
+    File.write(File.join(@tmp, "outer", "spin.toml"), "")
+
+    assert_nil builder.send(:find_spin_root, File.join(repo, "app", "bin"))
+    File.write(File.join(repo, "app", "spin.toml"), "")
+    assert_equal File.join(repo, "app"), builder.send(:find_spin_root, File.join(repo, "app", "bin"))
+  end
+
+  def test_spinel_spin_flags_failure
+    posix_only
+    spinel = fake_spinel
+    project, spin, = fake_spin_project(fail: true)
+    out, status = ocran(project, "app.rb", "--spinel", env: { "SPINEL" => spinel, "SPIN" => spin })
+
+    refute status.success?, out
+    assert_match(/spin could not resolve the project's dependencies/, out)
+    assert_match(/SPIN_ALLOW_NATIVE_BUILD=1/, out)
+    refute File.exist?(File.join(@tmp, "spinel-args")), "spinel ran although spin flags failed"
+  end
+
   def test_spinel_failure_reports_incompatibilities
     posix_only
     dir = fixture("spinel_incompatible")
@@ -271,6 +354,7 @@ class TestNativeCompilation < Minitest::Test
     bin = File.join(@tmp, "bin")
     FileUtils.mkdir_p(bin)
     write_script(File.join(bin, "roundhouse"), <<~SH)
+      [ "$1" = "--version" ] && { echo "roundhouse 0.0 (stand-in)"; exit 0; }
       if [ "$1" = "check" ]; then
         echo "app/models/post.rb:3:5: error[send_dispatch_failed]: no known method frobnicate on Post"
         echo "roundhouse-check: 12 gems: 9 framework, 0 modeled, 2 infrastructure, 1 unknown (frobnicator)"
@@ -285,6 +369,7 @@ class TestNativeCompilation < Minitest::Test
         if [ "$1" = "-o" ]; then out="$2"; shift; fi
         shift
       done
+      [ -n "$out" ] || { echo "roundhouse: no -o" >&2; exit 2; }
       mkdir -p "$out/db" "$out/config"
       printf 'assets:\\n\\tbundle exec ruby -e 1\\n' > "$out/Makefile"
       printf '[package]\\nallocator = "jemalloc"\\n' > "$out/spin.toml"
