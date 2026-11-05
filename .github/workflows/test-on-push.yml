@@ -19,7 +19,10 @@ jobs:
       fail-fast: false
       matrix:
         ruby: [ '3.3', '3.4', '4.0' ]
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: Ubuntu 26.04 has no xpra package, which the GLX
+    # display for the GUI tests is started with, and a failed apt-get leaves
+    # libfox-1.6-dev out too, so fxruby cannot be built.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -133,6 +136,11 @@ jobs:
   # runners have no Spinel.
   test-spinel:
     runs-on: ubuntu-latest
+    env:
+      # Nothing here is GUI; without the group the job does not need the FOX
+      # headers to build fxruby (it used to get it from run-tests-linux's
+      # bundle cache, which a new runner image does not have).
+      BUNDLE_WITHOUT: gui
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -179,6 +187,11 @@ jobs:
   # skip those tests because they have no ruby_wasm.
   test-wasm:
     runs-on: ubuntu-latest
+    env:
+      # Nothing here is GUI; without the group the job does not need the FOX
+      # headers to build fxruby (it used to get it from run-tests-linux's
+      # bundle cache, which a new runner image does not have).
+      BUNDLE_WITHOUT: gui
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
