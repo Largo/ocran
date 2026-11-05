@@ -35,11 +35,16 @@ module Ocran
       thread enumerator fiber ffi rational complex io/wait rbconfig
     ].freeze
 
-    # packages_dir: Spinel's packages/ directory, if known, to read the
-    #               features it provides from
-    def initialize(script, packages_dir: nil, project_dirs: nil)
+    # packages_dir:  Spinel's packages/ directory, if known, to read the
+    #                features it provides from
+    # package_roots: the -I roots of a spin project's dependencies (from
+    #                `spin flags`); a library one of them holds is provided,
+    #                ahead of any gem of the same name, as Spinel searches
+    #                them first
+    def initialize(script, packages_dir: nil, package_roots: [], project_dirs: nil)
       super(script, project_dirs: project_dirs)
       @features = spinel_features(packages_dir)
+      @package_roots = package_roots
       @allowed = {}
     end
 
@@ -47,11 +52,21 @@ module Ocran
 
     private
 
-    def provided_feature?(feature) = @features.include?(feature)
+    def provided_feature?(feature)
+      @features.include?(feature) || in_package_root?(feature)
+    end
+
+    # Spinel resolves require "x" against a root as x.rb or x/x.rb.
+    def in_package_root?(feature)
+      base = File.basename(feature)
+      @package_roots.any? do |root|
+        File.file?(File.join(root, "#{feature}.rb")) || File.file?(File.join(root, feature, "#{base}.rb"))
+      end
+    end
 
     def gem_problem(gem)
       if gem.native
-        [:error, "has a C extension, which Spinel cannot compile"]
+        [:error, "has a C extension, which Spinel cannot compile (it builds native code only from spin packages)"]
       elsif gem.stdlib
         # Spinel has its own versions of the parts of the standard library
         # it supports (matched by name before a gem is ever looked up), so
@@ -129,9 +144,7 @@ module Ocran
           end
         end
       when :define_method
-        unless literal?(args.first)
-          flag(:warning, node, "define_method with a computed name works only where Spinel can enumerate the names at compile time")
-        end
+        check_define_method(node, args.first) if receiver.nil? || receiver.is_a?(Prism::SelfNode)
       when :instance_variable_get, :instance_variable_set
         unless literal?(args.first)
           flag(:error, node, "#{name} with a computed name is not supported (only literal names like :@x)")
@@ -166,6 +179,65 @@ module Ocran
           flag(:error, node, "Class.new with a superclass computed at run time is not supported (a constant superclass works)")
         end
       end
+    end
+
+    # Spinel expands define_method at compile time, so it needs the names:
+    # a literal, or the variable of a loop over a literal list (also inside
+    # an interpolation, as in "#{n}="). In a method body a computed name
+    # can still work: a class method the class body calls with literal
+    # arguments is expanded call by call.
+    def check_define_method(node, name)
+      return if name.nil? || static_name?(name)
+
+      if built_from_loop_vars?(name)
+        flag(:warning, node, "define_method with a name built from a literal-list loop variable compiles only " \
+                             "where Spinel can work the name out once it unrolls the loop")
+      elsif in_def?
+        flag(:warning, node, "define_method with a computed name compiles only where the method is called " \
+                             "from a class body with literal arguments")
+      else
+        flag(:error, node, "define_method with a name computed at run time is refused (literal names, and the " \
+                           "variable of a loop over a literal list or a constant, work)")
+      end
+    end
+
+    def static_name?(node)
+      case node
+      when Prism::SymbolNode, Prism::StringNode
+        true
+      when Prism::InterpolatedSymbolNode, Prism::InterpolatedStringNode
+        node.parts.all? do |part|
+          part.is_a?(Prism::StringNode) ||
+            (part.is_a?(Prism::EmbeddedStatementsNode) && part.statements&.body&.size == 1 &&
+             static_name?(part.statements.body.first))
+        end
+      when Prism::CallNode
+        # n.to_sym, n.to_s
+        %i[to_sym to_s].include?(node.name) && node.arguments.nil? && static_name?(node.receiver)
+      else
+        literal_loop_var?(node)
+      end
+    end
+
+    # An expression of literals and literal-list loop variables only, such
+    # as n.to_s + "?", which unrolling the loop may make a constant.
+    def built_from_loop_vars?(node)
+      vars = []
+      walk = lambda do |n|
+        case n
+        when Prism::SymbolNode, Prism::StringNode, Prism::IntegerNode then true
+        when Prism::LocalVariableReadNode then literal_loop_var?(n) && vars << n
+        when Prism::CallNode
+          n.block.nil? && !n.receiver.nil? && walk.(n.receiver) &&
+            (n.arguments&.arguments || []).all? { |a| walk.(a) }
+        when Prism::InterpolatedSymbolNode, Prism::InterpolatedStringNode
+          n.parts.all? { |p| p.is_a?(Prism::StringNode) || (p.is_a?(Prism::EmbeddedStatementsNode) && p.statements&.body&.size == 1 && walk.(p.statements.body.first)) }
+        when Prism::ParenthesesNode
+          n.body.is_a?(Prism::StatementsNode) && n.body.body.size == 1 && walk.(n.body.body.first)
+        else false
+        end
+      end
+      walk.(node) && !vars.empty?
     end
 
     def string_argument?(node, args)

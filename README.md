@@ -514,6 +514,16 @@ does not, OCRAN tells you why.
   with `-g`. Only code is compiled in; data files have to ship next to
   the executable.
 
+  Spinel compiles native code only from *spin packages*, not from gems
+  with C extensions. When the script is in a spin project (a `spin.toml`
+  in its directory or above, up to the repository root or your home
+  directory), OCRAN runs `spin flags` there and compiles with what it
+  prints: the dependencies' `-I` roots, the objects of the C they carry
+  (`--link`) and `--strict-require`. A library a dependency provides is
+  then not reported, even where a gem of the same name has a C extension.
+  If a dependency has a native build step, allow it with
+  `SPIN_ALLOW_NATIVE_BUILD=1` or `spin trust <package>`.
+
 * `--roundhouse`: Compile a **Rails application** into a native server
   binary with [Roundhouse](https://github.com/rubys/roundhouse), which
   lowers the app to the Ruby subset Spinel compiles. OCRAN runs the

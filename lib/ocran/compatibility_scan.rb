@@ -53,6 +53,8 @@ module Ocran
       @files = []
       @project_files = []
       @local_requires = []
+      @loop_vars = []
+      @def_depth = 0
     end
 
     # The name the report uses for the target, e.g. "Spinel".
@@ -196,6 +198,49 @@ module Ocran
 
     def constant?(node, name)
       node.is_a?(Prism::ConstantReadNode) && node.name == name
+    end
+
+    # True inside a method body.
+    def in_def? = @def_depth.positive?
+
+    # True when node is a local variable that the program sets, at compile
+    # time, to each element of a literal list in turn: the block variable of
+    # `%w[a b].each { |n| ... }`, `[:a, :b].each`, or `NAMES.each`.
+    def literal_loop_var?(node)
+      node.is_a?(Prism::LocalVariableReadNode) && @loop_vars.any? { |vars| vars.include?(node.name) }
+    end
+
+    # The block variables of a literal-list loop, or [] for any other call.
+    def literal_loop_vars(node)
+      return [] unless node.name == :each && node.block.is_a?(Prism::BlockNode)
+
+      list = node.receiver
+      literal_list = case list
+                     when Prism::ArrayNode then list.elements.all? { |e| literal?(e) }
+                     when Prism::ConstantReadNode, Prism::ConstantPathNode then true
+                     else false
+                     end
+      return [] unless literal_list
+
+      params = node.block.parameters
+      params = params.parameters if params.is_a?(Prism::BlockParametersNode)
+      return [] unless params.is_a?(Prism::ParametersNode)
+
+      params.requireds.grep(Prism::RequiredParameterNode).map(&:name)
+    end
+
+    def with_loop_vars(vars)
+      @loop_vars.push(vars) unless vars.empty?
+      yield
+    ensure
+      @loop_vars.pop unless vars.empty?
+    end
+
+    def with_def
+      @def_depth += 1
+      yield
+    ensure
+      @def_depth -= 1
     end
 
     def location(f)
@@ -380,12 +425,12 @@ module Ocran
 
         def visit_call_node(node)
           @scan.send(:visit_call, node)
-          super
+          @scan.send(:with_loop_vars, @scan.send(:literal_loop_vars, node)) { super }
         end
 
         def visit_def_node(node)
           @scan.send(:check_def, node)
-          super
+          @scan.send(:with_def) { super }
         end
 
         def visit_global_variable_read_node(node)
