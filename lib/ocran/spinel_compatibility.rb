@@ -41,8 +41,8 @@ module Ocran
     #                `spin flags`); a library one of them holds is provided,
     #                ahead of any gem of the same name, as Spinel searches
     #                them first
-    def initialize(script, packages_dir: nil, package_roots: [], project_dirs: nil)
-      super(script, project_dirs: project_dirs)
+    def initialize(script, packages_dir: nil, package_roots: [], project_dirs: nil, search_roots: [])
+      super(script, project_dirs: project_dirs, search_roots: search_roots)
       @features = spinel_features(packages_dir)
       @package_roots = package_roots
       @allowed = {}

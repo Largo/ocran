@@ -43,7 +43,10 @@ module Ocran
 
     # script:       the program's entry file
     # project_dirs: directories whose files count as the program's own
-    def initialize(script, project_dirs: nil)
+    # search_roots: further directories of the program's own that requires
+    #               are resolved against, after the script's directory and
+    #               its lib/ (the root of a spin project, say)
+    def initialize(script, project_dirs: nil, search_roots: [])
       @script = Pathname(script).expand_path
       @root = @script.dirname
       @project_dirs = (project_dirs || [@root]).map { |d| Pathname(d).expand_path }
@@ -53,6 +56,7 @@ module Ocran
       @files = []
       @project_files = []
       @local_requires = []
+      @search_roots = search_roots.map { |d| Pathname(d).expand_path }
       @loop_vars = []
       @def_depth = 0
     end
@@ -333,7 +337,7 @@ module Ocran
       # The program's own files, on a load path it would set up with -I or
       # $LOAD_PATH: the script's directory and its lib/, and the require
       # paths of the gems already found (a gem requiring its own files).
-      local_roots = [@root, @root + "lib"] + @include_dirs.map { |d| Pathname(d) }
+      local_roots = ([@root, @root + "lib"] + @search_roots + @include_dirs.map { |d| Pathname(d) }).uniq
       local_roots.each do |root|
         candidate = root + "#{feature}.rb"
         next unless candidate.file?

@@ -241,10 +241,11 @@ class TestNativeCompilation < Minitest::Test
   # A script in a spin project is compiled with what `spin flags` prints:
   # its dependencies' roots and the objects of the C they carry. A library
   # a dependency provides is not reported, whatever gem has the same name.
-  def fake_spin_project(fail: false)
+  def fake_spin_project(fail: false, pkgs: "pkgs")
     project = File.join(@tmp, "proj")
-    pkg = File.join(@tmp, "pkgs", "curses")
-    FileUtils.mkdir_p([File.join(project, "lib"), pkg])
+    pkg = File.join(@tmp, pkgs, "curses")
+    FileUtils.mkdir_p([File.join(project, "lib"), pkg, File.join(@tmp, "cache")])
+    File.write(File.join(@tmp, "cache", "sp_curses.o"), "")
     File.write(File.join(project, "spin.toml"), "[package]\nname = \"proj\"\n")
     File.write(File.join(pkg, "curses.rb"), "module Curses; end\n")
     File.write(File.join(project, "app.rb"), %(require "curses"\nrequire "helper"\nputs Helper::X\n))
@@ -253,7 +254,7 @@ class TestNativeCompilation < Minitest::Test
       pwd > "#{@tmp}/spin-cwd"
       [ "$1" = flags ] || exit 2
       #{fail ? 'echo "spin: curses has a native build step. Allow it with --allow-native-build" >&2; exit 1' : ""}
-      echo "--strict-require -I #{File.dirname(pkg)}/curses -I #{project} --link /cache/sp_curses.o"
+      echo "--strict-require -I #{pkg} -I #{project} --link #{@tmp}/cache/sp_curses.o --link -lcurses"
     SH
     [project, spin, pkg]
   end
@@ -267,8 +268,9 @@ class TestNativeCompilation < Minitest::Test
     assert status.success?, out
     assert_equal File.realpath(project), File.realpath(File.read(File.join(@tmp, "spin-cwd")).strip)
     args = File.read(File.join(@tmp, "spinel-args")).lines(chomp: true)
-    assert_equal ["--strict-require", "-I", pkg, "-I", project, "--link", "/cache/sp_curses.o"], args.first(7)
-    assert_equal ["-I", File.join(project, "lib")], args[7, 2]
+    assert_equal ["--strict-require", "-I", pkg, "-I", project, "--link", "#{@tmp}/cache/sp_curses.o",
+                  "--link", "-lcurses"], args.first(9)
+    assert_equal ["-I", File.join(project, "lib")], args[9, 2]
     refute_match(/curses/, out.sub(/^.*spin project.*$/, ""))
   end
 
@@ -283,6 +285,44 @@ class TestNativeCompilation < Minitest::Test
     assert_nil builder.send(:find_spin_root, File.join(repo, "app", "bin"))
     File.write(File.join(repo, "app", "spin.toml"), "")
     assert_equal File.join(repo, "app"), builder.send(:find_spin_root, File.join(repo, "app", "bin"))
+  end
+
+  # spin prints its flags unquoted: a path with a space arrives in pieces,
+  # which OCRAN refuses rather than guess how to rejoin.
+  def test_spinel_spin_flags_path_with_space
+    posix_only
+    spinel = fake_spinel
+    project, spin, = fake_spin_project(pkgs: "my pkgs")
+    out, status = ocran(project, "app.rb", "--spinel", env: { "SPINEL" => spinel, "SPIN" => spin })
+
+    refute status.success?, out
+    assert_match(/names ".*my" \(-I\), which does not exist/, out)
+    assert_match(/path without spaces/, out)
+    refute File.exist?(File.join(@tmp, "spinel-args")), "spinel ran with a broken -I"
+  end
+
+  # A script in a subdirectory of a spin project requires files at the
+  # project root, which spin passes as -I.
+  def test_compatibility_resolves_from_search_roots
+    root = File.join(@tmp, "proj")
+    FileUtils.mkdir_p(File.join(root, "bin"))
+    File.write(File.join(root, "app.rb"), "module App; end\n")
+    File.write(File.join(root, "bin", "main.rb"), %(require "app"\n))
+    analysis = ::Ocran::SpinelCompatibility.new(File.join(root, "bin", "main.rb"),
+                                                 project_dirs: [root], search_roots: [root]).analyze
+
+    assert_empty analysis.findings, analysis.report
+    assert_includes analysis.project_files.map(&:to_s), File.join(root, "app.rb")
+  end
+
+  def test_toolchain_locations_on_windows
+    exe = File.join(@tmp, "spinel", "bin", "spinel.exe")
+    FileUtils.mkdir_p(File.dirname(exe))
+    File.write(exe, "")
+    pattern = File.join(@tmp, "spinel", "bin", "spinel")
+
+    assert_equal [exe], ::Ocran::AotToolchain.location_candidates(pattern, windows: true)
+    assert_empty ::Ocran::AotToolchain.location_candidates(pattern, windows: false)
   end
 
   def test_spinel_spin_flags_failure

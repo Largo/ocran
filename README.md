@@ -523,6 +523,9 @@ does not, OCRAN tells you why.
   then not reported, even where a gem of the same name has a C extension.
   If a dependency has a native build step, allow it with
   `SPIN_ALLOW_NATIVE_BUILD=1` or `spin trust <package>`.
+  `spin flags` prints paths unquoted, so the project and its dependencies
+  must not be in a path that contains a space; OCRAN stops with the path
+  it could not find.
 
 * `--roundhouse`: Compile a **Rails application** into a native server
   binary with [Roundhouse](https://github.com/rubys/roundhouse), which

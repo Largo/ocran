@@ -61,8 +61,15 @@ module Ocran
       end
 
       search_path(tool.command, env) ||
-        tool.locations.lazy.flat_map { |pattern| Dir.glob(File.expand_path(pattern)) }
+        tool.locations.lazy.flat_map { |pattern| location_candidates(pattern) }
                           .find { |path| executable?(path) }
+    end
+
+    # The paths a conventional location stands for: on Windows the command
+    # is spinel.exe (and so on) rather than spinel.
+    def location_candidates(pattern, windows: Gem.win_platform?)
+      patterns = windows ? ["#{pattern}.exe", pattern] : [pattern]
+      patterns.flat_map { |p| Dir.glob(File.expand_path(p)) }
     end
 
     # Hash of name => path for the given tools, with nil for missing ones.
