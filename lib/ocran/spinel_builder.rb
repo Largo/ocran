@@ -44,7 +44,10 @@ module Ocran
       spin_flags = spin_root && spinel ? spin_flags(spin_root, spinel) : []
       analysis = SpinelCompatibility.new(@script, packages_dir: packages_dir(spinel),
                                                   package_roots: package_roots(spin_flags, spin_root),
-                                                  project_dirs: project_dirs + [spin_root].compact).analyze
+                                                  project_dirs: project_dirs + [spin_root].compact,
+                                                  # spin passes the project root as -I, so the
+                                                  # program's requires resolve against it too
+                                                  search_roots: [spin_root].compact).analyze
 
       unless spinel
         error "--spinel needs the Spinel compiler, which was not found."
@@ -210,10 +213,28 @@ module Ocran
         end
         raise "spin flags failed in #{display(root)}"
       end
-      # spin joins the flags with spaces, unquoted.
-      out.split
+      check_spin_flags(out.split, root)
     rescue SystemCallError => e
       raise "spin could not be run: #{e.message}"
+    end
+
+    # spin joins its flags with spaces and does not quote them, so a path
+    # with a space in it arrives in pieces. Every path a flag names has to
+    # exist; rejoining pieces would only be a guess.
+    PATH_FLAGS = { "-I" => :directory?, "--rbs" => :directory?, "--link" => :exist? }.freeze
+
+    def check_spin_flags(flags, root)
+      flags.each_cons(2) do |flag, value|
+        test = PATH_FLAGS[flag] or next
+        next if flag == "--link" && value.start_with?("-") # --link -ljemalloc
+
+        next if File.public_send(test, value)
+
+        raise "`spin flags` in #{display(root)} names #{value.inspect} (#{flag}), which does not exist. " \
+              "spin prints its flags unquoted, so a project or dependency whose path contains a space " \
+              "cannot be passed on; move it to a path without spaces"
+      end
+      flags
     end
 
     def include_roots(flags)
