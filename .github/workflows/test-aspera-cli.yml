@@ -41,7 +41,7 @@ jobs:
           docker run --rm \
             -v "$PWD":/ocran-src:ro \
             -v /tmp/ascli-out:/out \
-            fedora:latest bash -euxc '
+            fedora:44 bash -euxc '
               # Weak deps matter here: Fedora ships default gems (json,
               # psych, ...) as separate RPMs pulled in as weak deps of ruby
               dnf install -y \
@@ -65,7 +65,7 @@ jobs:
         # test-on-push.yml covers the cross-distro case for toolchain-built
         # rubies.)
         run: |
-          out=$(docker run --rm -v /tmp/ascli-out:/mnt:ro fedora:latest bash -euc '
+          out=$(docker run --rm -v /tmp/ascli-out:/mnt:ro fedora:44 bash -euc '
             if command -v ruby > /dev/null; then
               echo "test container unexpectedly has Ruby installed - not a clean-system test" >&2
               exit 1
@@ -81,7 +81,9 @@ jobs:
         # on Ubuntu. The remaining constraint is glibc itself, which can
         # never be bundled: the target's glibc must be at least as new as
         # the build host's (e.g. Debian stable is often too old for a
-        # fedora:latest build).
+        # fedora:latest build). Fedora is pinned to 44 because Fedora 45
+        # ships glibc 2.44 while ubuntu:latest (26.04) has 2.43; raise the
+        # pin once ubuntu:latest catches up.
         run: |
           set +e
           out=$(docker run --rm -v /tmp/ascli-out:/mnt:ro ubuntu:latest bash -euc '
